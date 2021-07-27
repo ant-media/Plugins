@@ -16,7 +16,6 @@ import io.antmedia.app.SamplePacketListener;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.IStreamListener;
-import io.antmedia.settings.ServerSettings;
 import io.vertx.core.Vertx;
 
 @Component(value="plugin.myplugin")
@@ -91,6 +90,18 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 		System.out.println("***************");
 		System.out.println("Stream Finished:"+streamId);
 		System.out.println("***************");
+	}
+
+	@Override
+	public void joinedTheRoom(String roomId, String streamId) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void leftTheRoom(String roomId, String streamId) {
+		// TODO Auto-generated method stub
+		
 	}
 
 	

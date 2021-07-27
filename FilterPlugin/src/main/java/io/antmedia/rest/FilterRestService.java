@@ -7,11 +7,9 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
@@ -64,18 +62,6 @@ public class FilterRestService {
 		AntMediaApplicationAdapter adaptor = ((IApplicationAdaptorFactory) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME)).getAppAdaptor();
 		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
 		filtersManager.createFilter(filterConfiguration, adaptor);
-		
-		return new Result(true);
-	}
-	
-	@POST
-	@Path("/create-mcu-conference")
-	@Produces(MediaType.APPLICATION_JSON)
-	@Consumes(MediaType.APPLICATION_JSON)
-	public Result createMCUConference(@ApiParam(value="MCU Conference roomId") @QueryParam("roomId") String roomId) {
-		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
-		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
-		filtersManager.conference(roomId, appCtx);
 		
 		return new Result(true);
 	}

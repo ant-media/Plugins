@@ -9,7 +9,9 @@ public class FilterConfiguration {
 	protected String videoFilter;
 	protected String audioFilter;
 	protected String type = "custom";
-
+	protected boolean videoEnabled;
+	protected boolean audioEnabled;
+	
 	public List<String> getInputStreams() {
 		return inputStreams;
 	}
@@ -45,5 +47,17 @@ public class FilterConfiguration {
 	}
 	public void setType(String type) {
 		this.type = type;
+	}
+	public boolean isVideoEnabled() {
+		return videoEnabled;
+	}
+	public void setVideoEnabled(boolean videoEnabled) {
+		this.videoEnabled = videoEnabled;
+	}
+	public boolean isAudioEnabled() {
+		return audioEnabled;
+	}
+	public void setAudioEnabled(boolean audioEnabled) {
+		this.audioEnabled = audioEnabled;
 	}
 }

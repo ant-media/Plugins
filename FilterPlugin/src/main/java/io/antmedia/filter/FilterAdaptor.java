@@ -129,6 +129,9 @@ public class FilterAdaptor implements IFrameListener{
 		// TODO Auto-generated method stub
 	}
 
+	/*
+	 * Update filter graph according to the newly added or removed streams
+	 */
 	public void update() {
 		Map<String, Filter> videoSourceFiltersMap = new LinkedHashMap<String, Filter>();
 		Map<String, Filter> videoSinkFiltersMap = new LinkedHashMap<String, Filter>();
@@ -137,13 +140,22 @@ public class FilterAdaptor implements IFrameListener{
 		int i = 0;
 		for (String streamId : currentInStreams) {
 			StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
-			StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
 
 			String videoFilterArgs = "video_size="+videoStreamParams.codecParameters.width()+"x"+videoStreamParams.codecParameters.height()+":"
 					+ "pix_fmt="+videoStreamParams.codecParameters.format()+":"
 					+ "time_base="+videoStreamParams.timeBase.num()+"/"+videoStreamParams.timeBase.den()+":"
 					+ "pixel_aspect=1/1";
+			
+			if(!videoStreamParams.enabled) {
+				videoFilterArgs = "video_size=360x360:pix_fmt=0:time_base=1/20:pixel_aspect=1/1";
+			}
+			
+			System.out.println("video:"+videoFilterArgs);
+			
+			videoSourceFiltersMap.put(streamId, new Filter("buffer", videoFilterArgs, "in"+i));
 
+
+			StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
 			/* FIXME: Check according to the createAudioFrame in WebRTCEncoderAdaptor
 			String audioFilterArgs = "channel_layout="+audioStreamParams.codecParameters.channel_layout()+":"
 					+ "sample_fmt="+audioStreamParams.codecParameters.format()+":"
@@ -153,10 +165,14 @@ public class FilterAdaptor implements IFrameListener{
 			String audioFilterArgs = "channel_layout=4:" //MONO
 					+ "sample_fmt=1:" //AV_SAMPLE_FMT_S16
 					+ "sample_rate=16000";
-			videoSourceFiltersMap.put(streamId, new Filter("buffer", videoFilterArgs, "in"+i));
+			
+			System.out.println("audio:"+audioFilterArgs);
+
 			audioSourceFiltersMap.put(streamId, new Filter("abuffer", audioFilterArgs, "in"+i));
 			i++;
 		}
+		FilterGraph prevVideoFilterGraph = videoFilterGraph;
+
 		
 		i = 0;
 		for (String streamId : currentOutStreams.keySet()) {
@@ -164,16 +180,8 @@ public class FilterAdaptor implements IFrameListener{
 			audioSinkFiltersMap.put(streamId, new Filter("abuffersink", null, "out"+i));
 		}
 		
-		
-		FilterGraph prevVideoFilterGraph = videoFilterGraph;
-		FilterGraph prevAudioFilterGraph = audioFilterGraph;
 		long currentVideoPts = 0;
-		long currentAudioPts = 0;
-
 		if(videoFilterGraph != null) {
-			currentVideoPts = videoFilterGraph.getCurrentPts();
-		}
-		if(audioFilterGraph != null) {
 			currentVideoPts = videoFilterGraph.getCurrentPts();
 		}
 		
@@ -184,6 +192,19 @@ public class FilterAdaptor implements IFrameListener{
 				currentOutStreams.get(streamId).onVideoFrame(streamId, frame);
 			}
 		});
+		
+		if(prevVideoFilterGraph != null) {
+			prevVideoFilterGraph.close();
+		}
+		
+		FilterGraph prevAudioFilterGraph = audioFilterGraph;
+		long currentAudioPts = 0;
+
+		
+		if(audioFilterGraph != null) {
+			currentAudioPts = audioFilterGraph.getCurrentPts();
+		}
+		
 		audioFilterGraph = new FilterGraph(filterConfiguration.getAudioFilter(), audioSourceFiltersMap , audioSinkFiltersMap);
 		audioFilterGraph.setCurrentPts(currentAudioPts);
 		audioFilterGraph.setListener((streamId, frame)->{
@@ -192,14 +213,15 @@ public class FilterAdaptor implements IFrameListener{
 			}
 		});
 		
-		if(prevVideoFilterGraph != null) {
-			prevVideoFilterGraph.close();
-		}
 		if(prevAudioFilterGraph != null) {
 			prevAudioFilterGraph.close();
 		}
 	}
 	
+	/*
+	 * This method is used for the creation and also for the update of the filter
+	 * For example new inputs mat be added as an update
+	 */
 	
 	public void createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter app) {
 		if(vertx == null) {
@@ -208,17 +230,20 @@ public class FilterAdaptor implements IFrameListener{
 		}
 		
 		this.filterConfiguration = filterConfiguration;
+		
+		//create custom broadcast for each output and add them to the map
 		for (String streamId : filterConfiguration.getOutputStreams()) {
 			if(!currentOutStreams.containsKey(streamId)) {
 				IFrameListener broadcast = app.createCustomBroadcast(streamId);
 				currentOutStreams.put(streamId, broadcast);
-				startBroadcast(streamId, broadcast);
+				startBroadcast(streamId, broadcast, filterConfiguration.videoEnabled, filterConfiguration.audioEnabled);
 			}		
 		}
 
+		
+		// check the inseted or removed streams to the filter as an update
 		List<String> inserted = filterConfiguration.getInputStreams();
 		List<String> removed = new ArrayList<String>();
-
 		for (String streamId : currentInStreams) {
 			if(filterConfiguration.getInputStreams().contains(streamId)) {
 				inserted.remove(streamId);
@@ -234,11 +259,13 @@ public class FilterAdaptor implements IFrameListener{
 			return;
 		}
 		
+		// deregister plugin for the streams removed from filter
 		for (String streamId : removed) {
 			app.removeFrameListener(streamId, this);
 			currentInStreams.remove(streamId);
 		}
 		
+		// register plugin for the streams inserted to the filter
 		for (String streamId : inserted) {
 			app.addFrameListener(streamId, this);
 			currentInStreams.add(streamId);
@@ -249,7 +276,7 @@ public class FilterAdaptor implements IFrameListener{
 		update();
 	}
 	
-	private void startBroadcast(String streamId, IFrameListener broadcast) {
+	private void startBroadcast(String streamId, IFrameListener broadcast, boolean videoEnabled, boolean audioEnabled) {
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
 		videoCodecParameters.width(width);
 		videoCodecParameters.height(height);
@@ -275,8 +302,9 @@ public class FilterAdaptor implements IFrameListener{
 		StreamParametersInfo audioStreamParametersInfo = new StreamParametersInfo();
 		
 		videoStreamParametersInfo.codecParameters = videoCodecParameters;
+		videoStreamParametersInfo.enabled = videoEnabled;
 		audioStreamParametersInfo.codecParameters = audioCodecParameters;
-
+		audioStreamParametersInfo.enabled = audioEnabled;
 		
 		broadcast.setVideoStreamInfo(streamId, videoStreamParametersInfo);
 		broadcast.setAudioStreamInfo(streamId, audioStreamParametersInfo);
