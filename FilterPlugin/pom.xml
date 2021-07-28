@@ -7,7 +7,7 @@
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.antmedia.plugin</groupId>
-	<artifactId>FilterPlugin</artifactId>
+	<artifactId>antmedia-filter-plugin</artifactId>
 	<name>Filter Plugin</name>
 	<url>http://maven.apache.org</url>
 	<packaging>jar</packaging>
