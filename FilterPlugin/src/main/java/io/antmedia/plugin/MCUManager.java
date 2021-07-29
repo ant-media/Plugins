@@ -69,29 +69,34 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	private void updateRoomFilter(String roomId) {
 		DataStore datastore = getApplication().getDataStore();
 		ConferenceRoom room = datastore.getConferenceRoom(roomId);
-		List<String> streams = new ArrayList();
-		streams.addAll(room.getRoomStreamList());
-		
-		for (String streamId : room.getRoomStreamList()) {
-			Broadcast broadcast = datastore.get(streamId);
-			if(broadcast == null || !broadcast.getStatus().equals(AntMediaApplicationAdapter.BROADCAST_STATUS_BROADCASTING)) {
-				streams.remove(streamId);
-			}
+		if(room == null) {
+			conferenceRooms.remove(roomId);
 		}
-		
-		if(streams.size()>1) {
-			MCUFilterConfiguration filterConfiguration = new MCUFilterConfiguration();
-			filterConfiguration.setFilterId(roomId);
-			filterConfiguration.setInputStreams(streams);
-			List<String> outputStreams = new ArrayList<>();
-			outputStreams.add(roomId);
-			filterConfiguration.setOutputStreams(outputStreams);
-			filterConfiguration.setVideoFilter(FilterUtils.createVideoFilter(streams.size()));
-			filterConfiguration.setAudioFilter(FilterUtils.createAudioFilter(streams.size()));
-			filterConfiguration.setVideoEnabled(!room.getMode().equals(WebSocketConstants.AMCU));
-			filterConfiguration.setAudioEnabled(true);
-			
-			getFiltersManager().createFilter(filterConfiguration, getApplication());
+		else {
+			List<String> streams = new ArrayList();
+			streams.addAll(room.getRoomStreamList());
+
+			for (String streamId : room.getRoomStreamList()) {
+				Broadcast broadcast = datastore.get(streamId);
+				if(broadcast == null || !broadcast.getStatus().equals(AntMediaApplicationAdapter.BROADCAST_STATUS_BROADCASTING)) {
+					streams.remove(streamId);
+				}
+			}
+
+			if(streams.size()>1) {
+				MCUFilterConfiguration filterConfiguration = new MCUFilterConfiguration();
+				filterConfiguration.setFilterId(roomId);
+				filterConfiguration.setInputStreams(streams);
+				List<String> outputStreams = new ArrayList<>();
+				outputStreams.add(roomId);
+				filterConfiguration.setOutputStreams(outputStreams);
+				filterConfiguration.setVideoFilter(FilterUtils.createVideoFilter(streams.size()));
+				filterConfiguration.setAudioFilter(FilterUtils.createAudioFilter(streams.size()));
+				filterConfiguration.setVideoEnabled(!room.getMode().equals(WebSocketConstants.AMCU));
+				filterConfiguration.setAudioEnabled(true);
+
+				getFiltersManager().createFilter(filterConfiguration, getApplication());
+			}
 		}
 	}
 

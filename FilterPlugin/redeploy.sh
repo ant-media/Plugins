@@ -8,7 +8,7 @@ if [ $OUT -ne 0 ]; then
 fi
 
 rm -r $AMS_DIR/plugins/ant-media-filter-plugin*
-cp target/ant-media-filter-plugin.jar $AMS_DIR/plugins
+cp target/ant-media-filter-plugin.jar $AMS_DIR/plugins/
 
 OUT=$?
 

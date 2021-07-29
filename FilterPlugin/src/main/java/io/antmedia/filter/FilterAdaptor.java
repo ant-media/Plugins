@@ -306,7 +306,9 @@ public class FilterAdaptor implements IFrameListener{
 		audioStreamParametersInfo.codecParameters = audioCodecParameters;
 		audioStreamParametersInfo.enabled = audioEnabled;
 		
-		broadcast.setVideoStreamInfo(streamId, videoStreamParametersInfo);
+		if(videoEnabled) {
+			broadcast.setVideoStreamInfo(streamId, videoStreamParametersInfo);
+		}
 		broadcast.setAudioStreamInfo(streamId, audioStreamParametersInfo);
 		broadcast.start();
 	}
