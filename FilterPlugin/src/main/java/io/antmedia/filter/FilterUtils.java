@@ -2,6 +2,10 @@ package io.antmedia.filter;
 
 public class FilterUtils {
 	public static String createAudioFilter(int streamCount) {
+		if(streamCount == 1) {
+			return "[in0]acopy[out0]";
+		}
+		
 		String filter = "";
         for (int i = 0; i < streamCount; i++) {
             filter += "[in" + i + "]";
@@ -12,6 +16,10 @@ public class FilterUtils {
 	}
 
 	public static String createVideoFilter(int streamCount) {
+		if(streamCount == 1) {
+			return "[in0]scale=720:480[out0]";
+		}
+		
 		int width = 360;
 		int height = 240;
 		String color = "red";

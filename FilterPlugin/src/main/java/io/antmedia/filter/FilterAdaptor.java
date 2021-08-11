@@ -51,8 +51,8 @@ public class FilterAdaptor implements IFrameListener{
 	private BytePointer picture_bufptr;
 	private static final Logger logger = LoggerFactory.getLogger(FilterAdaptor.class);
 	
-	int width = 480;
-	int height = 360;
+	int width = 720;
+	int height = 480;
 
 
 	@Override

@@ -26,6 +26,7 @@ import io.vertx.core.Vertx;
 @Component(value="filters.mcu")
 public class MCUManager implements ApplicationContextAware, IStreamListener{
 	
+	//room to change availibility map
 	private Map<String, Boolean> conferenceRooms = new ConcurrentHashMap<String, Boolean>();
 	public static final long CONFERENCE_INFO_POLL_PERIOD_MS = 5000;
 	private long roomUpdateTimer = -1L;
@@ -71,6 +72,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		ConferenceRoom room = datastore.getConferenceRoom(roomId);
 		if(room == null) {
 			conferenceRooms.remove(roomId);
+			getFiltersManager().delete(roomId, getApplication());
 		}
 		else {
 			List<String> streams = new ArrayList();
@@ -83,7 +85,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 				}
 			}
 
-			if(streams.size()>1) {
+			if(streams.size() > 0) {
 				MCUFilterConfiguration filterConfiguration = new MCUFilterConfiguration();
 				filterConfiguration.setFilterId(roomId);
 				filterConfiguration.setInputStreams(streams);
@@ -103,7 +105,9 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	private void roomHasChange(String roomId) {
 		DataStore datastore = getApplication().getDataStore();
 		ConferenceRoom room = datastore.getConferenceRoom(roomId);	
-		if((room.getMode().equals(WebSocketConstants.MCU) || room.getMode().equals(WebSocketConstants.AMCU))) {
+		if(conferenceRooms.containsKey(roomId) 
+				|| (room.getMode().equals(WebSocketConstants.MCU) 
+				|| room.getMode().equals(WebSocketConstants.AMCU))) {
 			if(getApplication().getAppSettings().getEncoderSettings().isEmpty()) {
 				logger.warn("You should add at least one adaptivesettings to use MCU");
 			}
