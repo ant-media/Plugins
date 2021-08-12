@@ -17,21 +17,24 @@ public class FilterUtils {
 
 	public static String createVideoFilter(int streamCount) {
 		if(streamCount == 1) {
-			return "[in0]scale=720:480[out0]";
+			return "[in0]scale=-1:234,pad=360:240:(ow-iw)/2:(oh-ih)/2:color=black[s0];[s0]pad=720:480:(ow-iw)/2:(oh-ih)/2:color=red[out0]";
 		}
 		
 		int width = 360;
 		int height = 240;
-		String color = "red";
+		String color = "black";
 		int margin = 3;
 
 		String filter = "";
 		int columns = (int) Math.ceil(Math.sqrt((double)streamCount));
 		int rows = (int) Math.ceil((double)streamCount/columns);
 		int lastRowColumns = streamCount - (rows - 1) * columns;
+		
+		width = Math.min(360, 720/columns);
+		height = 240*width/360;
 
 		for (int i = 0; i < streamCount; i++) {
-			filter += "[in" + i + "]scale="+(width-2*margin)+":"+(height-2*margin);
+			filter += "[in" + i + "]scale="+"-1"+":"+(height-2*margin);
 			filter += ",pad="+width+":"+height+":"+margin+":"+margin+":color="+color;
 			filter += "[s" + i + "];";
 		}
@@ -43,7 +46,7 @@ public class FilterUtils {
 				filter += "[s" + total + "]";
 				total++;
 			}
-			String outLabel = rows == 1 ? "[out0]" : "[l" + i + "];";
+			String outLabel = rows == 1 ? ",pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]" : "[l" + i + "];";
 			filter += "hstack=inputs="+j+outLabel;
 		}
 
@@ -55,7 +58,7 @@ public class FilterUtils {
 			for (int i = 0; i < rows; i++) {
 				filter += "[l" + i + "]";
 			}
-			filter += "vstack=inputs=" + rows + "[out0]";
+			filter += "vstack=inputs=" + rows + ",pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]";
 		}
 		
 		System.out.println("generated filter:"+filter);
