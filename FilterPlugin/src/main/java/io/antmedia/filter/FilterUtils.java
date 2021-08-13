@@ -16,14 +16,15 @@ public class FilterUtils {
 	}
 
 	public static String createVideoFilter(int streamCount) {
-		if(streamCount == 1) {
-			return "[in0]scale=-1:234,pad=360:240:(ow-iw)/2:(oh-ih)/2:color=black[s0];[s0]pad=720:480:(ow-iw)/2:(oh-ih)/2:color=red[out0]";
-		}
-		
+			
 		int width = 360;
 		int height = 240;
 		String color = "black";
 		int margin = 3;
+		
+		if(streamCount == 1) {
+			return "[in0]scale="+(width)+":"+(height)+":force_original_aspect_ratio=decrease,pad=720:480:(ow-iw)/2:(oh-ih)/2:color="+color+"[out0]";
+		}
 
 		String filter = "";
 		int columns = (int) Math.ceil(Math.sqrt((double)streamCount));
@@ -34,7 +35,7 @@ public class FilterUtils {
 		height = 240*width/360;
 
 		for (int i = 0; i < streamCount; i++) {
-			filter += "[in" + i + "]scale="+"-1"+":"+(height-2*margin);
+			filter += "[in" + i + "]scale="+(width-2*margin)+":"+(height-2*margin)+":force_original_aspect_ratio=decrease";
 			filter += ",pad="+width+":"+height+":"+margin+":"+margin+":color="+color;
 			filter += "[s" + i + "];";
 		}
