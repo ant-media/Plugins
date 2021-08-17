@@ -79,17 +79,19 @@ public class FilterGraph {
 		
 		if (avfilter_graph_parse(filterGraph, filterDescription, listOfInputs, listOfOutputs, null) < 0) {
 			logger.error("error avfilter_graph_parse");
+			return;
 		}
 
 		if (avfilter_graph_config(filterGraph, null) < 0) {
 			logger.error("error avfilter_graph_config");
+			return;
 		}
-		initiated = true;
+		setInitiated(true);
 	}
 	
 	public void doFilter(String streamId, AVFrame frame) {
 		synchronized(lock) {
-			if (!initiated) return;
+			if (!isInitiated()) return;
 			
 			long pktPTS = frame.pts();
 
@@ -115,6 +117,7 @@ public class FilterGraph {
 			/* push the decoded frame into the filtergraph */
 			if ((ret = av_buffersrc_add_frame(sourceFiltersMap.get(streamId).filterContext, frame)) < 0) {
 				logger.error("Error while feeding the filtergraph "+ret);
+				return;
 			}
 
 			for (String outStreamId : sinkFiltersMap.keySet()) {
@@ -141,7 +144,7 @@ public class FilterGraph {
 
 	public void close() {
 		synchronized(lock) {
-			initiated = false;
+			setInitiated(false);
 
 			avfilter_graph_free(filterGraph);
 			filterGraph = null;
@@ -160,5 +163,13 @@ public class FilterGraph {
 
 	public void setCurrentPts(long currentPts) {
 		this.currentPts = currentPts;
+	}
+
+	public boolean isInitiated() {
+		return initiated;
+	}
+
+	public void setInitiated(boolean initiated) {
+		this.initiated = initiated;
 	}
 }

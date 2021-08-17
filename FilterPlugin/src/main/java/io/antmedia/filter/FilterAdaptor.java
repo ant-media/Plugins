@@ -132,7 +132,7 @@ public class FilterAdaptor implements IFrameListener{
 	/*
 	 * Update filter graph according to the newly added or removed streams
 	 */
-	public void update() {
+	public boolean update() {
 		Map<String, Filter> videoSourceFiltersMap = new LinkedHashMap<String, Filter>();
 		Map<String, Filter> videoSinkFiltersMap = new LinkedHashMap<String, Filter>();
 		Map<String, Filter> audioSourceFiltersMap = new LinkedHashMap<String, Filter>();
@@ -150,8 +150,6 @@ public class FilterAdaptor implements IFrameListener{
 				videoFilterArgs = "video_size=360x360:pix_fmt=0:time_base=1/20:pixel_aspect=1/1";
 			}
 			
-			System.out.println("video:"+videoFilterArgs);
-			
 			videoSourceFiltersMap.put(streamId, new Filter("buffer", videoFilterArgs, "in"+i));
 
 
@@ -166,8 +164,6 @@ public class FilterAdaptor implements IFrameListener{
 					+ "sample_fmt=1:" //AV_SAMPLE_FMT_S16
 					+ "sample_rate=16000";
 			
-			System.out.println("audio:"+audioFilterArgs);
-
 			audioSourceFiltersMap.put(streamId, new Filter("abuffer", audioFilterArgs, "in"+i));
 			i++;
 		}
@@ -186,6 +182,10 @@ public class FilterAdaptor implements IFrameListener{
 		}
 		
 		videoFilterGraph = new FilterGraph(filterConfiguration.getVideoFilter(), videoSourceFiltersMap , videoSinkFiltersMap);
+		if(videoFilterGraph.isInitiated()) {
+			logger.error("Aideo filter graph can not be initiated:"+filterConfiguration.getVideoFilter());
+			return false;
+		}
 		videoFilterGraph.setCurrentPts(currentVideoPts);
 		videoFilterGraph.setListener((streamId, frame)->{
 			if(frame != null) {
@@ -206,6 +206,10 @@ public class FilterAdaptor implements IFrameListener{
 		}
 		
 		audioFilterGraph = new FilterGraph(filterConfiguration.getAudioFilter(), audioSourceFiltersMap , audioSinkFiltersMap);
+		if(audioFilterGraph.isInitiated()) {
+			logger.error("Aideo filter graph can not be initiated:"+filterConfiguration.getAudioFilter());
+			return false;
+		}
 		audioFilterGraph.setCurrentPts(currentAudioPts);
 		audioFilterGraph.setListener((streamId, frame)->{
 			if(frame != null) {
@@ -216,6 +220,8 @@ public class FilterAdaptor implements IFrameListener{
 		if(prevAudioFilterGraph != null) {
 			prevAudioFilterGraph.close();
 		}
+		
+		return true;
 	}
 	
 	/*
@@ -223,7 +229,7 @@ public class FilterAdaptor implements IFrameListener{
 	 * For example new inputs mat be added as an update
 	 */
 	
-	public void createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter app) {
+	public synchronized boolean createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter app) {
 		if(vertx == null) {
 			vertx = app.getVertx();
 			prepareFrame();
@@ -256,7 +262,7 @@ public class FilterAdaptor implements IFrameListener{
 		boolean noChange = inserted.isEmpty() && removed.isEmpty();
 		
 		if(noChange) {
-			return;
+			return true;
 		}
 		
 		// deregister plugin for the streams removed from filter
@@ -273,7 +279,7 @@ public class FilterAdaptor implements IFrameListener{
 		
 		filterConfiguration.setInputStreams(currentInStreams);
 		
-		update();
+		return update();
 	}
 	
 	private void startBroadcast(String streamId, IFrameListener broadcast, boolean videoEnabled, boolean audioEnabled) {
