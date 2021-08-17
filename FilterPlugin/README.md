@@ -23,8 +23,8 @@ To create a filter you should use the POST method `/v2/filters/create`.
 You should pass the filter configuration in JSON format. That JSON should contain
 - **inputStreams:** list of the streams that will be used in the filter
 - **outputStreams:** stream id of the ouput(filtered) stream
-- **videoFilter:** video filter definition
-- **audioFilter:** audio filter definition
+- **videoFilter:** video filter definition, define inputs as [in0], [in1] ... 
+- **audioFilter:** audio filter definition, define inputs as [out0], [out1] ...
 - **videoEnabled:** true if video will be filtered
 - **audioenabled:** true
 
