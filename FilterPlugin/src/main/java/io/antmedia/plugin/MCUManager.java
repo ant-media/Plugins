@@ -105,10 +105,13 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	private void roomHasChange(String roomId) {
 		DataStore datastore = getApplication().getDataStore();
 		ConferenceRoom room = datastore.getConferenceRoom(roomId);	
-		if(conferenceRooms.containsKey(roomId) 
-				|| (room.getMode().equals(WebSocketConstants.MCU) 
-				|| room.getMode().equals(WebSocketConstants.AMCU))) {
-			if(getApplication().getAppSettings().getEncoderSettings().isEmpty()) {
+		if(room == null && conferenceRooms.containsKey(roomId)) {
+			//all participants are left the room and room has been deleted
+			conferenceRooms.put(roomId, true);
+		} 
+		else if((room != null) && (room.getMode().equals(WebSocketConstants.MCU) || room.getMode().equals(WebSocketConstants.AMCU))) {
+			if(!conferenceRooms.containsKey(roomId) && getApplication().getAppSettings().getEncoderSettings().isEmpty()) {
+				//first participant for the room but no adaptive settings
 				logger.warn("You should add at least one adaptivesettings to use MCU");
 			}
 			else {
