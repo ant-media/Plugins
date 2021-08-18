@@ -57,7 +57,7 @@ public class FilterAdaptor implements IFrameListener{
 
 	@Override
 	public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
-		if(audioFilterGraph != null) {
+		if(audioFilterGraph != null && audioFilterGraph.isInitiated()) {
 			audioFilterGraph.doFilter(streamId, audioFrame);
 		}
 		
@@ -66,7 +66,7 @@ public class FilterAdaptor implements IFrameListener{
 
 	@Override
 	public AVFrame onVideoFrame(String streamId, AVFrame videoFrame) {
-		if(videoFilterGraph != null) {
+		if(videoFilterGraph != null && videoFilterGraph.isInitiated()) {
 			//AVFrame frame = isScalingRequired(videoFrame) ? scale(videoFrame) : videoFrame;
 			AVFrame frame = videoFrame;
 			//Utils.save(frame, "onvideo");
@@ -182,8 +182,8 @@ public class FilterAdaptor implements IFrameListener{
 		}
 		
 		videoFilterGraph = new FilterGraph(filterConfiguration.getVideoFilter(), videoSourceFiltersMap , videoSinkFiltersMap);
-		if(videoFilterGraph.isInitiated()) {
-			logger.error("Aideo filter graph can not be initiated:"+filterConfiguration.getVideoFilter());
+		if(!videoFilterGraph.isInitiated()) {
+			logger.error("Video filter graph can not be initiated:"+filterConfiguration.getVideoFilter());
 			return false;
 		}
 		videoFilterGraph.setCurrentPts(currentVideoPts);
@@ -206,8 +206,8 @@ public class FilterAdaptor implements IFrameListener{
 		}
 		
 		audioFilterGraph = new FilterGraph(filterConfiguration.getAudioFilter(), audioSourceFiltersMap , audioSinkFiltersMap);
-		if(audioFilterGraph.isInitiated()) {
-			logger.error("Aideo filter graph can not be initiated:"+filterConfiguration.getAudioFilter());
+		if(!audioFilterGraph.isInitiated()) {
+			logger.error("Audio filter graph can not be initiated:"+filterConfiguration.getAudioFilter());
 			return false;
 		}
 		audioFilterGraph.setCurrentPts(currentAudioPts);
