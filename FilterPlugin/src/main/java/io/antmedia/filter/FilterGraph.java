@@ -93,8 +93,6 @@ public class FilterGraph {
 		synchronized(lock) {
 			if (!isInitiated()) return;
 			
-			long pktPTS = frame.pts();
-
 			int ret;
 			
 			Filter sourceFilter = sourceFiltersMap.get(streamId);
@@ -136,6 +134,59 @@ public class FilterGraph {
 				}
 			}
 		}
+	}
+	
+	
+	public AVFrame doFilterSync(String streamId, AVFrame frame) {
+		synchronized(lock) {
+			if (!isInitiated()) return null;
+			
+			int ret;
+			
+			Filter sourceFilter = sourceFiltersMap.get(streamId);
+			// TODO this check is for such a case:
+			// new filtergraph that contains streamX is under construction
+			// but frame for streamX comes the previous filtergraph
+			if(sourceFilter == null) {
+				return null;
+			}
+			
+			if(sourceFilter.isFirstFrame) {
+				sourceFilter.offset = currentPts - frame.pts();
+				sourceFilter.isFirstFrame = false;
+			}
+			long allignedPts = frame.pts()+sourceFilter.offset;
+			frame.pts(allignedPts);
+			
+			currentPts = Math.max(allignedPts, currentPts);
+			
+			/* push the decoded frame into the filtergraph */
+			if ((ret = av_buffersrc_add_frame(sourceFiltersMap.get(streamId).filterContext, frame)) < 0) {
+				logger.error("Error while feeding the filtergraph "+ret);
+				return null;
+			}
+
+			for (String outStreamId : sinkFiltersMap.keySet()) {
+				// get filtered frame for each output
+				while(true) {
+					ret = av_buffersink_get_frame(sinkFiltersMap.get(outStreamId).filterContext, filterOutputFrame);
+
+					if (ret < 0) {
+						break;
+					}
+					else {
+						//Utils.save(filterOutputFrame, "out"+(count++));
+						if(streamId.equals(outStreamId)) {
+							return filterOutputFrame;
+						}
+						else {
+							return null;
+						}
+					}
+				}
+			}
+		}
+		return null;
 	}
 
 	public void setListener(IFilteredFrameListener listener) {

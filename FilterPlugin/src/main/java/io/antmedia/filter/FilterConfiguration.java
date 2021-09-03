@@ -3,12 +3,16 @@ package io.antmedia.filter;
 import java.util.List;
 
 public class FilterConfiguration {
+	public static final String ASYNCHRONOUS = "asynchronous";
+	public static final String SYNCHRONOUS = "synchronous";
+	public static final String LASTPOINT = "lastpoint";
+
 	protected String filterId;
 	protected List<String> inputStreams;
 	protected List<String> outputStreams;
 	protected String videoFilter;
 	protected String audioFilter;
-	protected String type = "custom";
+	protected String type = ASYNCHRONOUS;
 	protected boolean videoEnabled;
 	protected boolean audioEnabled;
 	
