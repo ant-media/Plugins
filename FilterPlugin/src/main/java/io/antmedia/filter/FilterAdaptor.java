@@ -7,14 +7,8 @@ import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_CH_LAYOUT_MONO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
 import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLTP;
-import static org.bytedeco.ffmpeg.global.avutil.av_frame_alloc;
-import static org.bytedeco.ffmpeg.global.avutil.av_frame_unref;
-import static org.bytedeco.ffmpeg.global.avutil.av_image_fill_arrays;
-import static org.bytedeco.ffmpeg.global.avutil.av_image_get_buffer_size;
-import static org.bytedeco.ffmpeg.global.avutil.av_malloc;
-import static org.bytedeco.ffmpeg.global.swscale.SWS_BICUBIC;
-import static org.bytedeco.ffmpeg.global.swscale.sws_getCachedContext;
-import static org.bytedeco.ffmpeg.global.swscale.sws_scale;
+import static org.bytedeco.ffmpeg.global.avutil.av_frame_clone;
+import static org.bytedeco.ffmpeg.global.avutil.av_frame_free;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,7 +19,6 @@ import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.swscale.SwsContext;
 import org.bytedeco.javacpp.BytePointer;
-import org.bytedeco.javacpp.DoublePointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,68 +39,74 @@ public class FilterAdaptor implements IFrameListener{
 	private Map<String, StreamParametersInfo> audioStreamParamsMap = new LinkedHashMap<String, StreamParametersInfo>();
 	private FilterConfiguration filterConfiguration;
 	private Vertx vertx;
-	private SwsContext sws_ctx;
-	private AVFrame picture;
-	private BytePointer picture_bufptr;
 	private static final Logger logger = LoggerFactory.getLogger(FilterAdaptor.class);
 	
 	int width = 720;
 	int height = 480;
 
-
 	@Override
 	public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
-		if(audioFilterGraph != null && audioFilterGraph.isInitiated()) {
-			audioFilterGraph.doFilter(streamId, audioFrame);
+		if(audioFilterGraph == null || !audioFilterGraph.isInitiated()) {
+			return audioFrame;
 		}
-		
-		return null;
+		AVFrame filterInputframe;
+		AVFrame filterOutputFrame = null;
+		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) {
+			//copy the input frame then return it immediately
+			filterInputframe = av_frame_clone(audioFrame);
+
+			//vertx.executeBlocking(a->{
+			audioFilterGraph.doFilter(streamId, filterInputframe);
+			//},b->{});
+			filterOutputFrame = audioFrame;
+			av_frame_free(filterInputframe);
+		}
+		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) {
+			filterInputframe = audioFrame;
+
+			audioFilterGraph.doFilter(streamId, filterInputframe);
+			filterOutputFrame = null; //lastpoint
+		}
+		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS)){
+			filterInputframe = audioFrame;
+			filterOutputFrame = audioFilterGraph.doFilterSync(streamId, filterInputframe);
+		}
+		return filterOutputFrame;
 	}
 
 	@Override
 	public AVFrame onVideoFrame(String streamId, AVFrame videoFrame) {
-		if(videoFilterGraph != null && videoFilterGraph.isInitiated()) {
-			//AVFrame frame = isScalingRequired(videoFrame) ? scale(videoFrame) : videoFrame;
-			AVFrame frame = videoFrame;
-			//Utils.save(frame, "onvideo");
-			videoFilterGraph.doFilter(streamId, frame);
-			//av_frame_unref(videoFrame);  //FIXME: STREAM ADAPTORDEN GELENLEDE GEREKLİ ??
+		if(videoFilterGraph == null || !videoFilterGraph.isInitiated()) {
+			return videoFrame;
 		}
-		return null;
-	}
-	
-	public boolean isScalingRequired(AVFrame frame) {
-    	return frame != null && 
-				(frame.width() != width || frame.height() != height 
-				|| frame.format() != AV_PIX_FMT_YUV420P);
-    }
+		AVFrame filterInputframe;
+		AVFrame filterOutputFrame = null;
+		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) {
+			//copy the input frame then refilteredVideoFramesturn it immediately
+			filterInputframe = av_frame_clone(videoFrame);
+			
+			//vertx.executeBlocking(a->{
+			videoFilterGraph.doFilter(streamId, filterInputframe);
+			//},b->{});
+			filterOutputFrame = videoFrame;
+			av_frame_free(filterInputframe);
+		}
+		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) {
+			filterInputframe = videoFrame;
+			filterOutputFrame = null; //lastpoint
 
-	AVFrame scale(AVFrame frame) {
-		sws_ctx = sws_getCachedContext(sws_ctx, frame.width(), frame.height(), frame.format(),
-				width, height, AV_PIX_FMT_YUV420P,
-				SWS_BICUBIC, null, null, (DoublePointer)null);
-		
-		sws_scale(sws_ctx, frame.data(), frame.linesize(),
-				0, frame.height(), picture.data(), picture.linesize());
+			videoFilterGraph.doFilter(streamId, filterInputframe);
+		}
+		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS)){
+			filterInputframe = videoFrame;
+			filterOutputFrame = videoFilterGraph.doFilterSync(streamId, filterInputframe);
+			if(filterOutputFrame.width() == 0) {
+				filterOutputFrame = null;
+			}
 
-		picture.pts(frame.pts());
-		
-		return picture;
+		}
+		return filterOutputFrame;
 	}
-	
-	public void prepareFrame() {
-		picture = av_frame_alloc();
-		int size = av_image_get_buffer_size(AV_PIX_FMT_YUV420P, width, height, 32);
-		picture_bufptr = new BytePointer(av_malloc(size)).capacity(size);
-
-		// Assign appropriate parts of buffer to image planes in picture_rgb
-		// Note that picture_rgb is an AVFrame, but AVFrame is a superset of AVPicture
-		av_image_fill_arrays(picture.data(), picture.linesize(), picture_bufptr, AV_PIX_FMT_YUV420P, width, height, 32);
-		picture.format(AV_PIX_FMT_YUV420P);
-		picture.width(width);
-		picture.height(height);
-	}
-	
 	
 	@Override
 	public void writeTrailer() {
@@ -154,15 +153,11 @@ public class FilterAdaptor implements IFrameListener{
 
 
 			StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
-			/* FIXME: Check according to the createAudioFrame in WebRTCEncoderAdaptor
+			
 			String audioFilterArgs = "channel_layout="+audioStreamParams.codecParameters.channel_layout()+":"
 					+ "sample_fmt="+audioStreamParams.codecParameters.format()+":"
 					+ "time_base="+1+"/"+audioStreamParams.timeBase.num()+"/"+audioStreamParams.timeBase.den()+":"
 					+ "sample_rate="+audioStreamParams.codecParameters.sample_rate();
-			*/	
-			String audioFilterArgs = "channel_layout=4:" //MONO
-					+ "sample_fmt=1:" //AV_SAMPLE_FMT_S16
-					+ "sample_rate=16000";
 			
 			audioSourceFiltersMap.put(streamId, new Filter("abuffer", audioFilterArgs, "in"+i));
 			i++;
@@ -188,8 +183,12 @@ public class FilterAdaptor implements IFrameListener{
 		}
 		videoFilterGraph.setCurrentPts(currentVideoPts);
 		videoFilterGraph.setListener((streamId, frame)->{
-			if(frame != null) {
-				currentOutStreams.get(streamId).onVideoFrame(streamId, frame);
+			if(frame != null && currentOutStreams.containsKey(streamId)) {
+				IFrameListener frameListener = currentOutStreams.get(streamId);
+				if(frameListener != null) { 
+					//framelistener is a custombroadcast
+					frameListener.onVideoFrame(streamId, frame);
+				}
 			}
 		});
 		
@@ -212,8 +211,12 @@ public class FilterAdaptor implements IFrameListener{
 		}
 		audioFilterGraph.setCurrentPts(currentAudioPts);
 		audioFilterGraph.setListener((streamId, frame)->{
-			if(frame != null) {
-				currentOutStreams.get(streamId).onAudioFrame(streamId, frame);
+			if(frame != null && currentOutStreams.containsKey(streamId)) {
+				IFrameListener frameListener = currentOutStreams.get(streamId);
+				if(frameListener != null) { 
+					//framelistener is a custombroadcast
+					frameListener.onAudioFrame(streamId, frame);
+				}
 			}
 		});
 		
@@ -232,17 +235,25 @@ public class FilterAdaptor implements IFrameListener{
 	public synchronized boolean createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter app) {
 		if(vertx == null) {
 			vertx = app.getVertx();
-			prepareFrame();
 		}
 		
 		this.filterConfiguration = filterConfiguration;
 		
-		//create custom broadcast for each output and add them to the map
+		/*
+		 * create custom broadcast for each output and add them to the map
+		 *  if an outputstream is same with an input stream no need the create custombroadcast 
+		 * 		instead we feed input stream with filtered frame
+		 */
 		for (String streamId : filterConfiguration.getOutputStreams()) {
 			if(!currentOutStreams.containsKey(streamId)) {
-				IFrameListener broadcast = app.createCustomBroadcast(streamId);
-				currentOutStreams.put(streamId, broadcast);
-				startBroadcast(streamId, broadcast, filterConfiguration.videoEnabled, filterConfiguration.audioEnabled);
+				if(filterConfiguration.inputStreams.contains(streamId)) {
+					currentOutStreams.put(streamId, null);
+				}
+				else {
+					IFrameListener broadcast = app.createCustomBroadcast(streamId);
+					startBroadcast(streamId, broadcast, filterConfiguration.videoEnabled, filterConfiguration.audioEnabled);
+					currentOutStreams.put(streamId, broadcast);
+				}
 			}		
 		}
 

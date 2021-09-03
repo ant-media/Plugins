@@ -17,22 +17,22 @@ import io.antmedia.IApplicationAdaptorFactory;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.ConferenceRoom;
+import io.antmedia.filter.FilterConfiguration;
 import io.antmedia.filter.FilterUtils;
-import io.antmedia.filter.MCUFilterConfiguration;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.websocket.WebSocketConstants;
-import io.vertx.core.Vertx;
 
 @Component(value="filters.mcu")
 public class MCUManager implements ApplicationContextAware, IStreamListener{
+	public static final String BEAN_NAME = "filters.mcu";
 	
-	//room to change availibility map
-	private Map<String, Boolean> conferenceRooms = new ConcurrentHashMap<String, Boolean>();
+	private Map<String, Boolean> conferenceRooms = new ConcurrentHashMap<String, Boolean>(); //room to change availibility map
 	public static final long CONFERENCE_INFO_POLL_PERIOD_MS = 5000;
 	private long roomUpdateTimer = -1L;
 	private ApplicationContext applicationContext;
 	private AntMediaApplicationAdapter appAdaptor;
 	private FiltersManager filtersManager;
+	private String pluginType = FilterConfiguration.ASYNCHRONOUS;
 	private static Logger logger = LoggerFactory.getLogger(MCUManager.class);
 
 	
@@ -86,7 +86,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 			}
 
 			if(streams.size() > 0) {
-				MCUFilterConfiguration filterConfiguration = new MCUFilterConfiguration();
+				FilterConfiguration filterConfiguration = new FilterConfiguration();
 				filterConfiguration.setFilterId(roomId);
 				filterConfiguration.setInputStreams(streams);
 				List<String> outputStreams = new ArrayList<>();
@@ -96,6 +96,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 				filterConfiguration.setAudioFilter(FilterUtils.createAudioFilter(streams.size()));
 				filterConfiguration.setVideoEnabled(!room.getMode().equals(WebSocketConstants.AMCU));
 				filterConfiguration.setAudioEnabled(true);
+				filterConfiguration.setType(pluginType);
 
 				getFiltersManager().createFilter(filterConfiguration, getApplication());
 			}
@@ -136,5 +137,9 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	@Override
 	public void streamFinished(String streamId) {
+	}
+	
+	public void setPluginType(String type) {
+		this.pluginType = type;
 	}
 }
