@@ -7,6 +7,7 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -81,8 +82,8 @@ public class FilterRestService {
 		return new Result(true);
 	}
 	
-	@POST
-	@Path("/{id}/set-mcu-plugin-type")
+	@PUT
+	@Path("/{id}/mcu-plugin-type")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result setPluginType(@ApiParam(value="Change the plugin type for a flter: synchronous | asynchronous (default) | lastpoint") @QueryParam("type") String type) {
