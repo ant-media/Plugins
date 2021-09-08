@@ -5,14 +5,7 @@ This plugin is deployed in the Ant Media Server Enterprise version.
 
 # MCU Usage
 
-To use MCU conference, you should add at least one adaptive setting. 
-Then you can use MCU conference:
-
-`https://domain-name.com:5443/WebRTCAppEE/mcu.html`
-
-For audio only MCU conference:
-
-`https://domain-name.com:5443/WebRTCAppEE/mcu.html?audioOnly=true`
+Please check this [blogpost](https://antmedia.io/mcu-conference/).
 
 
 # Filter Usage
