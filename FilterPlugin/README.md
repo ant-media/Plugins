@@ -11,30 +11,18 @@ Please check this [blogpost](https://antmedia.io/mcu-conference/).
 MCU layout is determined by the `public static String createVideoFilter(int streamCount)` method in `FilterUtils.java`. 
 This method takes the stream count as input and generates an ffmpeg filter text. This text defines the layout. You can find more about ffmpeg filters [here](https://ffmpeg.org/ffmpeg-filters.html).
 
-To change the MCU layout, you should edit that method according to the layout you want to form. 
-You should use `[in0]`, `[in1]` ... `[inN]`  and `[out0]` labels to define the inputs and the output.
+To change the MCU layout, you should edit `createVideoFilter` method according to the layout you want to form. 
 
-For example the following is a generated filter text for 2 streams.
+You should use `[in0]`, `[in1]` ... `[inN]`  and `[out0]` labels to define the inputs and the output in the filter text.
+
+After you finalize your work on the code, you should build the plugin and replace the previous plugin with the new one as told below.
+
+### Example Filter Text
+The following is a generated filter text for 2 streams by the `createVideoFilter` method.
 
 ```
 [in0]scale=354:234:force_original_aspect_ratio=decrease,pad=360:240:3:3:color=black[s0];[in1]scale=354:234:force_original_aspect_ratio=decrease,pad=360:240:3:3:color=black[s1];[s0][s1]hstack=inputs=2,pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]
 ```
-
-In ffmpeg gilter terminology, the whole text above is a Filter Graph which is consist of sequence of connected Filter Chains which are seperated with ";"
-
-`[in0]scale=354:234:force_original_aspect_ratio=decrease,pad=360:240:3:3:color=black[s0];` part is a Filter Chain which is consist of connected Filters which are seperated with ",".
-
-`scale=354:234:force_original_aspect_ratio=decrease` or `pad=360:240:3:3:color=black` are Filters.
-
-Lets explain the filters we used:
-We apply Scale Filter and Pad filter to the [in0] (the first stream) and obtain a temp outpur [s0] which is a 360x240 frame.
-`scale=354:234:force_original_aspect_ratio=decrease` filter scales the input to 354x234 frame by keeping the aspect ratio.
-`pad=360:240:3:3:color=black` filter place the scaled frame in a 360x240 frame where the borders are black.
-`hstack=inputs=2` filter place 2 inputs side by side.
-`pad=720:480:(ow-iw)/2:(oh-ih)/2` filter place an input at the center of 720x480 frame.
-
-
-After you finalize your work on the code, you should build the plugin and replace the previous plugin with the new one as told below.
 
 # Filter Usage
 
