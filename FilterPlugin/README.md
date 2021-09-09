@@ -18,11 +18,25 @@ You should use `[in0]`, `[in1]` ... `[inN]`  and `[out0]` labels to define the i
 After you finalize your work on the code, you should build the plugin and replace the previous plugin with the new one as told below.
 
 ### Example Filter Text
-The following is a generated filter text for 2 streams by the `createVideoFilter` method.
+The following is a generated filter text for 2 streams by the default `createVideoFilter` method.
 
 ```
 [in0]scale=354:234:force_original_aspect_ratio=decrease,pad=360:240:3:3:color=black[s0];[in1]scale=354:234:force_original_aspect_ratio=decrease,pad=360:240:3:3:color=black[s1];[s0][s1]hstack=inputs=2,pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]
 ```
+
+This text forms the layout below.
+
+![Layout 1](doc/layout1.png)
+
+You may create such a text for bigger frame for the first stream and smaller frame for the second stream which are vertically alligned.
+
+```
+[in0]scale=534:354:force_original_aspect_ratio=decrease,pad=720:360:93:3:color=black[s0];[in1]scale=174:114:force_original_aspect_ratio=decrease,pad=720:120:273:3:color=black[s1];[s0][s1]vstack=inputs=2,pad=720:480:0:0[out0]
+```
+
+This text forms the layout below.
+
+![Layout 2](doc/layout2.png)
 
 # Filter Usage
 
