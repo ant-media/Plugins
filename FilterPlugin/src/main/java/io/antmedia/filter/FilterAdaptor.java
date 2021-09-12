@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
+import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.swscale.SwsContext;
 import org.bytedeco.javacpp.BytePointer;
@@ -24,10 +25,11 @@ import org.slf4j.LoggerFactory;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.plugin.api.IFrameListener;
+import io.antmedia.plugin.api.IPacketListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
 import io.vertx.core.Vertx;
 
-public class FilterAdaptor implements IFrameListener{
+public class FilterAdaptor implements IFrameListener, IPacketListener{
 	private FilterGraph videoFilterGraph = null;
 	private FilterGraph audioFilterGraph = null;
 
@@ -41,8 +43,16 @@ public class FilterAdaptor implements IFrameListener{
 	private Vertx vertx;
 	private static final Logger logger = LoggerFactory.getLogger(FilterAdaptor.class);
 	
+	private Map<String, VideoDecoder> videoDecodersMap = new LinkedHashMap<String, VideoDecoder>();
+
+	
 	int width = 720;
 	int height = 480;
+	private boolean selfDecodeStreams = true;
+
+	public FilterAdaptor(boolean selfDecodeVideo) {
+		this.selfDecodeStreams  = selfDecodeVideo;
+	}
 
 	@Override
 	public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
@@ -115,7 +125,12 @@ public class FilterAdaptor implements IFrameListener{
 	@Override
 	public void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
 		videoStreamParamsMap.put(streamId, videoStreamInfo);
-		
+		if(selfDecodeStreams) {
+			VideoDecoder decedor = new VideoDecoder(streamId, videoStreamInfo);
+			if(decedor.isInitialized()) {
+				videoDecodersMap.put(streamId, decedor);
+			}
+		}
 	}
 
 	@Override
@@ -146,6 +161,7 @@ public class FilterAdaptor implements IFrameListener{
 					+ "pixel_aspect=1/1";
 			
 			if(!videoStreamParams.enabled) {
+				//define dummy args
 				videoFilterArgs = "video_size=360x360:pix_fmt=0:time_base=1/20:pixel_aspect=1/1";
 			}
 			
@@ -285,6 +301,9 @@ public class FilterAdaptor implements IFrameListener{
 		// register plugin for the streams inserted to the filter
 		for (String streamId : inserted) {
 			app.addFrameListener(streamId, this);
+			if(selfDecodeStreams) {
+				app.addPacketListener(streamId, this);
+			}
 			currentInStreams.add(streamId);
 		}
 		
@@ -346,5 +365,26 @@ public class FilterAdaptor implements IFrameListener{
 
 		return true;
 		
+	}
+
+	@Override
+	public AVPacket onVideoPacket(String streamId, AVPacket packet) {
+		if(selfDecodeStreams) {
+			if(videoDecodersMap.containsKey(streamId)) {
+				AVFrame frame = videoDecodersMap.get(streamId).decodeVideoPacket(packet);
+				if(frame != null) {
+					onVideoFrame(streamId, frame);
+				}
+			}
+			else {
+				logger.warn("Decoder is not initialized for {}", streamId);
+			}
+		}
+		return packet;
+	}
+	
+	@Override
+	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
+		return packet;
 	}
 }
