@@ -356,6 +356,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public boolean close(AntMediaApplicationAdapter app) {
 		for(String streamId : currentInStreams) {
 			app.removeFrameListener(streamId, this);
+			app.removePacketListener(streamId, this);
 		}
 		for (String streamId : filterConfiguration.getOutputStreams()) {
 			app.stopCustomBroadcast(streamId);
@@ -374,6 +375,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				AVFrame frame = videoDecodersMap.get(streamId).decodeVideoPacket(packet);
 				if(frame != null) {
 					onVideoFrame(streamId, frame);
+				}
+				else {
 				}
 			}
 			else {
