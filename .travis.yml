@@ -29,7 +29,7 @@ before_install:
   - cd .. 
   
   #get server project
-  - (if [ $(git ls-remote https://github.com/ant-media/Ant-Media-Server.git $CI_COMMIT_REF_NAME  | wc -l) == "1" ];  
+  - (if [ $(git ls-remote https://github.com/ant-media/Ant-Media-Server.git $TRAVIS_BRANCH  | wc -l) == "1" ];  
      then 
        echo "$TRAVIS_BRANCH branch found in Ant-Media-Server";  
        git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/Ant-Media-Server.git;  
