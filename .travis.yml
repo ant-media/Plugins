@@ -8,8 +8,8 @@ git:
 
 addons:
   sonarcloud:
-    organization: "ant-media"
-    token: $SONAR_TOKEN
+    organization: "ant-media-plugins"
+    secure: $SONAR_TOKEN
 
 before_install:
   - sudo apt-get update -qq
