@@ -21,7 +21,7 @@ before_install:
         echo " $TRAVIS_BRANCH branch found";  
         git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/ant-media-server-parent.git;  
       else
-        echo "branch not found"; 
+        echo "$TRAVIS_BRANCH branch not found. Checking out master";
         git clone --depth=1 https://github.com/ant-media/ant-media-server-parent.git;  
     fi)
   - cd ant-media-server-parent
@@ -30,13 +30,13 @@ before_install:
   
   #get server project
   - (if [ $(git ls-remote https://github.com/ant-media/Ant-Media-Server.git $TRAVIS_BRANCH  | wc -l) == "1" ];  
-     then 
-       echo "$TRAVIS_BRANCH branch found in Ant-Media-Server";  
-       git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/Ant-Media-Server.git;  
-     else 
-       echo "$TRAVIS_BRANCH branch not. Checking out master";
-       git clone --depth=1 https://github.com/ant-media/Ant-Media-Server.git;   
-     fi)
+      then 
+        echo "$TRAVIS_BRANCH branch found in Ant-Media-Server";  
+        git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/Ant-Media-Server.git;  
+      else 
+        echo "$TRAVIS_BRANCH branch not found. Checking out master";
+        git clone --depth=1 https://github.com/ant-media/Ant-Media-Server.git;   
+    fi)
   - cd Ant-Media-Server
   - mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
   - cd ..
