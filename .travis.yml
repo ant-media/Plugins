@@ -31,10 +31,10 @@ before_install:
   #get server project
   - (if [ $(git ls-remote https://github.com/ant-media/Ant-Media-Server.git $CI_COMMIT_REF_NAME  | wc -l) == "1" ];  
      then 
-       echo "$CI_COMMIT_REF_NAME branch found in Ant-Media-Server";  
-       git clone --depth=1 -b $CI_COMMIT_REF_NAME https://github.com/ant-media/Ant-Media-Server.git;  
+       echo "$TRAVIS_BRANCH branch found in Ant-Media-Server";  
+       git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/Ant-Media-Server.git;  
      else 
-       echo "$CI_COMMIT_REF_NAME branch not. Checking out master";
+       echo "$TRAVIS_BRANCH branch not. Checking out master";
        git clone --depth=1 https://github.com/ant-media/Ant-Media-Server.git;   
      fi)
   - cd Ant-Media-Server
