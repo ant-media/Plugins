@@ -100,6 +100,10 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 				getFiltersManager().createFilter(filterConfiguration, getApplication());
 			}
+			else if(!room.isZombi()) {
+				conferenceRooms.remove(roomId);
+				getFiltersManager().delete(roomId, getApplication());
+			}
 		}
 	}
 
