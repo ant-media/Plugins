@@ -22,7 +22,6 @@ import org.springframework.web.context.WebApplicationContext;
 import com.google.gson.Gson;
 
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.IApplicationAdaptorFactory;
 import io.antmedia.filter.FilterConfiguration;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
@@ -43,7 +42,7 @@ public class FilterRestService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result create(@ApiParam(value="Filter object with the updates") FilterConfiguration filterConfiguration) {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
-		AntMediaApplicationAdapter adaptor = ((IApplicationAdaptorFactory) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME)).getAppAdaptor();
+		AntMediaApplicationAdapter adaptor = (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
 		filtersManager.createFilter(filterConfiguration, adaptor);
 		
@@ -75,7 +74,7 @@ public class FilterRestService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result delete(@ApiParam(value="Filter id for deleting filter") @PathParam("id") String id) {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
-		AntMediaApplicationAdapter adaptor = ((IApplicationAdaptorFactory) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME)).getAppAdaptor();
+		AntMediaApplicationAdapter adaptor = (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
 		filtersManager.delete(id, adaptor);
 		
