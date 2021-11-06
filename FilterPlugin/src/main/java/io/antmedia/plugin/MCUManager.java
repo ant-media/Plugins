@@ -13,7 +13,6 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.IApplicationAdaptorFactory;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.ConferenceRoom;
@@ -55,7 +54,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	public AntMediaApplicationAdapter getApplication() {
 		if(appAdaptor == null) {
-			appAdaptor = ((IApplicationAdaptorFactory) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME)).getAppAdaptor();
+			appAdaptor = (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 		}
 		return appAdaptor;
 	}
