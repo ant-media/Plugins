@@ -9,8 +9,7 @@ git:
 addons:
   sonarcloud:
     organization: "ant-media-plugins"
-    token:
-      secure: $SONAR_TOKEN
+    token: $SONAR_TOKEN
 
 before_install:
   - sudo apt-get update -qq
@@ -43,7 +42,7 @@ before_install:
   - cd ..
 script:
   - cd FilterPlugin
-  - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent test org.jacoco:jacoco-maven-plugin:report sonar:sonar -Dsonar.projectKey=ant-media_plugins -Dmaven.javadoc.skip=true --quiet
+  - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install org.jacoco:jacoco-maven-plugin:report sonar:sonar -Dsonar.projectKey=ant-media_plugins -Dmaven.javadoc.skip=true --quiet
     
 after_failure:
   - sudo cat hs_err_pid*.log  # cat hs_err_pid file if it exists
