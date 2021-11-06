@@ -18,10 +18,11 @@ public class FiltersManager {
 	private Map<String, FilterAdaptor> filterList = new LinkedHashMap<String, FilterAdaptor>();
 
 	public void createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter appAdaptor) {
+		boolean decodeStreams = appAdaptor.getAppSettings().getEncoderSettings().isEmpty();
 		String filter = filterConfiguration.getFilterId();
 		FilterAdaptor filterAdaptor = filterList.get(filter);
 		if(filterAdaptor == null) {
-			filterAdaptor = new FilterAdaptor();
+			filterAdaptor = new FilterAdaptor(decodeStreams);
 			filterList.put(filter, filterAdaptor);
 		}
 

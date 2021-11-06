@@ -8,27 +8,41 @@ git:
 
 addons:
   sonarcloud:
-    organization: "ant-media"
+    organization: "ant-media-plugins"
     token: $SONAR_TOKEN
 
 before_install:
   - sudo apt-get update -qq
   - sudo apt-get install ffmpeg -qq -y
+
+  #get parent project
   - (if [ $(git ls-remote https://github.com/ant-media/ant-media-server-parent.git $TRAVIS_BRANCH  | wc -l) == "1" ];  
       then 
         echo " $TRAVIS_BRANCH branch found";  
         git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/ant-media-server-parent.git;  
       else
-        echo "branch not found"; 
+        echo "$TRAVIS_BRANCH branch not found. Checking out master";
         git clone --depth=1 https://github.com/ant-media/ant-media-server-parent.git;  
     fi)
   - cd ant-media-server-parent
   - mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
   - cd .. 
   
+  #get server project
+  - (if [ $(git ls-remote https://github.com/ant-media/Ant-Media-Server.git $TRAVIS_BRANCH  | wc -l) == "1" ];  
+      then 
+        echo "$TRAVIS_BRANCH branch found in Ant-Media-Server";  
+        git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/Ant-Media-Server.git;  
+      else 
+        echo "$TRAVIS_BRANCH branch not found. Checking out master";
+        git clone --depth=1 https://github.com/ant-media/Ant-Media-Server.git;   
+    fi)
+  - cd Ant-Media-Server
+  - mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
+  - cd ..
 script:
   - cd FilterPlugin
-  - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent test org.jacoco:jacoco-maven-plugin:report sonar:sonar -Dsonar.projectKey=ant-media_plugins -Dmaven.javadoc.skip=true --quiet
+  - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install org.jacoco:jacoco-maven-plugin:report sonar:sonar -Dsonar.projectKey=ant-media_plugins -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
     
 after_failure:
   - sudo cat hs_err_pid*.log  # cat hs_err_pid file if it exists

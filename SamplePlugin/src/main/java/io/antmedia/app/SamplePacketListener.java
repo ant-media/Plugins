@@ -16,7 +16,13 @@ public class SamplePacketListener implements IPacketListener{
 	}
 
 	@Override
-	public AVPacket onPacket(String streamId, AVPacket packet) {
+	public AVPacket onVideoPacket(String streamId, AVPacket packet) {
+		packetCount++;
+		return packet;
+	}
+	
+	@Override
+	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
 		packetCount++;
 		return packet;
 	}
