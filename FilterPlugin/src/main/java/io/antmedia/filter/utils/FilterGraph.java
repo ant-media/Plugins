@@ -175,7 +175,6 @@ public class FilterGraph {
 						break;
 					}
 					else {
-						//Utils.save(filterOutputFrame, "out"+(count++));
 						if(streamId.equals(outStreamId)) {
 							return filterOutputFrame;
 						}

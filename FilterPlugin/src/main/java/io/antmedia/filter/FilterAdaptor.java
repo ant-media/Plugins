@@ -18,8 +18,6 @@ import java.util.Map;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
-import org.bytedeco.ffmpeg.swscale.SwsContext;
-import org.bytedeco.javacpp.BytePointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -130,16 +128,19 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	}
 	
 	@Override
-	public void writeTrailer() {
+	public void writeTrailer(String streamId) {
+		
 	}
 
 	@Override
-	public void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
+	public synchronized void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
 		videoStreamParamsMap.put(streamId, videoStreamInfo);
+		
 		if(selfDecodeStreams) {
-			VideoDecoder decedor = new VideoDecoder(streamId, videoStreamInfo);
-			if(decedor.isInitialized()) {
-				videoDecodersMap.put(streamId, decedor);
+			
+			VideoDecoder decoder = new VideoDecoder(streamId, videoStreamInfo);
+			if(decoder.isInitialized()) {
+				videoDecodersMap.put(streamId, decoder);
 			}
 		}
 	}
@@ -325,9 +326,12 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			
 			// register plugin for the streams inserted to the filter
 			for (String streamId : inserted) {
-				app.addFrameListener(streamId, this);
+				
 				if(selfDecodeStreams) {
 					app.addPacketListener(streamId, this);
+				}
+				else {
+					app.addFrameListener(streamId, this);
 				}
 				currentInStreams.add(streamId);
 			}

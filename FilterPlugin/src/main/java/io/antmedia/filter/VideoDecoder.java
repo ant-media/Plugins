@@ -88,7 +88,7 @@ public class VideoDecoder {
 		}
 		
 		BytePointer name = codec.name();
-		logger.info("video decoder name:  {} video context timebase:{}/{} wxh:{}x{}" , name.getString(),  videoContext.time_base().num(), videoContext.time_base().den(), videoContext.width(), videoContext.height());
+		logger.info("video decoder name: {} video context timebase:{}/{} wxh:{}x{}" , name.getString(),  videoContext.time_base().num(), videoContext.time_base().den(), videoContext.width(), videoContext.height());
 		codec.close();
 		
 		initialized = result;

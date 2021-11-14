@@ -1,13 +1,9 @@
 package io.antmedia.plugin;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -17,12 +13,14 @@ import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
+
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.ConferenceRoom;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.MCUFilterTextGenerator;
+import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.websocket.WebSocketConstants;
 
@@ -83,12 +81,13 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		return filtersManager;
 	}
 
-	private boolean updateRoomFilter(String roomId) {
+	private synchronized boolean updateRoomFilter(String roomId) 
+	{
 		DataStore datastore = getApplication().getDataStore();
 		ConferenceRoom room = datastore.getConferenceRoom(roomId);
 		boolean result = false;
-		if(room == null) {
-			conferenceRoomsUpdated.remove(roomId);
+		if(room == null) 
+		{
 			result = getFiltersManager().delete(roomId, getApplication());
 		}
 		else if (!roomsHasCustomFilters.contains(roomId)) 
@@ -100,24 +99,31 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 				for (String streamId : room.getRoomStreamList()) {
 					Broadcast broadcast = datastore.get(streamId);
-					if(broadcast == null || !broadcast.getStatus().equals(AntMediaApplicationAdapter.BROADCAST_STATUS_BROADCASTING)) {
+					if(broadcast == null || !broadcast.getStatus().equals(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING)) {
 						streams.remove(streamId);
 					}
 				}
-
-				FilterConfiguration filterConfiguration = new FilterConfiguration();
-				filterConfiguration.setFilterId(roomId);
-				filterConfiguration.setInputStreams(streams);
-				List<String> outputStreams = new ArrayList<>();
-				outputStreams.add(roomId);
-				filterConfiguration.setOutputStreams(outputStreams);
-				filterConfiguration.setVideoFilter(MCUFilterTextGenerator.createVideoFilter(streams.size()));
-				filterConfiguration.setAudioFilter(MCUFilterTextGenerator.createAudioFilter(streams.size()));
-				filterConfiguration.setVideoEnabled(!room.getMode().equals(WebSocketConstants.AMCU));
-				filterConfiguration.setAudioEnabled(true);
-				filterConfiguration.setType(pluginType);
-
-				result = getFiltersManager().createFilter(filterConfiguration, getApplication());
+				//
+				if (!streams.isEmpty()) 
+				{
+					FilterConfiguration filterConfiguration = new FilterConfiguration();
+					filterConfiguration.setFilterId(roomId);
+					filterConfiguration.setInputStreams(streams);
+					List<String> outputStreams = new ArrayList<>();
+					outputStreams.add(roomId);
+					filterConfiguration.setOutputStreams(outputStreams);
+					filterConfiguration.setVideoFilter(MCUFilterTextGenerator.createVideoFilter(streams.size()));
+					filterConfiguration.setAudioFilter(MCUFilterTextGenerator.createAudioFilter(streams.size()));
+					filterConfiguration.setVideoEnabled(!room.getMode().equals(WebSocketConstants.AMCU));
+					filterConfiguration.setAudioEnabled(true);
+					filterConfiguration.setType(pluginType);
+	
+					result = getFiltersManager().createFilter(filterConfiguration, getApplication());
+				}
+				else 
+				{
+					result = getFiltersManager().delete(roomId, getApplication());
+				}
 			}
 			catch (Exception e) {
 				//handle any unexpected exception to not have any problem in outer loop
@@ -140,12 +146,22 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	@Override
 	public void joinedTheRoom(String roomId, String streamId) {
+		 triggerUpdate(roomId);
+		
+	}
+	
+	private void triggerUpdate(String roomId) {
 		roomHasChange(roomId);
+		//call again after the period time to not encounter any problem
+		getApplication().getVertx().setTimer(CONFERENCE_INFO_POLL_PERIOD_MS, id -> {
+			roomHasChange(roomId);
+		});
 	}
 
 	@Override
 	public void leftTheRoom(String roomId, String streamId) {
-		roomHasChange(roomId);
+		
+		triggerUpdate(roomId);
 	}
 
 	@Override
