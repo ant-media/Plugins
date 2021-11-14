@@ -6,8 +6,8 @@ import java.util.Map;
 
 import org.junit.Test;
 
-import io.antmedia.filter.Filter;
-import io.antmedia.filter.FilterGraph;
+import io.antmedia.filter.utils.Filter;
+import io.antmedia.filter.utils.FilterGraph;
 
 public class FilterGraphUnitTest {
 	@Test

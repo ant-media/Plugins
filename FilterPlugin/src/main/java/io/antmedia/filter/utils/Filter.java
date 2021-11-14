@@ -1,4 +1,4 @@
-package io.antmedia.filter;
+package io.antmedia.filter.utils;
 
 import static org.bytedeco.ffmpeg.global.avfilter.avfilter_get_by_name;
 import static org.bytedeco.ffmpeg.global.avfilter.avfilter_graph_create_filter;
