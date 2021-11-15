@@ -10,7 +10,6 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.IApplicationAdaptorFactory;
 import io.antmedia.app.SampleFrameListener;
 import io.antmedia.app.SamplePacketListener;
 import io.antmedia.muxer.MuxAdaptor;
@@ -66,7 +65,7 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 	}
 	
 	public AntMediaApplicationAdapter getApplication() {
-		return ((IApplicationAdaptorFactory) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME)).getAppAdaptor();
+		return (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 	}
 	
 	public IFrameListener createCustomBroadcast(String streamId) {

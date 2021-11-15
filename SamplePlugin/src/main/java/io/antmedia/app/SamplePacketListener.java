@@ -10,7 +10,7 @@ public class SamplePacketListener implements IPacketListener{
 	private int packetCount = 0;
 
 	@Override
-	public void writeTrailer() {
+	public void writeTrailer(String streamId) {
 		System.out.println("SamplePacketListener.writeTrailer()");
 		
 	}

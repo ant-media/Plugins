@@ -1,4 +1,4 @@
-package io.antmedia.filter;
+package io.antmedia.filter.utils;
 
 
 import static org.bytedeco.ffmpeg.global.avfilter.av_buffersink_get_frame;
@@ -175,7 +175,6 @@ public class FilterGraph {
 						break;
 					}
 					else {
-						//Utils.save(filterOutputFrame, "out"+(count++));
 						if(streamId.equals(outStreamId)) {
 							return filterOutputFrame;
 						}

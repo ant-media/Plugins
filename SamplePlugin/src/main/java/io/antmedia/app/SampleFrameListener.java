@@ -23,7 +23,7 @@ public class SampleFrameListener implements IFrameListener{
 	}
 
 	@Override
-	public void writeTrailer() {
+	public void writeTrailer(String streamId) {
 		System.out.println("SampleFrameListener.writeTrailer()");
 	}
 
