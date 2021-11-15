@@ -49,7 +49,7 @@ public class TensorflowFrameListener implements IFrameListener{
 			AVFrame cloneframe = av_frame_clone(videoFrame);
 			vertx.executeBlocking(a->{
 				LocalDateTime ldt =  LocalDateTime.now();
-				String fileName = streamId + "-" + ldt.format(DateTimeFormatter.ofPattern(DATE_TIME_PATTERN));
+				String fileName = streamId + "-" + ldt.format(DateTimeFormatter.ofPattern(DATE_TIME_PATTERN))+".jpeg";
 				AVFrame rgbFrame = Utils.toRGB(cloneframe);
 				byte[] RGBAdata = new byte[rgbFrame.width()*rgbFrame.height()*4];
 				rgbFrame.data(0).get(RGBAdata);
