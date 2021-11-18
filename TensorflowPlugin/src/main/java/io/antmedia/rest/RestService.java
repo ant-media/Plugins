@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.context.WebApplicationContext;
 
 import io.antmedia.plugin.TensorflowPlugin;
+import io.antmedia.rest.model.Result;
 
 @Component
 @Path("/v2/tensorflow")
@@ -34,9 +35,9 @@ public class RestService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response start(@PathParam("streamId") String streamId) {
 		TensorflowPlugin app = getPluginApp();
-		app.startDetection(streamId);
+		boolean result = app.startDetection(streamId);
 
-		return Response.status(Status.OK).entity("").build();
+		return Response.status(Status.OK).entity(new Result(result)).build();
 	}
 	
 	/*
@@ -48,9 +49,9 @@ public class RestService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response stop(@PathParam("streamId") String streamId) {
 		TensorflowPlugin app = getPluginApp();
-		app.stopDetection(streamId);
+		boolean result = app.stopDetection(streamId);
 
-		return Response.status(Status.OK).entity("").build();
+		return Response.status(Status.OK).entity(new Result(result)).build();
 	}
 	
 	private TensorflowPlugin getPluginApp() {

@@ -32,26 +32,33 @@ public class TensorflowPlugin implements ApplicationContextAware, IStreamListene
 		app.addStreamListener(this);
 	}
 		
-	public void startDetection(String streamId) {
+	public boolean startDetection(String streamId) 
+	{
 		AntMediaApplicationAdapter app = getApplication();
 
 		TensorFlowDetector tensorFlowDetector = null;
 		try {
 			tensorFlowDetector = new TensorFlowDetector("lib/detection/");
+
+			frameListener = new TensorflowFrameListener(vertx, tensorFlowDetector, app);
+			app.addFrameListener(streamId, frameListener);
+			return true;
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
-		frameListener = new TensorflowFrameListener(vertx, tensorFlowDetector, app);
-		app.addFrameListener(streamId, frameListener);		
+		
+		return false;
 	}
 
-	public void stopDetection(String streamId) {
+	public boolean stopDetection(String streamId) {
 		AntMediaApplicationAdapter app = getApplication();
-		
+		boolean result = false;
 		if(frameListener != null) {
+			//TODO: Refactor we need to return a value in the interface method
 			app.removeFrameListener(streamId, frameListener);
+			result = true;
 		}
+		return result;
 	}
 	
 	public AntMediaApplicationAdapter getApplication() {
