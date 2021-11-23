@@ -19,7 +19,7 @@ import io.vertx.core.Vertx;
 
 public class TensorflowFrameListener implements IFrameListener{
 
-	private static final long DETECTION_CALL_PERIOD = 0;
+	private static final long DETECTION_CALL_PERIOD = 2000;
 	public static final String DATE_TIME_PATTERN = "yyyy-MM-dd_HH-mm-ss.SSS";
 
 	private TensorFlowDetector detector;
@@ -96,7 +96,7 @@ public class TensorflowFrameListener implements IFrameListener{
 			AVFrame cloneframe = av_frame_clone(videoFrame);
 			vertx.executeBlocking(a->{
 				LocalDateTime ldt =  LocalDateTime.now();
-				String fileName = streamId + "-" + ldt.format(DateTimeFormatter.ofPattern(DATE_TIME_PATTERN));
+				String fileName = streamId + "-" + ldt.format(DateTimeFormatter.ofPattern(DATE_TIME_PATTERN))+".jpg";
 				AVFrame rgbFrame = Utils.toRGB(cloneframe);
 				byte[] RGBAdata = new byte[rgbFrame.width()*rgbFrame.height()*4];
 				rgbFrame.data(0).get(RGBAdata);
