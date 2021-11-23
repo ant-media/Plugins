@@ -7,29 +7,42 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
+
+import javax.imageio.ImageIO;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.antmedia.plugin.IDeepLearningProcessor;
+import io.antmedia.plugin.tensorflow.detection.Classifier.Recognition;
+import io.vertx.core.Vertx;
 
 public class TensorFlowDetector implements IDeepLearningProcessor {
 
 	private Classifier classifier;
 	private String streamId;
 	private long captureCount = 0;
+	private List<Recognition> recognitionList = new ArrayList<Classifier.Recognition>();
+	private Vertx vertx;
+	private long lastUpdate;
+	private boolean tensorflowRunning;
 
 	private static Logger logger = LoggerFactory.getLogger(TensorFlowDetector.class);
 
-	public TensorFlowDetector(String modelDir) throws IOException {
+	public TensorFlowDetector(String modelDir, Vertx vertx) throws IOException {
 		this.classifier = TFObjectDetector.create(modelDir);
+		this.vertx = vertx;
 	}
 
 
 	@Override
-	public BufferedImage process(int width, int height, byte[] data) throws IOException {
+	public BufferedImage process(int width, int height, byte[] data, boolean immediately) throws IOException {
 		long startTime = System.currentTimeMillis();
 
 		BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -46,10 +59,24 @@ public class TensorFlowDetector implements IDeepLearningProcessor {
 				image.setRGB(x, y, c.getRGB());
 			}
 		}
+		
+		if(immediately) {
+			recognitionList = classifier.recognizeImage(image);
+		}
+		else {
+			if(!tensorflowRunning) {
+				tensorflowRunning = true;
+				vertx.executeBlocking(a->{
+					long t0 = System.currentTimeMillis();
+					recognitionList = classifier.recognizeImage(image);
+					logger.info("Processing time: {} ms. Number of found objects {} @{}", (System.currentTimeMillis() - t0), recognitionList.size(), System.currentTimeMillis());
+					tensorflowRunning = false;
+					a.complete();
+				}, null);
+				lastUpdate = startTime;
+			}
+		}
 
-		List<Classifier.Recognition> recognitionList = classifier.recognizeImage(image);
-
-		logger.info("Processing time: {} ms. Number of found objects {}", (System.currentTimeMillis() - startTime), recognitionList.size());
 		if (recognitionList.size() > 0) {
 			Graphics2D g2D = image.createGraphics();
 			g2D.setStroke(new BasicStroke(3));
@@ -62,7 +89,10 @@ public class TensorFlowDetector implements IDeepLearningProcessor {
 						(int) (recognition.getLocation().getHeight() + 0.5));
 
 				g2D.draw(rectangle);
+				
+				String date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM/dd/YY HH:mm:ss"));
 				String text = recognition.getTitle().replaceAll("\"", "")+"("+String.format("%.02f", recognition.getConfidence())+")";
+				text += " "+date;
 				
 				FontMetrics fm = g2D.getFontMetrics();
                 Rectangle2D rect = fm.getStringBounds(text, g2D);

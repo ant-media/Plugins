@@ -35,7 +35,21 @@ public class RestService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response start(@PathParam("streamId") String streamId) {
 		TensorflowPlugin app = getPluginApp();
-		boolean result = app.startDetection(streamId);
+		boolean result = app.startDetection(streamId, false);
+
+		return Response.status(Status.OK).entity(new Result(result)).build();
+	}
+	
+	/*
+	 * Start object detection for the given stream id in Real Time
+	 */
+	@POST
+	@Path("/{streamId}/startRT")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Response startRealTime(@PathParam("streamId") String streamId) {
+		TensorflowPlugin app = getPluginApp();
+		boolean result = app.startDetection(streamId, true);
 
 		return Response.status(Status.OK).entity(new Result(result)).build();
 	}

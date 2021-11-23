@@ -40,7 +40,7 @@ public class TensorFlowRecognizer implements IDeepLearningProcessor {
 	 * @return 
 	 */
 	@Override
-	public BufferedImage process(int width, int height, byte[] data) {
+	public BufferedImage process(int width, int height, byte[] data, boolean immediately) {
 		try (Tensor<Float> image = constructAndExecuteGraphToNormalizeImage(data)) {
 			float[] labelProbabilities = executeInceptionGraph(graphDef, image);
 			int bestLabelIdx = maxIndex(labelProbabilities);
