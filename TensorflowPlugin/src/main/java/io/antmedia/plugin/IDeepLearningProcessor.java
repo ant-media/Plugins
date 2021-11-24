@@ -10,5 +10,5 @@ public interface IDeepLearningProcessor {
 	 * @param data, full data of jpg or png image
 	 * @throws IOException 
 	 */
-	public BufferedImage process(int width, int height, byte[] data) throws IOException;
+	public BufferedImage process(int width, int height, byte[] data, boolean immediately) throws IOException;
 }

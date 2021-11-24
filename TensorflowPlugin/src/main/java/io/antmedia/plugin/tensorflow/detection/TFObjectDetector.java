@@ -164,7 +164,7 @@ public class TFObjectDetector implements Classifier {
                             xmax - xmin,
                             ymax - ymin) {
                     };
-            if (outputScores[i] > 0.5) {
+            if (outputScores[i] > 0.4) {
                 pq.add(new Recognition("" + i, labels.get((int) outputClasses[i]), outputScores[i], detection));
             }
         }
