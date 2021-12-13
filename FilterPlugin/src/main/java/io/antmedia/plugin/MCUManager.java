@@ -146,22 +146,28 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	@Override
 	public void joinedTheRoom(String roomId, String streamId) {
-		 triggerUpdate(roomId);
+		 triggerUpdate(roomId, false);
 		
 	}
 	
-	private void triggerUpdate(String roomId) {
-		roomHasChange(roomId);
-		//call again after the period time to not encounter any problem
-		getApplication().getVertx().setTimer(CONFERENCE_INFO_POLL_PERIOD_MS, id -> {
+	private void triggerUpdate(String roomId, boolean immediately) {
+		if(immediately) {
+			getApplication().getVertx().executeBlocking( l-> {
+				updateRoomFilter(roomId);
+			}, null);
+		}
+		else {
 			roomHasChange(roomId);
-		});
+			//call again after the period time to not encounter any problem
+			getApplication().getVertx().setTimer(immediately ? 1 : CONFERENCE_INFO_POLL_PERIOD_MS, id -> {
+				roomHasChange(roomId);
+			});
+		}
 	}
 
 	@Override
 	public void leftTheRoom(String roomId, String streamId) {
-		
-		triggerUpdate(roomId);
+		triggerUpdate(roomId, true);
 	}
 
 	@Override
