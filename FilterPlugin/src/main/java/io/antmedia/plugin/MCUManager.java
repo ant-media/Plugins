@@ -159,7 +159,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		else {
 			roomHasChange(roomId);
 			//call again after the period time to not encounter any problem
-			getApplication().getVertx().setTimer(immediately ? 1 : CONFERENCE_INFO_POLL_PERIOD_MS, id -> {
+			getApplication().getVertx().setTimer(CONFERENCE_INFO_POLL_PERIOD_MS, id -> {
 				roomHasChange(roomId);
 			});
 		}
