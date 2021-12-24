@@ -174,7 +174,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 			String videoFilterArgs = "video_size="+videoStreamParams.codecParameters.width()+"x"+videoStreamParams.codecParameters.height()+":"
 					+ "pix_fmt="+videoStreamParams.codecParameters.format()+":"
-					+ "time_base="+videoStreamParams.timeBase.num()+"/"+videoStreamParams.timeBase.den()+":"
+					+ "time_base="+1+"/"+1000+":"
 					+ "pixel_aspect=1/1";
 			
 			if(!videoStreamParams.enabled) {
@@ -205,6 +205,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		for (String streamId : currentOutStreams.keySet()) {
 			videoSinkFiltersMap.put(streamId, new Filter("buffersink", null, "out"+i));
 			audioSinkFiltersMap.put(streamId, new Filter("abuffersink", null, "out"+i));
+			i++;
 		}
 		
 		long currentVideoPts = 0;

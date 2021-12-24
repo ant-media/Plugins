@@ -39,7 +39,6 @@ public class FilterGraph {
 	private Object lock = new Object();
 	private boolean initiated = false;
 	private IFilteredFrameListener listener;
-	private int count;
 
 	private long currentPts = 0; 
 
