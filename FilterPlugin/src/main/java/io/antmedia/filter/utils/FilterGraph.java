@@ -39,7 +39,6 @@ public class FilterGraph {
 	private Object lock = new Object();
 	private boolean initiated = false;
 	private IFilteredFrameListener listener;
-	private int count;
 
 	private long currentPts = 0; 
 
@@ -190,6 +189,10 @@ public class FilterGraph {
 
 	public void setListener(IFilteredFrameListener listener) {
 		this.listener = listener;
+	}
+	
+	public IFilteredFrameListener getListener() {
+		return listener;
 	}
 
 	public void close() {
