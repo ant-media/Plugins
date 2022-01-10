@@ -12,6 +12,7 @@
 	<url>http://maven.apache.org</url>
 	<packaging>jar</packaging>
 	<properties>
+        <skipTests>false</skipTests>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 	<developers>
@@ -138,6 +139,15 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useSystemClassLoader>false</useSystemClassLoader>
+                    <argLine>@{argLine} --illegal-access=permit -Xmx750M -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Djava.library.path=${project.basedir}/src/main/server/lib/native-linux-x86_64</argLine>
+                	<skipAfterFailureCount>1</skipAfterFailureCount>
+                </configuration>
+            </plugin>
 			<plugin>
 			    <groupId>org.jacoco</groupId>
 			    <artifactId>jacoco-maven-plugin</artifactId>
