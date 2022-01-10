@@ -19,11 +19,16 @@ import java.util.ListIterator;
 import java.util.Map;
 
 import org.apache.commons.lang3.RandomUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.javacpp.Pointer;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.filter.FilterAdaptor;
@@ -34,6 +39,22 @@ import io.antmedia.filter.utils.IFilteredFrameListener;
 import io.vertx.core.Vertx;
 
 public class FilterAdaptorUnitTest {
+	
+	@Rule
+	public TestRule watcher = new TestWatcher() {
+		protected void starting(Description description) {
+			System.out.println("Starting test: " + description.getMethodName());
+		}
+
+		protected void failed(Throwable e, Description description) {
+			System.out.println("Failed test: " + description.getMethodName() + " e: " + ExceptionUtils.getStackTrace(e));
+		};
+
+		protected void finished(Description description) {
+			System.out.println("Finishing test: " + description.getMethodName());
+		};
+	};
+	
 	private static Vertx vertx;
 
 	@AfterClass
