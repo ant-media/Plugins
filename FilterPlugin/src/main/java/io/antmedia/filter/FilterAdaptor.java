@@ -65,7 +65,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 	@Override
 	public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
-		if(audioFilterGraph == null || !audioFilterGraph.isInitiated()) {
+		if(audioFilterGraph == null || !audioFilterGraph.isInitiated() || audioFilterGraph.getListener() == null) {
 			return audioFrame;
 		}
 		AVFrame filterInputframe;
@@ -74,16 +74,18 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			//copy the input frame then return it immediately
 			filterInputframe = av_frame_clone(audioFrame);
 
-			//vertx.executeBlocking(a->{
-			audioFilterGraph.doFilter(streamId, filterInputframe);
-			//},b->{});
+			vertx.executeBlocking(a->{
+				audioFilterGraph.doFilter(streamId, filterInputframe);
+			},b->{});
 			filterOutputFrame = audioFrame;
 			av_frame_free(filterInputframe);
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) {
 			filterInputframe = audioFrame;
+			vertx.executeBlocking(a->{
+				audioFilterGraph.doFilter(streamId, filterInputframe);
+			},b->{});
 
-			audioFilterGraph.doFilter(streamId, filterInputframe);
 			filterOutputFrame = null; //lastpoint
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS)){
@@ -95,7 +97,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 	@Override
 	public AVFrame onVideoFrame(String streamId, AVFrame videoFrame) {
-		if(videoFilterGraph == null || !videoFilterGraph.isInitiated()) {
+		if(videoFilterGraph == null || !videoFilterGraph.isInitiated() || videoFilterGraph.getListener() == null) {
 			return videoFrame;
 		}
 		AVFrame filterInputframe;
@@ -104,17 +106,18 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			//copy the input frame then refilteredVideoFramesturn it immediately
 			filterInputframe = av_frame_clone(videoFrame);
 			
-			//vertx.executeBlocking(a->{
-			videoFilterGraph.doFilter(streamId, filterInputframe);
-			//},b->{});
+			vertx.executeBlocking(a->{
+				videoFilterGraph.doFilter(streamId, filterInputframe);
+			},b->{});
 			filterOutputFrame = videoFrame;
 			av_frame_free(filterInputframe);
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) {
 			filterInputframe = videoFrame;
 			filterOutputFrame = null; //lastpoint
-
-			videoFilterGraph.doFilter(streamId, filterInputframe);
+			vertx.executeBlocking(a->{
+				videoFilterGraph.doFilter(streamId, filterInputframe);
+			},b->{});
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS)){
 			filterInputframe = videoFrame;
@@ -421,4 +424,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
 		return packet;
 	}
+
+	public void setVideoFilterGraphForTest(FilterGraph filterGraph) {
+		this.videoFilterGraph = filterGraph;
+	}
+
+	public void setAudioFilterGraphForTest(FilterGraph filterGraph) {
+		this.audioFilterGraph = filterGraph;
+	}
+
 }

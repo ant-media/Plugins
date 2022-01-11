@@ -1,15 +1,37 @@
+package io.antmedia.test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 
 import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterGraph;
 
 public class FilterGraphUnitTest {
+	
+	@Rule
+	public TestRule watcher = new TestWatcher() {
+		protected void starting(Description description) {
+			System.out.println("Starting test: " + description.getMethodName());
+		}
+
+		protected void failed(Throwable e, Description description) {
+			System.out.println("Failed test: " + description.getMethodName() + " e: " + ExceptionUtils.getStackTrace(e));
+		};
+
+		protected void finished(Description description) {
+			System.out.println("Finishing test: " + description.getMethodName());
+		};
+	};
+	
 	@Test
 	public void testFilterGraphParse() {
 		assertFalse(createFilterGraph("dummy_filter_description", 1, 1));
