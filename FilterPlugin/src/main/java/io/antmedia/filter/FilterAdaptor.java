@@ -76,9 +76,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 			vertx.executeBlocking(a->{
 				audioFilterGraph.doFilter(streamId, filterInputframe);
+				av_frame_free(filterInputframe);
 			},b->{});
 			filterOutputFrame = audioFrame;
-			av_frame_free(filterInputframe);
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) {
 			filterInputframe = audioFrame;
@@ -108,9 +108,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			
 			vertx.executeBlocking(a->{
 				videoFilterGraph.doFilter(streamId, filterInputframe);
+				av_frame_free(filterInputframe);
 			},b->{});
 			filterOutputFrame = videoFrame;
-			av_frame_free(filterInputframe);
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) {
 			filterInputframe = videoFrame;
