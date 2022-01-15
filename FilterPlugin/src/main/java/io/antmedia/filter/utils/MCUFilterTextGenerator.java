@@ -32,7 +32,7 @@ public class MCUFilterTextGenerator {
 		int margin = 3;
 		
 		if(streamCount == 1) {
-			return "[in0]scale="+(width)+":"+(height)+":force_original_aspect_ratio=decrease,pad=720:480:(ow-iw)/2:(oh-ih)/2:color="+color+"[out0]";
+			return "[in0]copy[out0]";
 		}
 
 		String filter = "";
