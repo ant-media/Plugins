@@ -30,6 +30,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	private Queue<String> conferenceRoomsUpdated = new ConcurrentLinkedQueue<>(); //room to change availibility map
 	public static final long CONFERENCE_INFO_POLL_PERIOD_MS = 5000;
+	public static final String MERGED_SUFFIX = "Merged";
 	private long roomUpdateTimer = -1L;
 	private ApplicationContext applicationContext;
 	private AntMediaApplicationAdapter appAdaptor;
@@ -37,6 +38,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	private String pluginType = FilterConfiguration.ASYNCHRONOUS;
 	private static Logger logger = LoggerFactory.getLogger(MCUManager.class);
 	private Queue<String> roomsHasCustomFilters = new ConcurrentLinkedQueue<>();
+	
 
 
 	@Override
@@ -110,7 +112,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 					filterConfiguration.setFilterId(roomId);
 					filterConfiguration.setInputStreams(streams);
 					List<String> outputStreams = new ArrayList<>();
-					outputStreams.add(roomId);
+					outputStreams.add(roomId+MERGED_SUFFIX);
 					filterConfiguration.setOutputStreams(outputStreams);
 					filterConfiguration.setVideoFilter(MCUFilterTextGenerator.createVideoFilter(streams.size()));
 					filterConfiguration.setAudioFilter(MCUFilterTextGenerator.createAudioFilter(streams.size()));
