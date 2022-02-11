@@ -2,6 +2,7 @@ package io.antmedia.plugin;
 
 import static org.bytedeco.ffmpeg.global.avutil.*;
 import static org.bytedeco.ffmpeg.global.swscale.SWS_BICUBIC;
+import static org.bytedeco.ffmpeg.global.swscale.sws_freeContext;
 import static org.bytedeco.ffmpeg.global.swscale.sws_getCachedContext;
 import static org.bytedeco.ffmpeg.global.swscale.sws_scale;
 
@@ -59,6 +60,10 @@ public class Utils {
 
 		outFrame.pts(inFrame.pts());
 		
+		
+		sws_freeContext(sws_ctx);
+		sws_ctx.close();
+		
 		return outFrame;
 	}
 
@@ -106,6 +111,9 @@ public class Utils {
 				0, inFrame.height(), outFrame.data(), outFrame.linesize());
 
 		outFrame.pts(inFrame.pts());
+		
+		sws_freeContext(sws_ctx);
+		sws_ctx.close();
 		
 		return outFrame;
 	}
