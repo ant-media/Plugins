@@ -170,7 +170,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	@Override
 	public void leftTheRoom(String roomId, String streamId) {
 		//since this is left event roomFilter should be available
-		if(roomsHasCustomFilters.contains(roomId)) {
+		if(getFiltersManager().hasFilter(roomId)) {
 			triggerUpdate(roomId, true);
 		}
 	}

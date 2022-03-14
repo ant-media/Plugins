@@ -40,6 +40,7 @@ import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.filter.utils.IFilteredFrameListener;
+import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
 import io.vertx.core.Vertx;
 
@@ -67,15 +68,19 @@ public class MCUManagerUnitTest {
 		MCUManager mcuManager = spy(new MCUManager());
 		doNothing().when(mcuManager).triggerUpdate(anyString(), anyBoolean());
 		
+		FiltersManager filtersManager = spy(new FiltersManager());
+		
+		doReturn(filtersManager).when(mcuManager).getFiltersManager();
+		
 		String room1 = "room1";
 		String room2 = "room2";
 		
 		String stream1 = "stream1";
 		String stream2 = "stream2";
 
+		doReturn(true).when(filtersManager).hasFilter(room1);
+		doReturn(false).when(filtersManager).hasFilter(room2);
 
-		mcuManager.getRoomsHasCustomFilters().add(room1);
-		
 		mcuManager.leftTheRoom(room1, stream1);
 		verify(mcuManager, times(1)).triggerUpdate(room1, true);
 		
