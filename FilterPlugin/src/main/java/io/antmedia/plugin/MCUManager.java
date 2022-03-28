@@ -152,7 +152,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		
 	}
 	
-	private void triggerUpdate(String roomId, boolean immediately) {
+	public void triggerUpdate(String roomId, boolean immediately) {
 		if(immediately) {
 			getApplication().getVertx().executeBlocking( l-> {
 				updateRoomFilter(roomId);
@@ -169,7 +169,11 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	@Override
 	public void leftTheRoom(String roomId, String streamId) {
-		triggerUpdate(roomId, true);
+		//since this is left event roomFilter should be available
+		if(getFiltersManager().hasFilter(roomId)) {
+			triggerUpdate(roomId, true);
+		}
+
 	}
 
 	@Override

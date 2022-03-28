@@ -62,4 +62,8 @@ public class FiltersManager {
 		}
 		return false;
 	}
+
+	public boolean hasFilter(String filterId) {
+		return filterList.containsKey(filterId);
+	}
 }
