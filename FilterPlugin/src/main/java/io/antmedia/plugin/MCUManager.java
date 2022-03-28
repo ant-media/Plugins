@@ -173,6 +173,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		if(getFiltersManager().hasFilter(roomId)) {
 			triggerUpdate(roomId, true);
 		}
+
 	}
 
 	@Override
@@ -187,9 +188,5 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	public void setPluginType(String type) {
 		this.pluginType = type;
-	}
-
-	public Queue<String> getRoomsHasCustomFilters() {
-		return roomsHasCustomFilters;
 	}
 }
