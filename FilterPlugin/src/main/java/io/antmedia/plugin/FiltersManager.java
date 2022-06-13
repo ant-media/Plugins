@@ -24,10 +24,12 @@ public class FiltersManager {
 	 */
 	public boolean createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter appAdaptor) {
 		boolean decodeStreams = appAdaptor.getAppSettings().getEncoderSettings().isEmpty();
+		int frameRate = appAdaptor.getAppSettings().getWebRTCFrameRate();
+
 		String filter = filterConfiguration.getFilterId();
 		FilterAdaptor filterAdaptor = filterList.get(filter);
 		if(filterAdaptor == null) {
-			filterAdaptor = new FilterAdaptor(decodeStreams);
+			filterAdaptor = new FilterAdaptor(decodeStreams, frameRate);
 			filterList.put(filter, filterAdaptor);
 		}
 

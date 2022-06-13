@@ -58,9 +58,11 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	private static final int WIDTH = 720;
 	private static final int HEIGHT = 480;
 	private boolean selfDecodeStreams = true;
+	private int frameRate = 30;
 
-	public FilterAdaptor(boolean selfDecodeVideo) {
+	public FilterAdaptor(boolean selfDecodeVideo, int frameRate) {
 		this.selfDecodeStreams  = selfDecodeVideo;
+		this.frameRate  = frameRate;
 	}
 
 	@Override
@@ -141,7 +143,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		
 		if(selfDecodeStreams) {
 			
-			VideoDecoder decoder = new VideoDecoder(streamId, videoStreamInfo);
+			VideoDecoder decoder = new VideoDecoder(streamId, videoStreamInfo, frameRate);
 			if(decoder.isInitialized()) {
 				videoDecodersMap.put(streamId, decoder);
 			}
@@ -333,6 +335,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				
 				if(selfDecodeStreams) {
 					app.addPacketListener(streamId, this);
+					app.addFrameListener(streamId, this);
 				}
 				else {
 					app.addFrameListener(streamId, this);

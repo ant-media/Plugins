@@ -71,7 +71,7 @@ public class FilterAdaptorUnitTest {
 	
 	@Test
 	public void testFilterGraphVideoFeed() {
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false, 0));
 		doReturn(true).when(filterAdaptor).update();
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
@@ -109,7 +109,7 @@ public class FilterAdaptorUnitTest {
 	
 	@Test
 	public void testFilterGraphAudioFeed() {
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false, 0));
 		doReturn(true).when(filterAdaptor).update();
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
