@@ -49,7 +49,7 @@ You should pass the filter configuration in JSON format. That JSON should contai
 - **videoFilter:** video filter definition, define inputs as [in0], [in1] ... 
 - **audioFilter:** audio filter definition, define inputs as [out0], [out1] ...
 - **videoEnabled:** true if video will be filtered
-- **audioenabled:** true
+- **audioenabled:** true if video will be filtered
 
 **Example:** You can apply a vertical flip filter to videao and copy filter to audio with the following REST method call:
 
@@ -58,6 +58,16 @@ curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json
 ```
 
 Note that the stream ID should be `stream1` and the filtered stream ID will be `test`.
+
+**Note:**
+After version 2.4.4 you don't have to use all input streams label in the filter text. This provides more flexibility to filter video and audio for streams separately. For example you may have 3 input streams but you want to apply a video filter to 2 of those streams and audio filter to another 2 streams. 
+One possible use case for such a flexibility is merging the video of a stream with the audio of another stream. You can do this by applying such a filter:
+
+```
+curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "http://localhost:5080/WebRTCAppEE/rest/v2/filters/create" -d '{"inputStreams":["stream1","stream2"],"outputStreams":["test"],"videoFilter":"[in0]copy[out0]","audioFilter":"[in1]acopy[out0]","videoEnabled":"true","audioEnabled":"true"}'
+```
+
+Here we merged *stream1*'s video with the *stream2*'s audio into a new stream *test*.
 
 # Build
 To build Filter Plugin you should first clone and build [ant-media-server-parent](https://github.com/ant-media/ant-media-server-parent) project.
