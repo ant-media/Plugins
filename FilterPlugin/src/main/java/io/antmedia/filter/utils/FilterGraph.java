@@ -1,4 +1,4 @@
-package io.antmedia.filter;
+package io.antmedia.filter.utils;
 
 
 import static org.bytedeco.ffmpeg.global.avfilter.av_buffersink_get_frame;
@@ -39,7 +39,6 @@ public class FilterGraph {
 	private Object lock = new Object();
 	private boolean initiated = false;
 	private IFilteredFrameListener listener;
-	private int count;
 
 	private long currentPts = 0; 
 
@@ -175,7 +174,6 @@ public class FilterGraph {
 						break;
 					}
 					else {
-						//Utils.save(filterOutputFrame, "out"+(count++));
 						if(streamId.equals(outStreamId)) {
 							return filterOutputFrame;
 						}
@@ -191,6 +189,10 @@ public class FilterGraph {
 
 	public void setListener(IFilteredFrameListener listener) {
 		this.listener = listener;
+	}
+	
+	public IFilteredFrameListener getListener() {
+		return listener;
 	}
 
 	public void close() {

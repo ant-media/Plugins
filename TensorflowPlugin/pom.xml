@@ -7,7 +7,7 @@
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.antmedia.plugin</groupId>
-	<artifactId>SamplePlugin</artifactId>
+	<artifactId>ant-media-tensorflow-plugin</artifactId>
 	<packaging>jar</packaging>
 	<name>Plugin Maven Webapp</name>
 	<url>http://maven.apache.org</url>
@@ -28,7 +28,7 @@
 			<comments>A business-friendly OSS license</comments>
 		</license>
 	</licenses>
-	 <repositories>
+	<repositories>
         <repository>
             <snapshots>
                 <enabled>false</enabled>
@@ -59,7 +59,7 @@
 		</repository>
 	</distributionManagement>
 	<build>
-		<finalName>PluginApp</finalName>
+		<finalName>ant-media-tensorflow-plugin</finalName>
 		<testSourceDirectory>src/test/java</testSourceDirectory>
 		<plugins>
 			<plugin>
@@ -268,6 +268,18 @@
     		<groupId>org.bytedeco</groupId>
     		<artifactId>ffmpeg-platform</artifactId>
             <version>${javacpp.ffmpeg.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.tensorflow</groupId>
+            <artifactId>tensorflow</artifactId>
+            <version>${tensorflow.version}</version>
+            <scope>provided</scope>
+        </dependency>
+         <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${protobuf-java.version}</version>
             <scope>provided</scope>
         </dependency>
 	</dependencies>

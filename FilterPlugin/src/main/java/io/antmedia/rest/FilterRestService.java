@@ -19,14 +19,12 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.WebApplicationContext;
 
-import com.google.gson.Gson;
-
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.IApplicationAdaptorFactory;
-import io.antmedia.filter.FilterConfiguration;
+import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
 import io.antmedia.rest.model.Result;
+import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 
 @Component
@@ -35,22 +33,23 @@ public class FilterRestService {
 
 	@Context
 	protected ServletContext servletContext;
-	Gson gson = new Gson();
 
+
+	@ApiOperation(value = "Creates or update the filter. If the filterId of the FilterConfiguration is already available, it just updates the configuration. Otherwise it creates the filter", notes = "", response = Result.class)
 	@POST
 	@Path("/create")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result create(@ApiParam(value="Filter object with the updates") FilterConfiguration filterConfiguration) {
+	public Result create(@ApiParam(value="Filter object with the updates") FilterConfiguration filterConfiguration) 
+	{
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
-		AntMediaApplicationAdapter adaptor = ((IApplicationAdaptorFactory) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME)).getAppAdaptor();
+		AntMediaApplicationAdapter adaptor = (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
-		filtersManager.createFilter(filterConfiguration, adaptor);
 		
-		return new Result(true);
+		return new Result(filtersManager.createFilter(filterConfiguration, adaptor));
 	}
 	
-	
+	@ApiOperation(value = "Returns the list of filters effective in the application", notes = "", response = Result.class)
 	@GET
 	@Path("/list/{offset}/{size}")
 	@Produces(MediaType.APPLICATION_JSON)
@@ -69,19 +68,20 @@ public class FilterRestService {
 		return filtersManager.getfilters();
 	}
 
+	@ApiOperation(value = "Delete the filter according to the filterId", notes = "", response = Result.class)
 	@DELETE
 	@Path("/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result delete(@ApiParam(value="Filter id for deleting filter") @PathParam("id") String id) {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
-		AntMediaApplicationAdapter adaptor = ((IApplicationAdaptorFactory) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME)).getAppAdaptor();
+		AntMediaApplicationAdapter adaptor = (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
-		filtersManager.delete(id, adaptor);
 		
-		return new Result(true);
+		return new Result(filtersManager.delete(id, adaptor));
 	}
 	
+	@ApiOperation(value = "Set the plugin type of the MCU function. This type is in application specific not room specific", notes = "", response = Result.class)
 	@PUT
 	@Path("/{id}/mcu-plugin-type")
 	@Produces(MediaType.APPLICATION_JSON)
@@ -92,5 +92,38 @@ public class FilterRestService {
 		mcuManager.setPluginType(type);
 		return new Result(true);
 	}
+	
+	@ApiOperation(value = "Set a filter specific to the MCU room. When this method is used, it always uses this filter. If you want to change to the default behaviour, you need to reset the MCU filter", notes = "", response = Result.class)
+	@PUT
+	@Path("/mcu-filter")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result setCustomMCUFilter(@ApiParam(value="Filter object with the updates") FilterConfiguration filterConfiguration) {
+		Result result = create(filterConfiguration);
+		
+		if (result.isSuccess()) {
+			ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
+			MCUManager mcuManager = (MCUManager) appCtx.getBean(MCUManager.BEAN_NAME);
+			mcuManager.customFilterAdded(filterConfiguration.getFilterId());
+		}
+		
+		return result;
+	}
+	
+	@ApiOperation(value = "Reset the default MCU filter", notes = "", response = Result.class)
+	@DELETE
+	@Path("/mcu-filter/{id}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result resetMCUFilter(@ApiParam(value="Filter object with the updates") @PathParam("id") String filterId) {
+		
+		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
+		MCUManager mcuManager = (MCUManager) appCtx.getBean(MCUManager.BEAN_NAME);
+		
+		
+		return new Result(mcuManager.customFilterRemoved(filterId));
+	}
+	
+	
 
 }

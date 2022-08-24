@@ -1,6 +1,15 @@
-package io.antmedia.filter;
+package io.antmedia.filter.utils;
 
-public class FilterUtils {
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.antmedia.plugin.MCUManager;
+
+public class MCUFilterTextGenerator {
+	
+	private static Logger logger = LoggerFactory.getLogger(MCUFilterTextGenerator.class);
+	
 	public static String createAudioFilter(int streamCount) {
 		if(streamCount == 1) {
 			return "[in0]acopy[out0]";
@@ -23,7 +32,7 @@ public class FilterUtils {
 		int margin = 3;
 		
 		if(streamCount == 1) {
-			return "[in0]scale="+(width)+":"+(height)+":force_original_aspect_ratio=decrease,pad=720:480:(ow-iw)/2:(oh-ih)/2:color="+color+"[out0]";
+			return "[in0]copy[out0]";
 		}
 
 		String filter = "";
@@ -62,7 +71,7 @@ public class FilterUtils {
 			filter += "vstack=inputs=" + rows + ",pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]";
 		}
 		
-		System.out.println("generated filter:"+filter);
+		logger.info("generated filter:{}", filter);
 
 		return filter;
 	}

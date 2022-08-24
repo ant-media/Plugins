@@ -7,8 +7,8 @@ if [ $OUT -ne 0 ]; then
     exit $OUT
 fi
 
-rm -r $AMS_DIR/plugins/PluginApp*
-cp target/PluginApp.jar $AMS_DIR/plugins
+rm -r $AMS_DIR/plugins/ant-media-tensorflow-plugin*
+cp target/ant-media-tensorflow-plugin.jar $AMS_DIR/plugins/
 
 OUT=$?
 

@@ -10,13 +10,19 @@ public class SamplePacketListener implements IPacketListener{
 	private int packetCount = 0;
 
 	@Override
-	public void writeTrailer() {
+	public void writeTrailer(String streamId) {
 		System.out.println("SamplePacketListener.writeTrailer()");
 		
 	}
 
 	@Override
-	public AVPacket onPacket(String streamId, AVPacket packet) {
+	public AVPacket onVideoPacket(String streamId, AVPacket packet) {
+		packetCount++;
+		return packet;
+	}
+	
+	@Override
+	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
 		packetCount++;
 		return packet;
 	}
