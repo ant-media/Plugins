@@ -131,10 +131,9 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 				//handle any unexpected exception to not have any problem in outer loop
 				logger.error(ExceptionUtils.getStackTrace(e));
 			}
-			else if(!room.isZombi()) {
-				conferenceRooms.remove(roomId);
-				getFiltersManager().delete(roomId, getApplication());
-			}
+		}
+		else if(!room.isZombi() && room.getRoomStreamList().isEmpty()) {
+			getFiltersManager().delete(roomId, getApplication());
 		}
 
 		return result;
