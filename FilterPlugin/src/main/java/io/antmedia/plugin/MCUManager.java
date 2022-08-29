@@ -83,7 +83,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		return filtersManager;
 	}
 
-	private synchronized boolean updateRoomFilter(String roomId) 
+	public synchronized boolean updateRoomFilter(String roomId) 
 	{
 		DataStore datastore = getApplication().getDataStore();
 		ConferenceRoom room = datastore.getConferenceRoom(roomId);
@@ -132,8 +132,21 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 				logger.error(ExceptionUtils.getStackTrace(e));
 			}
 		}
-		else if(!room.isZombi() && room.getRoomStreamList().isEmpty()) {
-			getFiltersManager().delete(roomId, getApplication());
+		else if(!room.isZombi()) {
+			/*
+			 * This is to delete merged broadcast in case of non-zombi room and custom filter
+			 * delete if the all broadcasts are in non broadcasting status
+			 */
+			boolean deleteRoom = true;
+			for (String streamId : room.getRoomStreamList()) {
+				Broadcast broadcast = datastore.get(streamId);
+				if(broadcast != null && broadcast.getStatus().equals(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING)) {
+					deleteRoom = false;
+				}
+			} 
+			if(deleteRoom) {
+				result = getFiltersManager().delete(roomId, getApplication());
+			}	
 		}
 
 		return result;
