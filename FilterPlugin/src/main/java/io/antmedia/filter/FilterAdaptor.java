@@ -186,28 +186,32 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		for (String streamId : currentInStreams) 
 		{
 			StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
+			if(videoStreamParams.enabled) {
 
-			String videoFilterArgs = "video_size="+videoStreamParams.codecParameters.width()+"x"+videoStreamParams.codecParameters.height()+":"
-					+ "pix_fmt="+videoStreamParams.codecParameters.format()+":"
-					+ "time_base="+1+"/"+1000+":"
-					+ "pixel_aspect=1/1";
-			
-			if(!videoStreamParams.enabled) {
-				//define dummy args
-				videoFilterArgs = "video_size=360x360:pix_fmt=0:time_base=1/20:pixel_aspect=1/1";
+				String videoFilterArgs = "video_size="+videoStreamParams.codecParameters.width()+"x"+videoStreamParams.codecParameters.height()+":"
+						+ "pix_fmt="+videoStreamParams.codecParameters.format()+":"
+						+ "time_base="+1+"/"+1000+":"
+						+ "pixel_aspect=1/1";
+
+
+				if(filterConfiguration.getVideoFilter().contains("["+"in"+i+"]")) {
+					videoSourceFiltersMap.put(streamId, new Filter("buffer", videoFilterArgs, "in"+i));
+				}
 			}
-			
-			videoSourceFiltersMap.put(streamId, new Filter("buffer", videoFilterArgs, "in"+i));
-
 
 			StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
 			
-			String audioFilterArgs = "channel_layout="+audioStreamParams.codecParameters.channel_layout()+":"
-					+ "sample_fmt="+audioStreamParams.codecParameters.format()+":"
-					+ "time_base="+1+"/"+audioStreamParams.timeBase.num()+"/"+audioStreamParams.timeBase.den()+":"
-					+ "sample_rate="+audioStreamParams.codecParameters.sample_rate();
-			
-			audioSourceFiltersMap.put(streamId, new Filter("abuffer", audioFilterArgs, "in"+i));
+			if(audioStreamParams.enabled) {
+				String audioFilterArgs = "channel_layout="+audioStreamParams.codecParameters.channel_layout()+":"
+						+ "sample_fmt="+audioStreamParams.codecParameters.format()+":"
+						+ "time_base="+audioStreamParams.timeBase.num()+"/"+audioStreamParams.timeBase.den()+":"
+						+ "sample_rate="+audioStreamParams.codecParameters.sample_rate();
+
+				if(filterConfiguration.getAudioFilter().contains("["+"in"+i+"]")) {
+					audioSourceFiltersMap.put(streamId, new Filter("abuffer", audioFilterArgs, "in"+i));
+				}
+			}
+
 			i++;
 		}
 		FilterGraph prevVideoFilterGraph = videoFilterGraph;
@@ -223,65 +227,69 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			i++;
 		}
 		
-		long currentVideoPts = 0;
-		if(videoFilterGraph != null) {
-			currentVideoPts = videoFilterGraph.getCurrentPts();
-		}
-		
-		/*
-		 * Initialize the video filter graph which does the real job
-		 * Filter text and inputs buffer and output buffer sinks are provided as parameter
-		 */
-		videoFilterGraph = new FilterGraph(filterConfiguration.getVideoFilter(), videoSourceFiltersMap , videoSinkFiltersMap);
-		if(!videoFilterGraph.isInitiated()) {
-			logger.error("Video filter graph can not be initiated: {}", filterConfiguration.getVideoFilter());
-			return false;
-		}
-		videoFilterGraph.setCurrentPts(currentVideoPts);
-		
-		/*
-		 * Set the listener of video filter graph. FilterGrapah calls the listener for the filtered output frame
-		 */
-		videoFilterGraph.setListener((streamId, frame)->{
-			if(frame != null && currentOutStreams.containsKey(streamId)) {
-				IFrameListener frameListener = currentOutStreams.get(streamId);
-				if(frameListener != null) { 
-					//framelistener is a custombroadcast
-					frameListener.onVideoFrame(streamId, frame);
-				}
+		if(filterConfiguration.isVideoEnabled()) {
+			long currentVideoPts = 0;
+			if(videoFilterGraph != null) {
+				currentVideoPts = videoFilterGraph.getCurrentPts();
 			}
-		});
-		
-		if(prevVideoFilterGraph != null) {
-			prevVideoFilterGraph.close();
-		}
-		
-		FilterGraph prevAudioFilterGraph = audioFilterGraph;
-		long currentAudioPts = 0;
 
-		
-		if(audioFilterGraph != null) {
-			currentAudioPts = audioFilterGraph.getCurrentPts();
-		}
-		
-		audioFilterGraph = new FilterGraph(filterConfiguration.getAudioFilter(), audioSourceFiltersMap , audioSinkFiltersMap);
-		if(!audioFilterGraph.isInitiated()) {
-			logger.error("Audio filter graph can not be initiated:{}", filterConfiguration.getAudioFilter());
-			return false;
-		}
-		audioFilterGraph.setCurrentPts(currentAudioPts);
-		audioFilterGraph.setListener((streamId, frame)->{
-			if(frame != null && currentOutStreams.containsKey(streamId)) {
-				IFrameListener frameListener = currentOutStreams.get(streamId);
-				if(frameListener != null) { 
-					//framelistener is a custombroadcast
-					frameListener.onAudioFrame(streamId, frame);
-				}
+			/*
+			 * Initialize the video filter graph which does the real job
+			 * Filter text and inputs buffer and output buffer sinks are provided as parameter
+			 */
+			videoFilterGraph = new FilterGraph(filterConfiguration.getVideoFilter(), videoSourceFiltersMap , videoSinkFiltersMap);
+			if(!videoFilterGraph.isInitiated()) {
+				logger.error("Video filter graph can not be initiated: {}", filterConfiguration.getVideoFilter());
+				return false;
 			}
-		});
+			videoFilterGraph.setCurrentPts(currentVideoPts);
+
+			/*
+			 * Set the listener of video filter graph. FilterGrapah calls the listener for the filtered output frame
+			 */
+			videoFilterGraph.setListener((streamId, frame)->{
+				if(frame != null && currentOutStreams.containsKey(streamId)) {
+					IFrameListener frameListener = currentOutStreams.get(streamId);
+					if(frameListener != null) { 
+						//framelistener is a custombroadcast
+						frameListener.onVideoFrame(streamId, frame);
+					}
+				}
+			});
+
+			if(prevVideoFilterGraph != null) {
+				prevVideoFilterGraph.close();
+			}
+		}
 		
-		if(prevAudioFilterGraph != null) {
-			prevAudioFilterGraph.close();
+		if(filterConfiguration.isAudioEnabled()) {
+			FilterGraph prevAudioFilterGraph = audioFilterGraph;
+			long currentAudioPts = 0;
+
+
+			if(audioFilterGraph != null) {
+				currentAudioPts = audioFilterGraph.getCurrentPts();
+			}
+
+			audioFilterGraph = new FilterGraph(filterConfiguration.getAudioFilter(), audioSourceFiltersMap , audioSinkFiltersMap);
+			if(!audioFilterGraph.isInitiated()) {
+				logger.error("Audio filter graph can not be initiated:{}", filterConfiguration.getAudioFilter());
+				return false;
+			}
+			audioFilterGraph.setCurrentPts(currentAudioPts);
+			audioFilterGraph.setListener((streamId, frame)->{
+				if(frame != null && currentOutStreams.containsKey(streamId)) {
+					IFrameListener frameListener = currentOutStreams.get(streamId);
+					if(frameListener != null) { 
+						//framelistener is a custombroadcast
+						frameListener.onAudioFrame(streamId, frame);
+					}
+				}
+			});
+
+			if(prevAudioFilterGraph != null) {
+				prevAudioFilterGraph.close();
+			}
 		}
 		
 		return true;

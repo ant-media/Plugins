@@ -1,6 +1,7 @@
 package io.antmedia.test;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -23,6 +25,7 @@ import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
+import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.javacpp.Pointer;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -38,6 +41,7 @@ import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.filter.utils.IFilteredFrameListener;
+import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
 import io.vertx.core.Vertx;
 
@@ -148,6 +152,92 @@ public class FilterAdaptorUnitTest {
 
 		filterAdaptor.onAudioFrame(streamId, frame);
 		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any());
+	}
+	
+	@Test
+	public void testVideoAudioFiltering() {
+		testFiltering(true, "[in0][in1][in2]vstack=inputs=3[out0]", true, "[in0][in1][in2]amix=inputs=3[out0]");
+	}
+	
+	//use some of the inputs in the filter
+	@Test 
+	public void testPartialVideoAudioFiltering() {
+		testFiltering(true, "[in0][in2]vstack=inputs=2[out0]", true, "[in0][in2]amix=inputs=2[out0]");
+	}
+	
+	@Test
+	public void testVideoOnlyFiltering() {
+		testFiltering(true, "[in0][in1][in2]vstack=inputs=3[out0]", false, "dummy");
+	}
+	
+	@Test
+	public void testAudioOnlyFiltering() {
+		testFiltering(false, "dummy", true, "[in0][in1][in2]amix=inputs=3[out0]");
+	}
+	
+	
+	public void testFiltering(boolean videoEnabled, String videoFilter, boolean audioEnabled, String audioFilter) {
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+		when(app.createCustomBroadcast(anyString())).thenReturn(mock(IFrameListener.class));
+
+		String stream1 = "inStream1";
+		String stream2 = "inStream2";
+		String stream3 = "inStream3";
+		
+		String output1 = "outStream1";
+
+
+		StreamParametersInfo vsi1 = getStreamInfo();
+		StreamParametersInfo vsi2 = getStreamInfo();
+		StreamParametersInfo vsi3 = getStreamInfo();
+
+		StreamParametersInfo asi1 = getStreamInfo();
+		StreamParametersInfo asi2 = getStreamInfo();
+		StreamParametersInfo asi3 = getStreamInfo();
+
+		
+		filterAdaptor.setVideoStreamInfo(stream1, vsi1);
+		filterAdaptor.setAudioStreamInfo(stream1, asi1);
+		
+		filterAdaptor.setVideoStreamInfo(stream2, vsi2);
+		filterAdaptor.setAudioStreamInfo(stream2, asi2);
+		
+		filterAdaptor.setVideoStreamInfo(stream3, vsi3);
+		filterAdaptor.setAudioStreamInfo(stream3, asi3);
+		
+		FilterConfiguration conf = new FilterConfiguration();
+		conf.setVideoEnabled(videoEnabled);
+		conf.setAudioEnabled(audioEnabled);
+		conf.setVideoFilter(videoFilter);
+		conf.setAudioFilter(audioFilter);
+		conf.setInputStreams(Arrays.asList(stream1, stream2, stream3));
+		conf.setOutputStreams(Arrays.asList(output1));
+		
+		assertTrue(filterAdaptor.createFilter(conf, app));
+	}
+
+	public StreamParametersInfo getStreamInfo() {
+		StreamParametersInfo si = new StreamParametersInfo();
+		AVCodecParameters codecParams = mock(AVCodecParameters.class);
+		when(codecParams.height()).thenReturn(360);
+		when(codecParams.width()).thenReturn(640);
+		when(codecParams.channel_layout()).thenReturn(2L);
+		when(codecParams.sample_rate()).thenReturn(16000);
+
+
+		AVRational tb = mock(AVRational.class);
+		when(tb.num()).thenReturn(1);
+		when(tb.den()).thenReturn(1000);
+
+		
+		si.enabled = true;
+		si.codecParameters = codecParams;
+		
+		
+		si.timeBase = tb;
+
+		return si;
 	}
 
 
