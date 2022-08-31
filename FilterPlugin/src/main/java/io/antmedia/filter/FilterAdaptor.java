@@ -102,6 +102,18 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		AVFrame filterInputframe;
 		AVFrame filterOutputFrame = null;
+		
+		if(videoFrame.width() != videoStreamParamsMap.get(streamId).codecParameters.width()
+				&& videoFrame.height() != videoStreamParamsMap.get(streamId).codecParameters.height()) {
+			System.out.println("update");
+			
+			videoStreamParamsMap.get(streamId).codecParameters.width(videoFrame.width());
+			videoStreamParamsMap.get(streamId).codecParameters.height(videoFrame.height());
+
+			update();
+			
+		}
+		
 		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) {
 			//copy the input frame then refilteredVideoFramesturn it immediately
 			filterInputframe = av_frame_clone(videoFrame);

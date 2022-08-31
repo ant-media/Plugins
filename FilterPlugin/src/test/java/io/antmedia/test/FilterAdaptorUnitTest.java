@@ -21,6 +21,7 @@ import java.util.Map;
 
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.javacpp.Pointer;
 import org.junit.AfterClass;
@@ -37,6 +38,7 @@ import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.filter.utils.IFilteredFrameListener;
+import io.antmedia.plugin.api.StreamParametersInfo;
 import io.vertx.core.Vertx;
 
 public class FilterAdaptorUnitTest {
@@ -102,6 +104,10 @@ public class FilterAdaptorUnitTest {
 
 		when(filterGraph.getListener()).thenReturn(mock(IFilteredFrameListener.class));
 
+		StreamParametersInfo vsi = new StreamParametersInfo();
+		vsi.codecParameters = mock(AVCodecParameters.class);
+		filterAdaptor.setVideoStreamInfo(streamId, vsi);
+		
 		filterAdaptor.onVideoFrame(streamId, frame);
 		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any());
 	}
