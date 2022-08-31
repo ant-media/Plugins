@@ -33,8 +33,12 @@ import org.junit.Test;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
+import org.mockito.Mockito;
 
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.datastore.db.DataStore;
+import io.antmedia.datastore.db.InMemoryDataStore;
+import io.antmedia.datastore.db.types.ConferenceRoom;
 import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
@@ -42,6 +46,7 @@ import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.filter.utils.IFilteredFrameListener;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
+import io.antmedia.websocket.WebSocketConstants;
 import io.vertx.core.Vertx;
 
 public class MCUManagerUnitTest {
@@ -86,5 +91,33 @@ public class MCUManagerUnitTest {
 		
 		mcuManager.leftTheRoom(room2, stream2);
 		verify(mcuManager, never()).triggerUpdate(eq(room2), anyBoolean());
+	}
+	
+	
+	@Test
+	public void testRemoveNonZombiRoomFilter() {
+		String roomId = "room"+RandomUtils.nextInt();
+		MCUManager mcuManager = spy(new MCUManager());
+		FiltersManager filtersManager = spy(new FiltersManager());
+		
+		doReturn(filtersManager).when(mcuManager).getFiltersManager();
+		
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore );
+		doReturn(app).when(mcuManager).getApplication();
+
+		
+		ConferenceRoom room = new ConferenceRoom();
+		room.setRoomId(roomId);
+		room.setMode(WebSocketConstants.MCU);
+		
+		dataStore.createConferenceRoom(room);
+		
+		mcuManager.updateRoomFilter(roomId);
+		
+		verify(filtersManager, times(1)).delete(roomId, app);
+
+
 	}
 }

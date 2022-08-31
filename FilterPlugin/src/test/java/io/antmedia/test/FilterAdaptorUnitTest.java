@@ -108,6 +108,10 @@ public class FilterAdaptorUnitTest {
 
 		when(filterGraph.getListener()).thenReturn(mock(IFilteredFrameListener.class));
 
+		StreamParametersInfo vsi = new StreamParametersInfo();
+		vsi.codecParameters = mock(AVCodecParameters.class);
+		filterAdaptor.setVideoStreamInfo(streamId, vsi);
+		
 		filterAdaptor.onVideoFrame(streamId, frame);
 		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any());
 	}
