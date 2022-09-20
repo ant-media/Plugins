@@ -83,7 +83,7 @@ public class FilterRestService {
 	
 	@ApiOperation(value = "Creates MCU filter for non MCU room")
 	@POST
-	@Path("/mcu-filter/{roomId}")
+	@Path("/room-mcu-filter/{roomId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result createMCU(@ApiParam(value="Room Id") @PathParam("roomId") String roomId) 
@@ -95,9 +95,9 @@ public class FilterRestService {
 		return new Result(true);
 	}
 	
-	@ApiOperation(value = "Creates MCU filter for non MCU room")
+	@ApiOperation(value = "Deletes MCU filter for non MCU room")
 	@DELETE
-	@Path("/mcu-filter/{roomId}")
+	@Path("/room-mcu-filter/{roomId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result deleteMCU(@ApiParam(value="Room Id") @PathParam("roomId") String roomId) 

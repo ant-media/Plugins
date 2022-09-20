@@ -2,6 +2,7 @@ package io.antmedia.filter;
 
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_AAC;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H264;
+import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_OPUS;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_CH_LAYOUT_MONO;
@@ -53,6 +54,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	private static final Logger logger = LoggerFactory.getLogger(FilterAdaptor.class);
 	
 	private Map<String, VideoDecoder> videoDecodersMap = new LinkedHashMap<>();
+	private Map<String, OpusDecoder> audioDecodersMap = new LinkedHashMap<>();
 
 	
 	private static final int WIDTH = 720;
@@ -65,6 +67,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 	@Override
 	public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
+		
 		if(audioFilterGraph == null || !audioFilterGraph.isInitiated() || audioFilterGraph.getListener() == null) {
 			return audioFrame;
 		}
@@ -105,13 +108,10 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		
 		if(videoFrame.width() != videoStreamParamsMap.get(streamId).codecParameters.width()
 				&& videoFrame.height() != videoStreamParamsMap.get(streamId).codecParameters.height()) {
-			System.out.println("update");
-			
 			videoStreamParamsMap.get(streamId).codecParameters.width(videoFrame.width());
 			videoStreamParamsMap.get(streamId).codecParameters.height(videoFrame.height());
 
 			update();
-			
 		}
 		
 		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) {
@@ -163,6 +163,14 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	@Override
 	public void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
 		audioStreamParamsMap.put(streamId, audioStreamInfo);
+		
+		if(selfDecodeStreams) {
+			OpusDecoder decoder = new OpusDecoder();
+			decoder.prepare(streamId);
+			if(decoder.isInitialized()) {
+				audioDecodersMap.put(streamId, decoder);
+			}
+		}
 	}
 	
 	@Override
@@ -206,7 +214,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 						+ "sample_fmt="+audioStreamParams.codecParameters.format()+":"
 						+ "time_base="+audioStreamParams.timeBase.num()+"/"+audioStreamParams.timeBase.den()+":"
 						+ "sample_rate="+audioStreamParams.codecParameters.sample_rate();
-
+				
 				if(filterConfiguration.getAudioFilter().contains("["+"in"+i+"]")) {
 					audioSourceFiltersMap.put(streamId, new Filter("abuffer", audioFilterArgs, "in"+i));
 				}
@@ -443,6 +451,20 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	
 	@Override
 	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
+		if(selfDecodeStreams) {
+			if(audioDecodersMap.containsKey(streamId)) {
+				AVFrame frame = audioDecodersMap.get(streamId).decode(packet);
+
+				if(frame != null) {
+					onAudioFrame(streamId, frame);
+				}
+				else {
+				}
+			}
+			else {
+				logger.warn("Opus Decoder is not initialized for {}", streamId);
+			}
+		}
 		return packet;
 	}
 
