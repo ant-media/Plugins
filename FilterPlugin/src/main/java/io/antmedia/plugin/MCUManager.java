@@ -31,7 +31,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	private Queue<String> conferenceRoomsUpdated = new ConcurrentLinkedQueue<>(); //room to change availibility map
 	public static final long CONFERENCE_INFO_POLL_PERIOD_MS = 5000;
-	public static final String MERGED_SUFFIX = "Merged"+RandomUtils.nextInt();
+	public static final String MERGED_SUFFIX = "Merged";
 	private long roomUpdateTimer = -1L;
 	private ApplicationContext applicationContext;
 	private AntMediaApplicationAdapter appAdaptor;
