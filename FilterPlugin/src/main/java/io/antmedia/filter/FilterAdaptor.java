@@ -18,6 +18,7 @@ import java.util.Map;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
+import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -353,6 +354,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				
 				if(selfDecodeStreams) {
 					app.addPacketListener(streamId, this);
+					app.addFrameListener(streamId, this);
 				}
 				else {
 					app.addFrameListener(streamId, this);
@@ -398,9 +400,14 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		audioStreamParametersInfo.enabled = audioEnabled;
 		
 		if(videoEnabled) {
+			videoStreamParametersInfo.timeBase = new AVRational();
+			videoStreamParametersInfo.timeBase.num(1);
+			videoStreamParametersInfo.timeBase.den(1000);
 			broadcast.setVideoStreamInfo(streamId, videoStreamParametersInfo);
 		}
-		broadcast.setAudioStreamInfo(streamId, audioStreamParametersInfo);
+		if(audioEnabled) {
+			broadcast.setAudioStreamInfo(streamId, audioStreamParametersInfo);
+		}
 		broadcast.start();
 	}
 

@@ -49,7 +49,7 @@ public class VideoDecoder {
 		this.streamParameters = streamParameters;
 		videoEncoderTimebase = new AVRational();
 		videoEncoderTimebase.num(1);
-		videoEncoderTimebase.den(20);  //Make time base 1/20
+		videoEncoderTimebase.den(30);  //Make time base 1/20
 		
 		if ((decodedFrame = av_frame_alloc()) == null) {
 			throw new IllegalArgumentException("av_frame_alloc() error: Could not allocate raw picture frame.");
