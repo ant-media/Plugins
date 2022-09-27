@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	private String pluginType = FilterConfiguration.ASYNCHRONOUS;
 	private static Logger logger = LoggerFactory.getLogger(MCUManager.class);
 	private Queue<String> roomsHasCustomFilters = new ConcurrentLinkedQueue<>();
+	private Queue<String> customRooms = new ConcurrentLinkedQueue<>();
 	
 
 
@@ -155,7 +157,9 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	private void roomHasChange(String roomId) {
 		DataStore datastore = getApplication().getDataStore();
 		ConferenceRoom room = datastore.getConferenceRoom(roomId);	
-		if ((room == null || (room.getMode().equals(WebSocketConstants.MCU) || room.getMode().equals(WebSocketConstants.AMCU))) 
+		if ((room == null || room.getMode().equals(WebSocketConstants.MCU)
+				|| room.getMode().equals(WebSocketConstants.AMCU)
+				|| customRooms.contains(roomId)) 
 				&& !conferenceRoomsUpdated.contains(roomId)) 
 		{
 			conferenceRoomsUpdated.add(roomId); 
@@ -204,5 +208,15 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	public void setPluginType(String type) {
 		this.pluginType = type;
+	}
+
+	public void addCustomRoom(String roomId) {
+		customRooms.add(roomId);	
+		triggerUpdate(roomId, false);
+	}
+
+	public void removeCustomRoom(String roomId) {
+		customRooms.remove(roomId);	
+		filtersManager.delete(roomId, appAdaptor);
 	}
 }
