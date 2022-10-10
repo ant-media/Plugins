@@ -23,13 +23,11 @@ import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avutil.AVDictionary;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
-import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.javacpp.BytePointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.antmedia.SystemUtils;
-import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.api.StreamParametersInfo;
 import io.antmedia.statistic.GPUUtils;
 
@@ -38,7 +36,6 @@ public class VideoDecoder {
 	private AVCodecContext videoContext;
 	private String streamId;
 	private AVFrame decodedFrame;
-	private AVRational videoEncoderTimebase;
 	private StreamParametersInfo streamParameters;
 	private boolean initialized = false;
 
@@ -47,19 +44,16 @@ public class VideoDecoder {
 		this.streamId = streamId;
 		
 		this.streamParameters = streamParameters;
-		videoEncoderTimebase = new AVRational();
-		videoEncoderTimebase.num(1);
-		videoEncoderTimebase.den(30);  //Make time base 1/20
 		
 		if ((decodedFrame = av_frame_alloc()) == null) {
 			throw new IllegalArgumentException("av_frame_alloc() error: Could not allocate raw picture frame.");
 		}
 		
-		String encoderName = null;
+		String decoderName = null;
 		AVCodec codec = null;
 		if (GPUUtils.getInstance().getDeviceCount() > 0 && streamParameters.codecParameters.codec_id() == AV_CODEC_ID_H264) {
 			if (SystemUtils.OS_TYPE == SystemUtils.LINUX || SystemUtils.OS_TYPE == SystemUtils.WINDOWS) {
-				encoderName = "h264_cuvid";
+				decoderName = "h264_cuvid";
 			} else if (SystemUtils.OS_TYPE == SystemUtils.MAC_OS_X) {
 				/**
 				 *  when using h264_vda, it throws signal error 0xb
@@ -73,8 +67,8 @@ public class VideoDecoder {
 		}
 
 		boolean result = false;
-		if (encoderName != null) {
-			codec = avcodec_find_decoder_by_name(encoderName);
+		if (decoderName != null) {
+			codec = avcodec_find_decoder_by_name(decoderName);
 			result = openDecoder(codec, streamParameters.codecParameters);
 		}
 
@@ -131,8 +125,8 @@ public class VideoDecoder {
 	
 	public AVFrame decodeVideoPacket(AVPacket pkt) {
 		av_packet_rescale_ts(pkt,
-				videoEncoderTimebase,
-				streamParameters.timeBase
+				streamParameters.timeBase,
+				Utils.TIME_BASE_FOR_MS
 				);
 		
 		int ret = avcodec_send_packet(videoContext, pkt);

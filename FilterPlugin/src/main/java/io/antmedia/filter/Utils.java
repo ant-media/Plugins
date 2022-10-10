@@ -7,8 +7,16 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 
 import org.bytedeco.ffmpeg.avutil.AVFrame;
+import org.bytedeco.ffmpeg.avutil.AVRational;
 
 public class Utils {
+	
+	public static final  AVRational TIME_BASE_FOR_MS;
+	static {
+		TIME_BASE_FOR_MS = new AVRational();
+		TIME_BASE_FOR_MS.num(1);
+		TIME_BASE_FOR_MS.den(1000);
+	}
 
 	public static void save(AVFrame frame, String name) {
 		String format = "jpeg";

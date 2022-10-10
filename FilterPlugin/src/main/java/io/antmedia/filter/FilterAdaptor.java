@@ -2,6 +2,8 @@ package io.antmedia.filter;
 
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_AAC;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H264;
+import static org.bytedeco.ffmpeg.global.avcodec.av_packet_ref;
+import static org.bytedeco.ffmpeg.global.avcodec.av_packet_unref;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_CH_LAYOUT_MONO;
@@ -9,6 +11,9 @@ import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
 import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLTP;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_clone;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_free;
+import static org.bytedeco.ffmpeg.global.avutil.av_rescale_q_rnd;
+import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_NEAR_INF;
+import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_PASS_MINMAX;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -104,12 +109,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		AVFrame filterInputframe;
 		AVFrame filterOutputFrame = null;
 		
-		if(videoFrame.width() != videoStreamParamsMap.get(streamId).codecParameters.width()
-				&& videoFrame.height() != videoStreamParamsMap.get(streamId).codecParameters.height()) {
-			System.out.println("update");
+		StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
+		
+		if(videoFrame.width() != videoStreamParams.codecParameters.width()
+				&& videoFrame.height() != videoStreamParams.codecParameters.height()) {
 			
-			videoStreamParamsMap.get(streamId).codecParameters.width(videoFrame.width());
-			videoStreamParamsMap.get(streamId).codecParameters.height(videoFrame.height());
+			videoStreamParams.codecParameters.width(videoFrame.width());
+			videoStreamParams.codecParameters.height(videoFrame.height());
 
 			update();
 			
@@ -118,6 +124,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) {
 			//copy the input frame then refilteredVideoFramesturn it immediately
 			filterInputframe = av_frame_clone(videoFrame);
+			rescaleFramePtsToMs(filterInputframe, videoStreamParams.timeBase);
 			
 			vertx.executeBlocking(a->{
 				videoFilterGraph.doFilter(streamId, filterInputframe);
@@ -127,6 +134,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) {
 			filterInputframe = videoFrame;
+			rescaleFramePtsToMs(filterInputframe, videoStreamParams.timeBase);
+			
 			filterOutputFrame = null; //lastpoint
 			vertx.executeBlocking(a->{
 				videoFilterGraph.doFilter(streamId, filterInputframe);
@@ -134,6 +143,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS)){
 			filterInputframe = videoFrame;
+			rescaleFramePtsToMs(filterInputframe, videoStreamParams.timeBase);
 			filterOutputFrame = videoFilterGraph.doFilterSync(streamId, filterInputframe);
 			if(filterOutputFrame.width() == 0) {
 				filterOutputFrame = null;
@@ -141,6 +151,12 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 		}
 		return filterOutputFrame;
+	}
+
+	public void rescaleFramePtsToMs(AVFrame filterInputframe, AVRational timebase) {
+		if(!selfDecodeStreams) {
+			filterInputframe.pts(av_rescale_q_rnd(filterInputframe.pts(), timebase, Utils.TIME_BASE_FOR_MS, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX));
+		}
 	}
 	
 	@Override
@@ -191,7 +207,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 				String videoFilterArgs = "video_size="+videoStreamParams.codecParameters.width()+"x"+videoStreamParams.codecParameters.height()+":"
 						+ "pix_fmt="+videoStreamParams.codecParameters.format()+":"
-						+ "time_base="+1+"/"+1000+":"
+						+ "time_base="+Utils.TIME_BASE_FOR_MS.num()+"/"+Utils.TIME_BASE_FOR_MS.den()+":"
 						+ "pixel_aspect=1/1";
 
 
@@ -353,8 +369,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			for (String streamId : inserted) {
 				
 				if(selfDecodeStreams) {
-					app.addPacketListener(streamId, this);
-					app.addFrameListener(streamId, this);
+					app.addFrameListener(streamId, this); //to get decoded audioframes
+					app.addPacketListener(streamId, this); //to get video packets
 				}
 				else {
 					app.addFrameListener(streamId, this);
@@ -400,9 +416,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		audioStreamParametersInfo.enabled = audioEnabled;
 		
 		if(videoEnabled) {
-			videoStreamParametersInfo.timeBase = new AVRational();
-			videoStreamParametersInfo.timeBase.num(1);
-			videoStreamParametersInfo.timeBase.den(1000);
+			videoStreamParametersInfo.timeBase = Utils.TIME_BASE_FOR_MS;
 			broadcast.setVideoStreamInfo(streamId, videoStreamParametersInfo);
 		}
 		if(audioEnabled) {
@@ -434,12 +448,16 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public AVPacket onVideoPacket(String streamId, AVPacket packet) {
 		if(selfDecodeStreams) {
 			if(videoDecodersMap.containsKey(streamId)) {
-				AVFrame frame = videoDecodersMap.get(streamId).decodeVideoPacket(packet);
-				if(frame != null) {
-					onVideoFrame(streamId, frame);
-				}
-				else {
-				}
+				AVPacket tempPacket = new AVPacket();
+				av_packet_ref(tempPacket, packet);
+				vertx.executeBlocking(l->{
+					AVFrame frame = videoDecodersMap.get(streamId).decodeVideoPacket(tempPacket);
+					av_packet_unref(tempPacket);
+					tempPacket.close();
+					if(frame != null) {
+						onVideoFrame(streamId, frame);
+					}
+				});
 			}
 			else {
 				logger.warn("Decoder is not initialized for {}", streamId);
