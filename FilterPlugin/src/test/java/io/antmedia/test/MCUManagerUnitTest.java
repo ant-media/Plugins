@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -38,14 +39,17 @@ import org.mockito.Mockito;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.InMemoryDataStore;
+import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.ConferenceRoom;
 import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.filter.utils.IFilteredFrameListener;
+import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
+import io.antmedia.rest.FilterRestService;
 import io.antmedia.websocket.WebSocketConstants;
 import io.vertx.core.Vertx;
 
@@ -118,6 +122,48 @@ public class MCUManagerUnitTest {
 		
 		verify(filtersManager, times(1)).delete(roomId, app);
 
+
+	}
+	
+	@Test
+	public void testMCUWithOtherRooms() {
+		
+		String roomId = "room"+RandomUtils.nextInt();
+		MCUManager mcuManager = spy(new MCUManager());
+		FiltersManager filtersManager = spy(new FiltersManager());
+		
+		doReturn(filtersManager).when(mcuManager).getFiltersManager();
+		
+		doReturn(true).when(filtersManager).createFilter(any(), any());
+
+		
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore );
+		when(app.getVertx()).thenReturn(Vertx.vertx());
+		doReturn(app).when(mcuManager).getApplication();
+
+		String streamId = "stream"+RandomUtils.nextInt();
+		Broadcast broadcast = new Broadcast();
+		try {
+			broadcast.setStreamId(streamId);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
+		dataStore.save(broadcast);
+		
+		ConferenceRoom room = new ConferenceRoom();
+		room.setRoomId(roomId);
+		room.setMode(WebSocketConstants.LEGACY);
+		room.setRoomStreamList(Arrays.asList(streamId));
+		dataStore.createConferenceRoom(room);
+		
+		mcuManager.setApplicationContext(null);
+		
+		mcuManager.addCustomRoom(roomId);
+		
+		verify(filtersManager, timeout(MCUManager.CONFERENCE_INFO_POLL_PERIOD_MS*4000).times(1)).createFilter(any(), eq(app));
 
 	}
 }

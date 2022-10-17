@@ -81,6 +81,34 @@ public class FilterRestService {
 		return new Result(filtersManager.delete(id, adaptor));
 	}
 	
+	@ApiOperation(value = "Creates MCU filter for non MCU room")
+	@POST
+	@Path("/room-mcu-filter/{roomId}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result createMCU(@ApiParam(value="Room Id") @PathParam("roomId") String roomId) 
+	{
+		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
+		MCUManager mcuManager = (MCUManager) appCtx.getBean(MCUManager.BEAN_NAME);
+		mcuManager.addCustomRoom(roomId);
+		
+		return new Result(true);
+	}
+	
+	@ApiOperation(value = "Deletes MCU filter for non MCU room")
+	@DELETE
+	@Path("/room-mcu-filter/{roomId}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result deleteMCU(@ApiParam(value="Room Id") @PathParam("roomId") String roomId) 
+	{
+		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
+		MCUManager mcuManager = (MCUManager) appCtx.getBean(MCUManager.BEAN_NAME);
+		mcuManager.removeCustomRoom(roomId);
+		
+		return new Result(true);
+	}
+	
 	@ApiOperation(value = "Set the plugin type of the MCU function. This type is in application specific not room specific", notes = "", response = Result.class)
 	@PUT
 	@Path("/{id}/mcu-plugin-type")
