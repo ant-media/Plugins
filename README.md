@@ -1,7 +1,7 @@
 # Plugins
 This repository contains Plugins for Ant Media Server.
 
-This repository is not compatible with the community edition.
+Plugin support is an enterprise edition feature.
 
 You can read [more](https://antmedia.io/plugins-will-make-ant-media-server-more-powerful/) about plugin structure.
 
