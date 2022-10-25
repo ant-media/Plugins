@@ -66,6 +66,12 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	private static final int WIDTH = 720;
 	private static final int HEIGHT = 480;
 	private boolean selfDecodeStreams = true;
+	/*
+	 * In case decoding in the plugin, video frames are generated later than audio.
+	 * So this parameters is used to provide synchronization of video and audio frames.
+	 */
+	private long audioVideoOffset; 
+	private boolean firstVideoReceived = false;;
 
 	public FilterAdaptor(boolean selfDecodeVideo) {
 		this.selfDecodeStreams  = selfDecodeVideo;
@@ -278,6 +284,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				if(frame != null && currentOutStreams.containsKey(streamId)) {
 					IFrameListener frameListener = currentOutStreams.get(streamId);
 					if(frameListener != null) { 
+						if(!firstVideoReceived) {
+							firstVideoReceived = true;
+						}
 						//framelistener is a custombroadcast
 						frameListener.onVideoFrame(streamId, frame);
 					}
@@ -308,8 +317,15 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				if(frame != null && currentOutStreams.containsKey(streamId)) {
 					IFrameListener frameListener = currentOutStreams.get(streamId);
 					if(frameListener != null) { 
-						//framelistener is a custombroadcast
-						frameListener.onAudioFrame(streamId, frame);
+						if(!firstVideoReceived) {
+							audioVideoOffset = frame.pts();
+						}
+						else {
+							frame.pts(frame.pts()-audioVideoOffset);						
+							
+							//framelistener is a custombroadcast
+							frameListener.onAudioFrame(streamId, frame);
+						}
 					}
 				}
 			});
