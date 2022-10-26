@@ -120,11 +120,11 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		
 		StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
 		
-		if(videoFrame.width() != videoStreamParams.codecParameters.width()
-				&& videoFrame.height() != videoStreamParams.codecParameters.height()) {
+		if(videoFrame.width() != videoStreamParams.getCodecParameters().width()
+				&& videoFrame.height() != videoStreamParams.getCodecParameters().height()) {
 			
-			videoStreamParams.codecParameters.width(videoFrame.width());
-			videoStreamParams.codecParameters.height(videoFrame.height());
+			videoStreamParams.getCodecParameters().width(videoFrame.width());
+			videoStreamParams.getCodecParameters().height(videoFrame.height());
 
 			update();
 		}
@@ -132,7 +132,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) {
 			//copy the input frame then refilteredVideoFramesturn it immediately
 			filterInputframe = av_frame_clone(videoFrame);
-			rescaleFramePtsToMs(filterInputframe, videoStreamParams.timeBase);
+			rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
 			
 			vertx.executeBlocking(a->{
 				videoFilterGraph.doFilter(streamId, filterInputframe);
@@ -142,7 +142,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) {
 			filterInputframe = videoFrame;
-			rescaleFramePtsToMs(filterInputframe, videoStreamParams.timeBase);
+			rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
 			
 			filterOutputFrame = null; //lastpoint
 			vertx.executeBlocking(a->{
@@ -151,7 +151,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS)){
 			filterInputframe = videoFrame;
-			rescaleFramePtsToMs(filterInputframe, videoStreamParams.timeBase);
+			rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
 			filterOutputFrame = videoFilterGraph.doFilterSync(streamId, filterInputframe);
 			if(filterOutputFrame.width() == 0) {
 				filterOutputFrame = null;
@@ -176,7 +176,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public synchronized void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
 		videoStreamParamsMap.put(streamId, videoStreamInfo);
 		
-		if(selfDecodeStreams || videoStreamInfo.hostedInOtherNode) {
+		if(selfDecodeStreams || videoStreamInfo.isHostedInOtherNode()) {
 			
 			VideoDecoder decoder = new VideoDecoder(streamId, videoStreamInfo);
 			if(decoder.isInitialized()) {
@@ -189,7 +189,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
 		audioStreamParamsMap.put(streamId, audioStreamInfo);
 		
-		if(audioStreamInfo.hostedInOtherNode) {
+		if(audioStreamInfo.isHostedInOtherNode()) {
 			OpusDecoder decoder = new OpusDecoder();
 			decoder.prepare(streamId);
 			if(decoder.isInitialized()) {
@@ -219,10 +219,10 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		for (String streamId : currentInStreams) 
 		{
 			StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
-			if(videoStreamParams.enabled) {
+			if(videoStreamParams.isEnabled()) {
 
-				String videoFilterArgs = "video_size="+videoStreamParams.codecParameters.width()+"x"+videoStreamParams.codecParameters.height()+":"
-						+ "pix_fmt="+videoStreamParams.codecParameters.format()+":"
+				String videoFilterArgs = "video_size="+videoStreamParams.getCodecParameters().width()+"x"+videoStreamParams.getCodecParameters().height()+":"
+						+ "pix_fmt="+videoStreamParams.getCodecParameters().format()+":"
 						+ "time_base="+Utils.TIME_BASE_FOR_MS.num()+"/"+Utils.TIME_BASE_FOR_MS.den()+":"
 						+ "pixel_aspect=1/1";
 
@@ -234,11 +234,11 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 			StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
 			
-			if(audioStreamParams.enabled) {
-				String audioFilterArgs = "channel_layout="+audioStreamParams.codecParameters.channel_layout()+":"
-						+ "sample_fmt="+audioStreamParams.codecParameters.format()+":"
-						+ "time_base="+audioStreamParams.timeBase.num()+"/"+audioStreamParams.timeBase.den()+":"
-						+ "sample_rate="+audioStreamParams.codecParameters.sample_rate();
+			if(audioStreamParams.isEnabled()) {
+				String audioFilterArgs = "channel_layout="+audioStreamParams.getCodecParameters().channel_layout()+":"
+						+ "sample_fmt="+audioStreamParams.getCodecParameters().format()+":"
+						+ "time_base="+audioStreamParams.getTimeBase().num()+"/"+audioStreamParams.getTimeBase().den()+":"
+						+ "sample_rate="+audioStreamParams.getCodecParameters().sample_rate();
 				
 				if(filterConfiguration.getAudioFilter().contains("["+"in"+i+"]")) {
 					audioSourceFiltersMap.put(streamId, new Filter("abuffer", audioFilterArgs, "in"+i));
@@ -436,13 +436,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		StreamParametersInfo videoStreamParametersInfo = new StreamParametersInfo();
 		StreamParametersInfo audioStreamParametersInfo = new StreamParametersInfo();
 		
-		videoStreamParametersInfo.codecParameters = videoCodecParameters;
-		videoStreamParametersInfo.enabled = videoEnabled;
-		audioStreamParametersInfo.codecParameters = audioCodecParameters;
-		audioStreamParametersInfo.enabled = audioEnabled;
+		videoStreamParametersInfo.setCodecParameters(videoCodecParameters);
+		videoStreamParametersInfo.setEnabled(videoEnabled);
+		audioStreamParametersInfo.setCodecParameters(audioCodecParameters);
+		audioStreamParametersInfo.setEnabled(audioEnabled);
 		
 		if(videoEnabled) {
-			videoStreamParametersInfo.timeBase = Utils.TIME_BASE_FOR_MS;
+			videoStreamParametersInfo.setTimeBase(Utils.TIME_BASE_FOR_MS);
 			broadcast.setVideoStreamInfo(streamId, videoStreamParametersInfo);
 		}
 		if(audioEnabled) {
@@ -473,7 +473,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	@Override
 	public AVPacket onVideoPacket(String streamId, AVPacket packet) {
 		StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
-		if(selfDecodeStreams || (videoStreamParams != null && videoStreamParams.hostedInOtherNode)) {
+		if(selfDecodeStreams || (videoStreamParams != null && videoStreamParams.isHostedInOtherNode())) {
 			if(videoDecodersMap.containsKey(streamId)) {
 				AVPacket tempPacket = new AVPacket();
 				av_packet_ref(tempPacket, packet);
@@ -497,7 +497,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
 		StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
 		//decode audio if only if it comes from another node in cluster mode.
-		if(audioStreamParams != null && audioStreamParams.hostedInOtherNode) {
+		if(audioStreamParams != null && audioStreamParams.isHostedInOtherNode()) {
 			if(audioDecodersMap.containsKey(streamId)) {
 				AVFrame frame = audioDecodersMap.get(streamId).decode(packet);
 

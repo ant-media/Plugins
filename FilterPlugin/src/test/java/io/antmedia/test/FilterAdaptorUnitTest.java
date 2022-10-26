@@ -111,8 +111,8 @@ public class FilterAdaptorUnitTest {
 		when(filterGraph.getListener()).thenReturn(mock(IFilteredFrameListener.class));
 
 		StreamParametersInfo vsi = new StreamParametersInfo();
-		vsi.codecParameters = mock(AVCodecParameters.class);
-		vsi.timeBase = Utils.TIME_BASE_FOR_MS;
+		vsi.setCodecParameters(mock(AVCodecParameters.class));
+		vsi.setTimeBase(Utils.TIME_BASE_FOR_MS);
 		filterAdaptor.setVideoStreamInfo(streamId, vsi);
 		
 		filterAdaptor.onVideoFrame(streamId, frame);
@@ -234,11 +234,11 @@ public class FilterAdaptorUnitTest {
 		when(tb.den()).thenReturn(1000);
 
 		
-		si.enabled = true;
-		si.codecParameters = codecParams;
+		si.setEnabled(true);
+		si.setCodecParameters(codecParams);
 		
 		
-		si.timeBase = tb;
+		si.setTimeBase(tb);
 
 		return si;
 	}
