@@ -176,7 +176,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public synchronized void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
 		videoStreamParamsMap.put(streamId, videoStreamInfo);
 		
-		if(selfDecodeStreams) {
+		if(selfDecodeStreams || videoStreamInfo.hostedInOtherNode) {
 			
 			VideoDecoder decoder = new VideoDecoder(streamId, videoStreamInfo);
 			if(decoder.isInitialized()) {
@@ -189,7 +189,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
 		audioStreamParamsMap.put(streamId, audioStreamInfo);
 		
-		if(selfDecodeStreams) {
+		if(audioStreamInfo.hostedInOtherNode) {
 			OpusDecoder decoder = new OpusDecoder();
 			decoder.prepare(streamId);
 			if(decoder.isInitialized()) {
@@ -472,7 +472,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 	@Override
 	public AVPacket onVideoPacket(String streamId, AVPacket packet) {
-		if(selfDecodeStreams) {
+		StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
+		if(selfDecodeStreams || (videoStreamParams != null && videoStreamParams.hostedInOtherNode)) {
 			if(videoDecodersMap.containsKey(streamId)) {
 				AVPacket tempPacket = new AVPacket();
 				av_packet_ref(tempPacket, packet);
@@ -494,7 +495,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	
 	@Override
 	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
-		if(selfDecodeStreams) {
+		StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
+		//decode audio if only if it comes from another node in cluster mode.
+		if(audioStreamParams != null && audioStreamParams.hostedInOtherNode) {
 			if(audioDecodersMap.containsKey(streamId)) {
 				AVFrame frame = audioDecodersMap.get(streamId).decode(packet);
 
