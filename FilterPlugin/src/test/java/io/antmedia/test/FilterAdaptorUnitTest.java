@@ -37,6 +37,7 @@ import org.junit.runner.Description;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.filter.FilterAdaptor;
+import io.antmedia.filter.Utils;
 import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
@@ -79,6 +80,7 @@ public class FilterAdaptorUnitTest {
 	public void testFilterGraphVideoFeed() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
 		doReturn(true).when(filterAdaptor).update();
+		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
 		filterConf.setOutputStreams(new ArrayList<>());
@@ -110,6 +112,7 @@ public class FilterAdaptorUnitTest {
 
 		StreamParametersInfo vsi = new StreamParametersInfo();
 		vsi.codecParameters = mock(AVCodecParameters.class);
+		vsi.timeBase = Utils.TIME_BASE_FOR_MS;
 		filterAdaptor.setVideoStreamInfo(streamId, vsi);
 		
 		filterAdaptor.onVideoFrame(streamId, frame);
