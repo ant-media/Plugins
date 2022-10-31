@@ -296,7 +296,7 @@
 			<version>4.0.0</version>
 		</dependency>
 	</dependencies>
-	<description>Webpage Reecording Plugin for Ant Media Server</description>
+	<description>Webpage Recording Plugin for Ant Media Server</description>
 	<organization>
 		<name>Ant Media</name>
 		<url>http://antmedia.io</url>

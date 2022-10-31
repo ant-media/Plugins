@@ -23,7 +23,7 @@ import com.google.gson.Gson;
 import java.net.URISyntaxException;
 
 @Component
-@Path("/webpage-recording-plugin")
+@Path("/v2/webpage/record")
 public class RestService {
 
 	@Context
@@ -32,7 +32,7 @@ public class RestService {
 
 	
 	@POST
-	@Path("/startWebpageRecording")
+	@Path("/start")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response startWebpageRecording(@RequestBody StartWebpageRecordingRequest request) throws URISyntaxException, InterruptedException {
@@ -43,7 +43,7 @@ public class RestService {
 	}
 	
 	@GET
-	@Path("/stopWebpageRecording/{streamId}")
+	@Path("/stop/{streamId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response stopWebpageRecording(@PathParam("streamId") String streamId) throws InterruptedException {
