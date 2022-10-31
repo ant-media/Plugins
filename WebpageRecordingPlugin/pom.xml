@@ -59,7 +59,7 @@
 		</repository>
 	</distributionManagement>
 	<build>
-		<finalName>PluginApp</finalName>
+		<finalName>webpage-recording-plugin</finalName>
 		<testSourceDirectory>src/test/java</testSourceDirectory>
 		<plugins>
 			<plugin>
@@ -285,8 +285,18 @@
 			<artifactId>selenium-chrome-driver</artifactId>
 			<version>4.0.0</version>
 		</dependency>
+		<dependency>
+			<groupId>org.seleniumhq.selenium</groupId>
+			<artifactId>selenium-remote-driver</artifactId>
+			<version>4.0.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.seleniumhq.selenium</groupId>
+			<artifactId>selenium-chromium-driver</artifactId>
+			<version>4.0.0</version>
+		</dependency>
 	</dependencies>
-	<description>PluginApp for Ant Media Server</description>
+	<description>Webpage Reecording Plugin for Ant Media Server</description>
 	<organization>
 		<name>Ant Media</name>
 		<url>http://antmedia.io</url>
