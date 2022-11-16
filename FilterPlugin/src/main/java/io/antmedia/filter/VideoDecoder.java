@@ -123,7 +123,7 @@ public class VideoDecoder {
 		return true;
 	}
 	
-	public AVFrame decodeVideoPacket(AVPacket pkt) {
+	public synchronized AVFrame decodeVideoPacket(AVPacket pkt) {
 		av_packet_rescale_ts(pkt,
 				streamParameters.getTimeBase(),
 				Utils.TIME_BASE_FOR_MS
