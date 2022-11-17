@@ -1,14 +1,14 @@
 package io.antmedia.plugin;
 
-import java.io.File;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
+import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.app.SampleFrameListener;
+import io.antmedia.app.SamplePacketListener;
+import io.antmedia.plugin.api.IStreamListener;
+import io.vertx.core.Vertx;
+import org.apache.commons.io.FileUtils;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,14 +17,14 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 
-import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.app.SampleFrameListener;
-import io.antmedia.app.SamplePacketListener;
-import io.antmedia.plugin.api.IStreamListener;
-import io.vertx.core.Vertx;
-
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Component(value="plugin.webpageRecordingPlugin")
 public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamListener{
@@ -89,20 +89,27 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		args.add("--no-sandbox");
 		args.add(String.format("--whitelisted-extension-id=%s", EXTENSION_ID));
 		args.add("--headless=chrome");
-		options.addExtensions(getExtensionFileFromResource());
+		try {
+			options.addExtensions(getExtensionFileFromResource());
+		} catch (IOException e) {
+			logger.error(e.getMessage());
+			return null;
+		}
 		options.addArguments(args);
 
 		return new ChromeDriver(options);
 	}
 
-	private File getExtensionFileFromResource() throws URISyntaxException {
+	private File getExtensionFileFromResource() throws URISyntaxException, IOException {
 
 		ClassLoader classLoader = getClass().getClassLoader();
-		URL resource = classLoader.getResource("webpage-recording-extension.crx");
-		if (resource == null) {
+		InputStream inputStream = classLoader.getResourceAsStream("webpage-recording-extension.crx");
+		if (inputStream == null) {
 			throw new IllegalArgumentException("webpage-recording-extension not found!");
 		} else {
-			return new File(resource.toURI());
+			File targetFile = new File("src/main/resources/targetFile.tmp");
+			FileUtils.copyInputStreamToFile(inputStream, targetFile);
+			return targetFile;
 		}
 
 	}
