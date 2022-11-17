@@ -7,6 +7,9 @@ public class StartWebpageRecordingRequest {
 
     private String webpageUrl;
 
+    public StartWebpageRecordingRequest() {
+    }
+
     public StartWebpageRecordingRequest(String streamId, String websocketUrl, String webpageUrl) {
         this.streamId = streamId;
         this.websocketUrl = websocketUrl;
