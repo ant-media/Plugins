@@ -4,6 +4,7 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.app.SampleFrameListener;
 import io.antmedia.app.SamplePacketListener;
 import io.antmedia.plugin.api.IStreamListener;
+import io.github.bonigarcia.wdm.WebDriverManager;
 import io.vertx.core.Vertx;
 import org.apache.commons.io.FileUtils;
 import org.openqa.selenium.JavascriptExecutor;
@@ -78,7 +79,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 	}
 
 	public WebDriver createDriver() throws URISyntaxException {
-		System.setProperty("webdriver.chrome.driver", "/usr/bin/chromedriver");
+		WebDriverManager.chromedriver().setup();
 		ChromeOptions options = new ChromeOptions();
 		List<String> args = new ArrayList<>();
 
