@@ -276,7 +276,7 @@
         </dependency>
         <dependency>
 			<groupId>org.bytedeco</groupId>
-            <artifactId>zixi</artifactId>
+            <artifactId>zixi-platform</artifactId>
             <version>14.13.44304-1.5.5</version>
             <scope>provided</scope>
 		</dependency>
