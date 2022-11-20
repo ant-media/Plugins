@@ -4,13 +4,13 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
-import io.antmedia.plugin.ZixiClient;
+import io.antmedia.plugin.ZixiPlugin;
 
 public class ZixiClientTest {
 
     @Test
     public void testInit(){
-        ZixiClient client = new ZixiClient();
+        ZixiPlugin client = new ZixiPlugin();
         assertTrue(client.init());
 
         assertTrue(client.start());

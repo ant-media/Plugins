@@ -2,6 +2,7 @@ package io.antmedia.rest;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -18,7 +19,9 @@ import org.springframework.web.context.WebApplicationContext;
 
 import com.google.gson.Gson;
 
-import io.antmedia.plugin.ZixiClient;
+import io.antmedia.datastore.db.types.Broadcast;
+import io.antmedia.plugin.ZixiPlugin;
+import io.antmedia.rest.model.Result;
 
 @Component
 @Path("/zixi")
@@ -30,21 +33,44 @@ public class ZixiRestService {
 
 	
 	@POST
-	@Path("/register/{streamId}")
+	@Path("/client")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Response register(@PathParam("streamId") String streamId) {
-		ZixiClient app = getZixiReceiver();
-		app.register(streamId);
-
-		return Response.status(Status.OK).entity("").build();
+	public Result createZixiClient(Broadcast broadcast) {
+		//broadcast object should have streamURL
+		return  getZixiPlugin().startClient(broadcast);
+	}
+	
+	@DELETE
+	@Path("/client")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result deleteZixiClient(String streamId) {
+		return  getZixiPlugin().stopClient(streamId);
+	}
+	
+	@POST
+	@Path("/feeder")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result createZixiFeeder(String streamId, String zixiEndpointURL) {
+		return  getZixiPlugin().startFeeder(streamId, zixiEndpointURL);
 	}
 	
 	
-	private ZixiClient getZixiReceiver() {
+	@DELETE
+	@Path("/feeder")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result deleteZixiFeeder(String streamId, String zixiEndpointURL) {
+		return  getZixiPlugin().stopFeeder(streamId, zixiEndpointURL);
+	}
+	
+	
+	
+	
+	private ZixiPlugin getZixiPlugin() {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
-		
-		
-		return appCtx.getBean(ZixiClient.class);
+		return appCtx.getBean(ZixiPlugin.class);
 	}
 }
