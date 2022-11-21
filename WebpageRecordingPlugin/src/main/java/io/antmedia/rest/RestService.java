@@ -1,6 +1,7 @@
 package io.antmedia.rest;
 
 import javax.servlet.ServletContext;
+import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -35,11 +36,12 @@ public class RestService {
 	@Path("/start")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Response startWebpageRecording(@RequestBody StartWebpageRecordingRequest request) throws URISyntaxException, InterruptedException {
+	public Response startWebpageRecording(@RequestBody StartWebpageRecordingRequest request, HttpServletRequest req) throws URISyntaxException, InterruptedException {
+		String test = req.getRequestURI();
 		WebpageRecordingPlugin app = getPluginApp();
-		app.startWebpageRecording(request.getStreamId(), request.getWebsocketUrl(), request.getWebpageUrl());
+		ResponsePair responsePair = app.startWebpageRecording(request.getStreamId(), request.getWebsocketUrl(), request.getWebpageUrl());
 
-		return Response.status(Status.OK).entity("").build();
+		return Response.status(responsePair.getResponseCode()).entity(responsePair.getResponse()).build();
 	}
 	
 	@GET
@@ -48,9 +50,9 @@ public class RestService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response stopWebpageRecording(@PathParam("streamId") String streamId) throws InterruptedException {
 		WebpageRecordingPlugin app = getPluginApp();
-		app.stopWebpageRecording(streamId);
+		ResponsePair responsePair = app.stopWebpageRecording(streamId);
 
-		return Response.status(Status.OK).entity("").build();
+		return Response.status(responsePair.getResponseCode()).entity(responsePair.getResponse()).build();
 	}
 	
 	private WebpageRecordingPlugin getPluginApp() {

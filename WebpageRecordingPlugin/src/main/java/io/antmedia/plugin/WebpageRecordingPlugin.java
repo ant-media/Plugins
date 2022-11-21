@@ -4,6 +4,7 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.app.SampleFrameListener;
 import io.antmedia.app.SamplePacketListener;
 import io.antmedia.plugin.api.IStreamListener;
+import io.antmedia.rest.ResponsePair;
 import io.github.bonigarcia.wdm.WebDriverManager;
 import io.vertx.core.Vertx;
 import org.apache.commons.io.FileUtils;
@@ -41,33 +42,52 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 	private SamplePacketListener packetListener = new SamplePacketListener();
 	private ApplicationContext applicationContext;
 
+	public HashMap<String, WebDriver> getDrivers() {
+		return drivers;
+	}
+
 	@Override
 	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
 		this.applicationContext = applicationContext;
 		vertx = (Vertx) applicationContext.getBean("vertxCore");
-		
+
 		AntMediaApplicationAdapter app = getApplication();
 		app.addStreamListener(this);
 	}
 
-	public void startWebpageRecording(String streamId, String websocketUrl, String url) throws URISyntaxException, InterruptedException {
-		if (drivers.containsKey(streamId)) {
+	public ResponsePair startWebpageRecording(String streamId, String websocketUrl, String url) throws URISyntaxException, InterruptedException {
+		ResponsePair responsePair = new ResponsePair();
+		if (getDrivers().containsKey(streamId)) {
 			logger.warn("Driver already exists for stream id: {}", streamId);
-			return;
+			responsePair.setResponseCode(ResponsePair.INTERNAL_SERVER_ERROR_CODE);
+			responsePair.setResponse("Driver already exists for stream id: " + streamId);
+			return responsePair;
 		}
 
 		WebDriver driver = createDriver();
+		if (driver == null) {
+			logger.error("Driver cannot created");
+			responsePair.setResponseCode(ResponsePair.INTERNAL_SERVER_ERROR_CODE);
+			responsePair.setResponse("Driver cannot created");
+			return responsePair;
+		}
 		drivers.put(streamId, driver);
 		driver.get(url);
 		TimeUnit.SECONDS.sleep(5);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
 		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s' }, '*')", streamId, websocketUrl));
+		responsePair.setResponse("Webpage recording started");
+		responsePair.setResponseCode(ResponsePair.SUCCESS_CODE);
+		return responsePair;
 	}
 
-	public void stopWebpageRecording(String streamId) throws InterruptedException {
+	public ResponsePair stopWebpageRecording(String streamId) throws InterruptedException {
+		ResponsePair responsePair = new ResponsePair();
 		if (!drivers.containsKey(streamId)) {
 			logger.warn("Driver does not exist for stream id: {}", streamId);
-			return;
+			responsePair.setResponseCode(ResponsePair.INTERNAL_SERVER_ERROR_CODE);
+			responsePair.setResponse("Driver does not exist for stream id: " + streamId);
+			return responsePair;
 		}
 
 		WebDriver driver = drivers.get(streamId);
@@ -76,6 +96,9 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		TimeUnit.SECONDS.sleep(5);
 		driver.quit();
 		drivers.remove(streamId);
+		responsePair.setResponse("Webpage recording stopped");
+		responsePair.setResponseCode(ResponsePair.SUCCESS_CODE);
+		return responsePair;
 	}
 
 	public WebDriver createDriver() throws URISyntaxException {
