@@ -105,7 +105,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS)){
 			filterInputframe = audioFrame;
+			long orgPts = filterInputframe.pts();
 			filterOutputFrame = audioFilterGraph.doFilterSync(streamId, filterInputframe);
+			filterOutputFrame.pts(orgPts);
 		}
 		return filterOutputFrame;
 	}
@@ -151,11 +153,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS)){
 			filterInputframe = videoFrame;
+			long orgPts = filterInputframe.pts();
 			rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
 			filterOutputFrame = videoFilterGraph.doFilterSync(streamId, filterInputframe);
 			if(filterOutputFrame.width() == 0) {
 				filterOutputFrame = null;
 			}
+			filterOutputFrame.pts(orgPts);
 
 		}
 		return filterOutputFrame;
