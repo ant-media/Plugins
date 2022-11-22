@@ -8,6 +8,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -42,10 +43,10 @@ public class ZixiRestService {
 	}
 	
 	@DELETE
-	@Path("/client")
+	@Path("/client/{streamId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result deleteZixiClient(String streamId) {
+	public Result deleteZixiClient(@PathParam("streamId") String streamId) {
 		return  getZixiPlugin().stopClient(streamId);
 	}
 	
@@ -53,8 +54,9 @@ public class ZixiRestService {
 	@Path("/feeder")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result createZixiFeeder(String streamId, String zixiEndpointURL) {
-		return  getZixiPlugin().startFeeder(streamId, zixiEndpointURL);
+	public Result createZixiFeeder(String streamId) //, String zixiEndpointURL) 
+	{
+		return null;// getZixiPlugin().startFeeder(streamId, zixiEndpointURL);
 	}
 	
 	
@@ -62,12 +64,10 @@ public class ZixiRestService {
 	@Path("/feeder")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result deleteZixiFeeder(String streamId, String zixiEndpointURL) {
-		return  getZixiPlugin().stopFeeder(streamId, zixiEndpointURL);
+	public Result deleteZixiFeeder(String streamId) //, String zixiEndpointURL) 
+	{
+		return null;// getZixiPlugin().stopFeeder(streamId, zixiEndpointURL);
 	}
-	
-	
-	
 	
 	private ZixiPlugin getZixiPlugin() {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);

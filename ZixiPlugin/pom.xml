@@ -280,6 +280,18 @@
             <version>14.13.44304-1.5.5</version>
             <scope>provided</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.mockito</groupId>
+			<artifactId>mockito-core</artifactId>
+			<version>${mockito-core.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+		    <groupId>org.awaitility</groupId>
+		    <artifactId>awaitility</artifactId>
+		    <version>${awaitility.version}</version>
+		    <scope>test</scope>
+		</dependency>
 	</dependencies>
 	<description>ZixiPlugin for Ant Media Server</description>
 	<organization>

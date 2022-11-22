@@ -29,7 +29,6 @@ import io.antmedia.StreamIdValidator;
 import io.antmedia.app.SampleFrameListener;
 import io.antmedia.app.SamplePacketListener;
 import io.antmedia.datastore.db.types.Broadcast;
-import io.antmedia.enterprise.srt.SRTStream;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.api.IFrameListener;
@@ -41,7 +40,7 @@ import io.vertx.core.Vertx;
 import static org.bytedeco.zixi.global.client.*;
 import org.bytedeco.zixi.global.client;
 
-@Component(value="io.antmedia.zixi.client")
+@Component(value="io.antmedia.zixi.ZixiPlugin")
 public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 
 	protected static Logger logger = LoggerFactory.getLogger(ZixiPlugin.class);
@@ -177,32 +176,23 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 				app.getAppSettings().getListenerHookURL(), app.getServerSettings(), 0);
 
 
-		ZixiClient zixiClient = new ZixiClient(vertx, getApplication(), broadcast.getStreamUrl());
+		ZixiClient zixiClient = new ZixiClient(vertx, getApplication(), broadcast.getStreamUrl(), broadcast.getStreamId());
 		zixiClientMap.put(broadcast.getStreamId(), zixiClient);
 
 		return zixiClient.start();
 	}
-
-
-
 
 	public Result stopClient(String streamId) {
 		ZixiClient zixiClient = zixiClientMap.remove(streamId);
 		if (zixiClient != null) {
 			return zixiClient.stop();
 		}
-		return new Result(false, "Zixi client is not found with this stream id:{}", streamId);
+		return new Result(false, "Zixi client is not found with this stream id:" + streamId);
 	}
-
-
-
 
 	public Response startFeeder(String streamId, String zixiEndpointURL) {
 		return null;
 	}
-
-
-
 
 	public Response stopFeeder(String streamId, String zixiEndpointURL) {
 		return null;

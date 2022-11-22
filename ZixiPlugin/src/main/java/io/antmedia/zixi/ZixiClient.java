@@ -7,6 +7,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+
+import static org.bytedeco.ffmpeg.global.avcodec.av_packet_free;
+import static org.bytedeco.ffmpeg.global.avcodec.*;
+import static org.bytedeco.ffmpeg.global.avformat.av_dump_format;
+import static org.bytedeco.ffmpeg.global.avformat.*;
+import static org.bytedeco.ffmpeg.global.avformat.avformat_close_input;
+import static org.bytedeco.ffmpeg.global.avformat.avio_alloc_context;
+import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
+import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
+import static org.bytedeco.ffmpeg.global.avutil.av_dict_free;
+import static org.bytedeco.ffmpeg.global.avutil.av_dict_set;
+import static org.bytedeco.ffmpeg.global.avutil.av_free;
+
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avformat.AVFormatContext;
@@ -38,7 +51,6 @@ import io.antmedia.app.SampleFrameListener;
 import io.antmedia.app.SamplePacketListener;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
-import io.antmedia.enterprise.srt.SRTStream;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.api.IFrameListener;
@@ -52,7 +64,7 @@ import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 import static org.bytedeco.ffmpeg.global.avutil.av_dict_free;
 import static org.bytedeco.ffmpeg.global.avutil.av_dict_set;
-import static org.bytedeco.zixi.global.client;
+import static org.bytedeco.zixi.global.client.*;
 
 /**
  * ZixiClient connects to a Zixi Broadcaster(ZB) and pull the stream. It's also called Zixi Receiver because 
@@ -80,8 +92,15 @@ public class ZixiClient {
 	
 	public static final long INACTIVITY_TIMEOUT_MS = 5000;
 		
+	private boolean streamPublished = false;
+
+	protected AtomicBoolean isPipeReaderJobRunning = new AtomicBoolean(false);
 	
 	private AtomicBoolean stopRequested = new AtomicBoolean(false);
+
+	private AtomicBoolean prepared = new AtomicBoolean(false);
+
+	private AtomicBoolean stopped = new AtomicBoolean(false);
 
 	/* 
 	private static ZIXI_LOG_FUNC loggerFunction = new ZIXI_LOG_FUNC() 
@@ -93,6 +112,10 @@ public class ZixiClient {
 		}
 	};
 	*/
+
+	public AtomicBoolean getStopped() {
+		return stopped;
+	}
 
 	public ZIXI_NEW_STREAM_FUNC newStreamFunction = new ZIXI_NEW_STREAM_FUNC() {
 
@@ -132,7 +155,7 @@ public class ZixiClient {
 				{
 					if (zixiClient.stopRequested.get()) 
 					{
-						logger.info("Stop request for stream id: {} and scope: {}", zixiClient.streamId, zixiClient.scope.getName());
+						logger.info("Stop request for stream id: {} and scope: {}", zixiClient.streamId, zixiClient.appAdaptor.getScope().getName());
 						break;
 					}
 					Thread.sleep(WAIT_TIME_MILLISECONDS);
@@ -141,11 +164,11 @@ public class ZixiClient {
 					long elapsedTimeMs = waitCount * WAIT_TIME_MILLISECONDS;
 					if (waitCount % 50 == 0) 
 					{
-						logger.warn("Stream:{} in {} does not get packet for {} ms" , zixiClient.streamId, zixiClient.scope.getName(), elapsedTimeMs);
+						logger.warn("Stream:{} in {} does not get packet for {} ms" , zixiClient.streamId, zixiClient.appAdaptor.getScope().getName(), elapsedTimeMs);
 					}
 
 					if (elapsedTimeMs > INACTIVITY_TIMEOUT_MS) {
-						logger.warn("Inactivity timeout({}ms) for srt stream:{}/{}", INACTIVITY_TIMEOUT_MS, zixiClient.scope.getName(), zixiClient.streamId);
+						logger.warn("Inactivity timeout({}ms) for srt stream:{}/{}", INACTIVITY_TIMEOUT_MS, zixiClient.appAdaptor.getScope().getName(), zixiClient.streamId);
 						zixiClient.stop();
 						break;
 					}
@@ -182,13 +205,13 @@ public class ZixiClient {
 	private String streamUrl;
 
 
-	private Pointer zixiHandle;
+	private Pointer zixiHandle = null;
 
 	private AVFormatContext inputFormatContext;
 
 	private BytePointer opaque;
 
-	private static final Map<Pointer, ZixiClient> socketQueueMap = new ConcurrentHashMap<>();
+	public static final Map<Pointer, ZixiClient> socketQueueMap = new ConcurrentHashMap<>();
 
 
 	private AVIOContext avioContext;
@@ -197,25 +220,15 @@ public class ZixiClient {
 
 	private AVPacket pkt;
 
-	public ZixiClient(Vertx vertx, AntMediaApplicationAdapter appAdaptor, String streamUrl) {
+	private long readTimer;
+
+	public ZixiClient(Vertx vertx, AntMediaApplicationAdapter appAdaptor, String streamUrl, String streamId) {
 		this.vertx = vertx;
 		this.appAdaptor = appAdaptor;
 		//"zixi://127.0.0.1:2077/stream1
 		this.streamUrl = streamUrl;
+		this.streamId = streamId;
 	}
-
-	public boolean init() {
-		int result = zixi_init();
-		if (result == ZIXI_ERROR_OK) {
-			logger.info("Zixi is initialized successfully");
-		}
-		else {
-			logger.warn("Zixi initialization has failed");
-		}
-
-		return result == ZIXI_ERROR_OK;
-	}
-
 	
 	public boolean connect() 
 	{
@@ -229,7 +242,7 @@ public class ZixiClient {
 		else 
 		{
 			logger.warn("zixi_init_connection_handle ERROR - {}", ret);
-			close();
+			disconnect();
 			return false;
 		}
 		
@@ -243,7 +256,7 @@ public class ZixiClient {
 		else 
 		{
 			logger.warn("zixi_configure_id ERROR -> {}", ret);
-			close();
+			disconnect();
 			return false;
 		}
 		int latency = 1000;
@@ -261,7 +274,7 @@ public class ZixiClient {
 		else 
 		{
 			logger.warn("zixi_configure_error_correction ERROR -> {}", ret);
-			close();
+			disconnect();
 			return false;
 		}
 		
@@ -274,28 +287,50 @@ public class ZixiClient {
 		ret = zixi_connect_url(zixiHandle, streamUrl, true, cbs, true, false, true);
 		if (ret == ZIXI_ERROR_OK)
 		{
-			logger.info("Zixi connect url is successful to url:{}", url);
+			logger.info("Zixi connect url is successful to url:{}", streamUrl);
 		}
 		else
 		{
 			int ex_ret = zixi_get_last_error(zixiHandle);
 			logger.warn("zixi_connect_url ERROR - {}, last error - {}", ret, ex_ret);
-			close();
+			disconnect();
 			return false;
 		}
+
+		return true;
 		
 	}
 	
-	public void close() {
-		zixi_disconnect(zixiHandle);
-		zixi_delete_connection_handle(zixiHandle);
+	public boolean disconnect() {
+		
+		boolean disconnected = false; 
+		
+		if (zixiHandle != null && zixi_disconnect(zixiHandle) == ZIXI_ERROR_OK) {
+			logger.info("Zixi client disconnect is successful for url:{}", streamUrl);
+			disconnected = true;
+		} 
+		else {
+			logger.info("Zixi client disconnect is failed for url:{}", streamUrl);
+		}
+		
+		boolean connectionDeleted = false;
+		if (zixiHandle != null && zixi_delete_connection_handle(zixiHandle) == ZIXI_ERROR_OK) {
+			logger.info("Zixi client delete connection is successful for url:{}", streamUrl);
+			connectionDeleted = true;
+			zixiHandle = null;
+		} 
+		else {
+			logger.info("Zixi client delete connection is failed for url:{}", streamUrl);
+		}
+	
+		return disconnected && connectionDeleted;
 	}	
 	
 	public synchronized AVFormatContext prepareContext() 
 	{
 		try 
 		{
-			logger.info("Preparing ingest SRT stream:{} and scope:{}", streamId, appAdaptor.getScope().getName());
+			logger.info("Preparing Zixi Client stream:{} and scope:{}", streamId, appAdaptor.getScope().getName());
 			inputFormatContext = avformat.avformat_alloc_context();
 
 			opaque = new BytePointer(streamId);
@@ -314,6 +349,7 @@ public class ZixiClient {
 			av_dict_set(optionsDictionary, "analyzeduration", analyzeDuration, 0);
 
 
+			logger.info("avformat_open_input");
 			if (avformat.avformat_open_input(inputFormatContext, (String) null, null,
 					optionsDictionary) < 0) 
 			{
@@ -326,12 +362,14 @@ public class ZixiClient {
 			av_dict_free(optionsDictionary);
 			optionsDictionary.close();
 
+			logger.info("Try to get stream info");
 			int ret = avformat.avformat_find_stream_info(inputFormatContext, (AVDictionary) null);
 			if (ret < 0) 
 			{
 				logger.info("Cannot find the stream info for stream:{}", streamId);
 				return null;
 			}
+			logger.info("Stream info is available");
 
 			av_dump_format(inputFormatContext, 0, streamId, 0);
 
@@ -394,57 +432,217 @@ public class ZixiClient {
 		
 		if (connect()) {
 			
-			
-			//prepare context
-
-			vertx.setPeriodic(10, h -> {
+			//cancel the timer
+			readTimer = vertx.setPeriodic(10, h -> {
 				
-				byte[] data = new byte[1316*8];
+				byte[] data = new byte[BUFFER_SIZE];
 				int[] writtenSize = new int[1];
 				boolean[] isEOF = new boolean[1];
 				boolean[] discontinuity = new boolean[1];
 				int[] bitrate = new int[1];
-				
+				int ret;
 				do {
 					
-					int ret = zixi_read(zixiHandle, data, data.length, writtenSize, isEOF, discontinuity, false, bitrate);
+					ret = zixi_read(zixiHandle, data, data.length, writtenSize, isEOF, discontinuity, false, bitrate);
 					
-					logger.info("read packet size {} and EOF:{}", writtenSize[0], ieEOF[0]);
 					if (ret == ZIXI_ERROR_OK) 
-					{
+					{					
 						//add to queue
 						byte[] readData = new byte[writtenSize[0]];
-						System.arraycopy(data, 0, readData, 0, ret);
+						System.arraycopy(data, 0, readData, 0, readData.length);
 						queue.add(readData);
+
+						if (prepared.get()) 
+						{
+							executeProcessPacket();
+						}
 					}
 					else if (ret != ZIXI_ERROR_NOT_READY) {
 						//it means there is a problem 
-						close();
+						disconnect();
 					}
 					
 					if (isEOF[0]) {
 						//end of file
-						close();
+						logger.info("End of file for zixi stream:{}", streamUrl);
+						stop();
 						break;
 					}
 				}
-				while (ret == ZIXI_ERROR_OK)
+				while (ret == ZIXI_ERROR_OK);
 			});
-			
-			return new Result(true);			
+
+			return new Result(prepareContext() != null);			
 		}
 		else  {
 			return new Result(false, "Cannot connect to URL");
 		}
 	}
+
+	public AtomicBoolean getStopRequested() {
+		return stopRequested;
+	}
 	
 	public Result stop() {
 		stopRequested.set(true);
+
+		disconnect();
+
+		if (readTimer != -1) {
+			vertx.cancelTimer(readTimer);
+			readTimer = -1;
+		}
+
+		vertx.executeBlocking(b -> 
+		{
+			//finish the queue
+			while (!getQueue().isEmpty() && !stopped.get() && inputFormatContext != null) {
+				//processPacket is internally calling itself but we just need to make sure that 
+				processPacket(false);
+			}
+
+
+			if (isPipeReaderJobRunning.compareAndSet(false, true))  
+			{
+				logger.info("while stopping, number of items in the queue:{} streamId:{} and scope:{}", getQueue().size(), streamId, appAdaptor.getScope().getName());
+				stopAndRelease(streamId, appAdaptor.getScope());
+				isPipeReaderJobRunning.compareAndSet(true, false);
+			}
+
+			//stopped is set true and stream is stopped
+			if (!stopped.get()) 
+			{
+				//if it's not stopped, try again in 100ms
+				vertx.setTimer(100, l-> stop());
+			}
+
+		}, false, null);
+
 		return new Result(true);
 	}
+
+	private synchronized void stopAndRelease(String streamId, IScope scope) {
+		if (muxAdaptor != null) 
+		{
+			logger.info("Writing trailer in Muxadaptor {}", streamId);
+			muxAdaptor.writeTrailer();
+			appAdaptor.muxAdaptorRemoved(muxAdaptor);
+			muxAdaptor = null;
+		}
+
+		releasePrepareContext();
+
+		if (streamPublished && !stopped.get()) 
+		{
+			appAdaptor.closeBroadcast(streamId);
+		}
+
+		stopped.set(true);
+	}
+
+
+	private synchronized void releasePrepareContext() {
+
+		logger.info("Releasing resources for SRT stream:{} and scope:{}", streamId, appAdaptor.getScope().getName());
+		if (pkt != null) 
+		{
+			av_packet_free(pkt);
+			pkt.close();
+			pkt = null;
+		}
+
+		if (opaque != null) {
+			socketQueueMap.remove(opaque);
+			opaque.close();
+			opaque = null;
+		}
+
+		if (inputFormatContext != null) 
+		{
+			logger.info("Releasing input format context:{} for stream:{} and scope:{} ",inputFormatContext, streamId, appAdaptor.getScope().getName());
+
+			try {
+				avformat_close_input(inputFormatContext);
+			}
+			catch (Exception e) {
+				logger.info(e.getMessage());
+			}
+			inputFormatContext = null;
+		}
+
+		if (avioContext != null) {
+			if (avioContext.buffer() != null) {
+				av_free(avioContext.buffer());
+				avioContext.buffer(null);
+			}
+			av_free(avioContext);
+			avioContext = null;
+		}
+	}
+
+	
 
 	public Queue<byte[]> getQueue() {
 		return queue;
 	}
+
+
+	private void processPacket(boolean callItSelfIfRequired) 
+	{
+		logger.trace("Calilng process packet for stream:{}", streamId);
+		if (isPipeReaderJobRunning.compareAndSet(false, true))  
+		{
+			if (inputFormatContext == null) 
+			{
+				logger.warn("Zixi stream read is called after it's disconnected for stream:{} and scope:{}", streamId, appAdaptor.getScope().getName());
+			}
+			else 
+			{
+				if (av_read_frame(inputFormatContext, pkt) >= 0) 
+				{
+					if(!streamPublished) 
+					{
+						long currentTime = System.currentTimeMillis();
+						muxAdaptor.setStartTime(currentTime);
+						appAdaptor.startPublish(streamId, 0, IAntMediaStreamHandler.PUBLISH_TYPE_SRT);
+					}
+
+					streamPublished = true;
+					muxAdaptor.writePacket(inputFormatContext.streams(pkt.stream_index()), pkt);
+					av_packet_unref(pkt);
+				}
+				else 
+				{
+					logger.info("Cannot read packet for stream:{} and scope:{}", streamId, appAdaptor.getScope().getName());
+				}
+				
+			}
+			isPipeReaderJobRunning.compareAndSet(true, false);
+		}
+		else {
+			logger.trace("By passing the processpacket because there is already a thread running inside for stream:{}", streamId);
+		}
+		
+		if (callItSelfIfRequired && !getQueue().isEmpty() && !stopped.get() && inputFormatContext != null) 
+		{
+			//call execute process packet if not empty and not stopped and not inputFormatContext null
+			logger.trace("execute process packet and queue size:{} for stream:{}", getQueue().size(), streamId);
+			executeProcessPacket();
+		}
+	}
+
+	public void executeProcessPacket() 
+	{
+		vertx.executeBlocking(k -> processPacket(true), false, null);
+	}
+
+	public AtomicBoolean getPrepared() {
+		return prepared;
+	}
+
+	public static Map<Pointer, ZixiClient> getSocketqueuemap() {
+		return socketQueueMap;
+	}
+
 
 }
