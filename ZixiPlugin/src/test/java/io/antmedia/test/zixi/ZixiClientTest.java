@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
 
 import org.awaitility.Awaitility;
@@ -19,7 +21,6 @@ import io.antmedia.AppSettings;
 import io.antmedia.datastore.db.IDataStoreFactory;
 import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.filter.StreamAcceptFilter;
-import io.antmedia.plugin.ZixiPlugin;
 import io.antmedia.settings.ServerSettings;
 import io.antmedia.zixi.ZixiClient;
 import io.vertx.core.Vertx;
@@ -29,6 +30,14 @@ public class ZixiClientTest {
     Vertx vertx = Vertx.vertx();
 
     AntMediaApplicationAdapter appAdaptor;
+
+    private Process push2UDP;
+
+    private Process push2ZixiBC;
+
+    /*
+     * Zixi Broadcaster should be running in the local computer for these tests
+     */
 
     @Before
     public void before() {
@@ -66,10 +75,64 @@ public class ZixiClientTest {
        // Mockito.when(context.getResource(Mockito.anyString()).thenReturn();
     }
 
+
+    private static Process tmpExec;
+
+	public static Process execute(final String command) {
+		tmpExec = null;
+		new Thread() {
+
+			public void run() {
+				try 
+				{
+					tmpExec = Runtime.getRuntime().exec(command);
+					InputStream errorStream = tmpExec.getErrorStream();
+					byte[] data = new byte[1024];
+					int length = 0;
+
+					while ((length = errorStream.read(data, 0, data.length)) > 0) {
+						System.out.println(new String(data, 0, length));
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			};
+		}.start();
+
+		while (tmpExec == null) {
+			try {
+				System.out.println("Waiting for exec get initialized...");
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+
+		return tmpExec;
+	}
+
+
+    public void startPushingToZixiBroadcaster() {
+        //start 
+        String push2UDPCommand = "src/test/resources/zixi_sdks-antmedia-linux64-14.13.44304/test/push2UDP.sh";
+        push2UDP = execute(push2UDPCommand);
+
+        String push2ZixiBCCommand = "src/test/resources/zixi_sdks-antmedia-linux64-14.13.44304/test/push2ZixiBC.sh";
+        push2ZixiBC = execute(push2ZixiBCCommand);
+    }
+
+    public void stopPushingToZixiBroadcaster() {
+        push2UDP.destroy();
+        push2ZixiBC.destroy();
+    }
+
+
+    /**
+     *  This test requires there is a stream available with "stream1" in ZB 
+     */
     @Test
     public void testConnectAndDisconnect(){
        
-        //this test requires there is a stream available with stream1 in ZB 
 
         ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream1","stream1");
        // assertTrue(client.init());
@@ -79,11 +142,12 @@ public class ZixiClientTest {
         assertTrue(client.disconnect());
     }
 
-
+    /**
+     *  This just tests connection status for the non existed test 
+     */
     @Test
     public void testConnectAndDisconnectNotExistStream(){
        
-        //this test requires there is a stream available with stream1 in ZB 
 
         ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream_not_exists","stream1");
        // assertTrue(client.init());
@@ -98,7 +162,7 @@ public class ZixiClientTest {
     public void testStartStop() {
 
         //this test requires pushing the stream to ZB 
-
+        startPushingToZixiBroadcaster();
 
         ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream1", "stream1");
        
@@ -122,8 +186,8 @@ public class ZixiClientTest {
             return client.getStopped().get();
         });
         assertEquals(0, ZixiClient.getSocketqueuemap().size());
-       
 
+        stopPushingToZixiBroadcaster();
     }
 
 

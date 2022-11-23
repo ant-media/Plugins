@@ -7,7 +7,7 @@
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.antmedia.plugin</groupId>
-	<artifactId>ZixiPlugin</artifactId>
+	<artifactId>zixi</artifactId>
 	<packaging>jar</packaging>
 	<name>Plugin Maven Webapp</name>
 	<url>http://maven.apache.org</url>
@@ -63,7 +63,7 @@
 		</repository>
 	</distributionManagement>
 	<build>
-		<finalName>ZixiPlugin</finalName>
+		<finalName>zixi</finalName>
 		<testSourceDirectory>src/test/java</testSourceDirectory>
 		<plugins>
 			<plugin>
@@ -127,6 +127,29 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<version>3.1.1</version>
+
+				<configuration>
+					<descriptorRefs>
+						<descriptorRef>jar-with-dependencies</descriptorRef>
+					</descriptorRefs>
+					<finalName>${project.artifactId}-plugin</finalName>
+					<appendAssemblyId>false</appendAssemblyId>
+				</configuration>
+
+				<executions>
+					<execution>
+						<id>make-assembly</id>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+					</execution>
+				</executions>
+        	</plugin>
 		</plugins>
 		<resources>
 			<resource>
@@ -274,12 +297,6 @@
             <version>${javacpp.ffmpeg.version}</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-			<groupId>org.bytedeco</groupId>
-            <artifactId>zixi-platform</artifactId>
-            <version>14.13.44304-1.5.5</version>
-            <scope>provided</scope>
-		</dependency>
 		<dependency>
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-core</artifactId>
@@ -291,6 +308,17 @@
 		    <artifactId>awaitility</artifactId>
 		    <version>${awaitility.version}</version>
 		    <scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.bytedeco</groupId>
+            <artifactId>javacpp</artifactId>
+            <scope>provided</scope>
+		</dependency>
+		 <dependency>
+			<groupId>org.bytedeco</groupId>
+            <artifactId>zixi-platform</artifactId>
+            <version>14.13.44304-1.5.5</version>
+            <scope>compile</scope>
 		</dependency>
 	</dependencies>
 	<description>ZixiPlugin for Ant Media Server</description>

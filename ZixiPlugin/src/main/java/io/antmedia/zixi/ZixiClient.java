@@ -86,7 +86,7 @@ public class ZixiClient {
 	
 	private String streamId;
 	
-	protected static final int BUFFER_SIZE = 4096;
+	protected static final int BUFFER_SIZE = 8192;
 	
 	protected static final long WAIT_TIME_MILLISECONDS = 5;
 	
@@ -301,7 +301,7 @@ public class ZixiClient {
 		
 	}
 	
-	public boolean disconnect() {
+	public synchronized boolean disconnect() {
 		
 		boolean disconnected = false; 
 		
@@ -417,7 +417,7 @@ public class ZixiClient {
 
 			prepared.set(true);
 
-			logger.info("Prepared SRT stream:{} and scope:{}", streamId, appAdaptor.getScope().getName());
+			logger.info("Prepared Zixi Client stream:{} and scope:{}", streamId, appAdaptor.getScope().getName());
 			return inputFormatContext;
 		} 
 		catch (Exception e) 
@@ -472,7 +472,7 @@ public class ZixiClient {
 				while (ret == ZIXI_ERROR_OK);
 			});
 
-			return new Result(prepareContext() != null);			
+			return new Result(prepareContext() != null, streamId, "Stream pulling is started for " + streamUrl);			
 		}
 		else  {
 			return new Result(false, "Cannot connect to URL");
