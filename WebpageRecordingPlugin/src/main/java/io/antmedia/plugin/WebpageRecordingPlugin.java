@@ -6,10 +6,10 @@ import io.antmedia.rest.ResponsePair;
 import io.github.bonigarcia.wdm.WebDriverManager;
 import io.vertx.core.Vertx;
 import org.apache.commons.io.FileUtils;
-import org.openqa.selenium.JavascriptExecutor;
-import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.interactions.Actions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -70,11 +70,22 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		drivers.put(streamId, driver);
 		driver.get(url);
 		TimeUnit.SECONDS.sleep(5);
+		customModification(driver);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
 		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s' }, '*')", streamId, websocketUrl));
 		responsePair.setResponse("Webpage recording started");
 		responsePair.setResponseCode(ResponsePair.SUCCESS_CODE);
 		return responsePair;
+	}
+
+	public void customModification(WebDriver driver) {
+		// you add related selenium code here to play the video on a custom page or login to a page
+
+		/* example code to start YouTube video
+		new Actions(driver)
+				.sendKeys("k")
+				.perform();
+		 */
 	}
 
 	public ResponsePair stopWebpageRecording(String streamId) throws InterruptedException {
