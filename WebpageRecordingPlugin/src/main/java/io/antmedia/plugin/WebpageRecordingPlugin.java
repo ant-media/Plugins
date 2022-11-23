@@ -1,8 +1,6 @@
 package io.antmedia.plugin;
 
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.app.SampleFrameListener;
-import io.antmedia.app.SamplePacketListener;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.ResponsePair;
 import io.github.bonigarcia.wdm.WebDriverManager;
@@ -38,8 +36,6 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 	private HashMap<String, WebDriver> drivers = new HashMap<String, WebDriver>();
 
 	private Vertx vertx;
-	private SampleFrameListener frameListener = new SampleFrameListener();
-	private SamplePacketListener packetListener = new SamplePacketListener();
 	private ApplicationContext applicationContext;
 
 	public HashMap<String, WebDriver> getDrivers() {
@@ -136,12 +132,6 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 			return targetFile;
 		}
 
-	}
-	
-	public void register(String streamId) {
-		AntMediaApplicationAdapter app = getApplication();
-		app.addFrameListener(streamId, frameListener);		
-		app.addPacketListener(streamId, packetListener);
 	}
 	
 	public AntMediaApplicationAdapter getApplication() {
