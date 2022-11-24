@@ -53,6 +53,7 @@ import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
+import io.antmedia.plugin.ZixiPlugin;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
@@ -221,6 +222,8 @@ public class ZixiClient {
 	private AVPacket pkt;
 
 	private long readTimer;
+
+	private long lastReceivedPacketTimeMs = -1;
 
 	public ZixiClient(Vertx vertx, AntMediaApplicationAdapter appAdaptor, String streamUrl, String streamId) {
 		this.vertx = vertx;
@@ -451,6 +454,7 @@ public class ZixiClient {
 						byte[] readData = new byte[writtenSize[0]];
 						System.arraycopy(data, 0, readData, 0, readData.length);
 						queue.add(readData);
+						lastReceivedPacketTimeMs = System.currentTimeMillis();
 
 						if (prepared.get()) 
 						{
@@ -459,7 +463,14 @@ public class ZixiClient {
 					}
 					else if (ret != ZIXI_ERROR_NOT_READY) {
 						//it means there is a problem 
-						disconnect();
+						stop();
+					}
+					
+					if (lastReceivedPacketTimeMs != -1 && 
+							(System.currentTimeMillis() - lastReceivedPacketTimeMs > INACTIVITY_TIMEOUT_MS))
+					{
+						logger.warn("No activity more than {} for Zixi Client with streamId:{} so stopping connection", INACTIVITY_TIMEOUT_MS, streamId);
+						break;
 					}
 					
 					if (isEOF[0]) {
@@ -604,7 +615,7 @@ public class ZixiClient {
 					{
 						long currentTime = System.currentTimeMillis();
 						muxAdaptor.setStartTime(currentTime);
-						appAdaptor.startPublish(streamId, 0, IAntMediaStreamHandler.PUBLISH_TYPE_SRT);
+						appAdaptor.startPublish(streamId, 0, ZixiPlugin.PUBLISH_TYPE_ZIXI_CLIENT);
 					}
 
 					streamPublished = true;

@@ -52,21 +52,23 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 
 	private AntMediaApplicationAdapter app;
 
-	private static final Map<String, ZixiClient> zixiClientMap = new ConcurrentHashMap<>();
-
-
-
-	public static final String STREAM_TYPE_ZIXI_CLIENT = "zixiClient";
-
+	private final Map<String, ZixiClient> zixiClientMap = new ConcurrentHashMap<>();
+	public static final String PUBLISH_TYPE_ZIXI_CLIENT = "ZixiClient";
 
 
 	@Override
 	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
 		this.applicationContext = applicationContext;
 		vertx = (Vertx) applicationContext.getBean("vertxCore");
-
 		app = getApplication();
+	}
 
+	public void setApp(AntMediaApplicationAdapter app) {
+		this.app = app;
+	}
+
+	public void setVertx(Vertx vertx) {
+		this.vertx = vertx;
 	}
 
 
@@ -123,10 +125,46 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 
 	}
 
+	public Result startClient(String streamId) {
+		Broadcast broadcast = app.getDataStore().get(streamId);
+		Result result = null;
+		//check the broadcast exists
+		if (broadcast != null) 
+		{
+			//check the stream url is in correct format
+			if (broadcast.getStreamUrl() != null && broadcast.getStreamUrl().startsWith("zixi")) 
+			{
+				//check it's already running
+				if (zixiClientMap.get(broadcast.getStreamId()) == null) 
+				{
+					result = startZixiClientInternal(broadcast);
+				}
+				else 
+				{
+					result = new Result(false, "There is already a running zixi client for this stream Id:" + streamId);
+				}
+			}
+			else 
+			{
+				result = new Result(false, "Broadcast with streamId:" + streamId + " has not a correct stream url. Its stream url is " + broadcast.getStreamUrl());
+			} 
+		}
+		else 
+		{
+			result = new Result(false,"Broadcast with streamId:" + streamId + " is not found");
+		}
+		return result;
+	}
 
 
+	private Result startZixiClientInternal(Broadcast broadcast) {
+		ZixiClient zixiClient = new ZixiClient(vertx, getApplication(), broadcast.getStreamUrl(), broadcast.getStreamId());
+		zixiClientMap.put(broadcast.getStreamId(), zixiClient);
+		return zixiClient.start();
+	}
 
-	public Result startClient(Broadcast broadcast) {
+
+	public Result startClient(Broadcast broadcast, boolean start) {
 		//Check that there is a stream id 
 		//  if there is a stream id, check if it's available
 
@@ -170,16 +208,21 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 
 
 		//save it to the database with correct format
-		broadcast.setType(STREAM_TYPE_ZIXI_CLIENT);
+		broadcast.setPublishType(PUBLISH_TYPE_ZIXI_CLIENT);
 		broadcast = RestServiceBase.saveBroadcast(broadcast,
 				IAntMediaStreamHandler.BROADCAST_STATUS_CREATED, app.getScope().getName(), app.getDataStore(),
 				app.getAppSettings().getListenerHookURL(), app.getServerSettings(), 0);
 
-
-		ZixiClient zixiClient = new ZixiClient(vertx, getApplication(), broadcast.getStreamUrl(), broadcast.getStreamId());
-		zixiClientMap.put(broadcast.getStreamId(), zixiClient);
-
-		return zixiClient.start();
+		Result result = null;
+		if (start) 
+		{
+			result = startZixiClientInternal(broadcast);
+		}
+		else 
+		{
+			result = new Result(true, broadcast.getStreamId(), "ZixiClient is saved to db");
+		}
+		return result;
 	}
 
 	public Result stopClient(String streamId) {
@@ -190,6 +233,24 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 		return new Result(false, "Zixi client is not found with this stream id:" + streamId);
 	}
 
+	public Result deleteClient(String streamId) {
+		Result result = null;
+		Broadcast broadcast = app.getDataStore().get(streamId);
+		if (broadcast != null && broadcast.getStreamUrl() != null 
+				&& broadcast.getStreamUrl().startsWith("zixi")) 
+		{
+			//stop client if it's running
+			stopClient(streamId);
+			boolean deleted = app.getDataStore().delete(streamId);
+			result = new Result(deleted, "Broadcast is "+ (deleted ? "" : "not") + " deleted");
+		}
+		else {
+			result = new Result(false, "Broadcast with streamId:" + streamId +" is not a zixi stream");
+		}
+		return result;
+	}
+
+
 	public Response startFeeder(String streamId, String zixiEndpointURL) {
 		return null;
 	}
@@ -197,6 +258,12 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 	public Response stopFeeder(String streamId, String zixiEndpointURL) {
 		return null;
 	}
+
+
+	public Map<String, ZixiClient> getZixiClientMap() {
+		return zixiClientMap;
+	}
+
 
 
 

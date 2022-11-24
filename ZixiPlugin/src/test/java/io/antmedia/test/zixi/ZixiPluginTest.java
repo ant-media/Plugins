@@ -2,6 +2,7 @@ package io.antmedia.test.zixi;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -23,11 +24,12 @@ import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.filter.StreamAcceptFilter;
 import io.antmedia.plugin.ZixiPlugin;
+import io.antmedia.rest.model.Result;
 import io.antmedia.settings.ServerSettings;
 import io.antmedia.zixi.ZixiClient;
 import io.vertx.core.Vertx;
 
-public class ZixiClientTest {
+public class ZixiPluginTest {
 
     Vertx vertx = Vertx.vertx();
 
@@ -130,75 +132,65 @@ public class ZixiClientTest {
         push2ZixiBC.destroy();
     }
 
-
-    /**
-     *  This test requires there is a stream available with "stream1" in ZB 
-     */
     @Test
-    public void testConnectAndDisconnect(){
-       
+    public void testStartStopDeleteClientWithoutRealStart(){
+        ZixiPlugin zixiPlugin = new ZixiPlugin();
+        zixiPlugin.setApp(appAdaptor);
+        zixiPlugin.setVertx(vertx);
 
-        ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream1","stream1");
-       // assertTrue(client.init());
+        
+        Result result = zixiPlugin.startClient("stream1");
+        //it should be false because there is no stream with stream1
+        assertFalse(result.isSuccess());
 
-        assertTrue(client.connect());
+        Broadcast broadcast = new Broadcast();
+        result = zixiPlugin.startClient(broadcast, false);
+        //it should be false because broadcast object has no streamUrl
+        assertFalse(result.isSuccess());
 
-        assertTrue(client.disconnect());
-    }
-
-    /**
-     *  This just tests connection status for the non existed test 
-     */
-    @Test
-    public void testConnectAndDisconnectNotExistStream(){
-       
-
-        ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream_not_exists","stream1");
-       // assertTrue(client.init());
-        assertFalse(client.start().isSuccess());
-
-        assertFalse(client.disconnect());
-    }
+        broadcast.setStreamUrl("srt://");
+        result = zixiPlugin.startClient(broadcast, false);
+        //it should be false because broadcast object' streamUrl starts wth srt. It should be zixi
+        assertFalse(result.isSuccess());
 
 
-    @Test
-    public void testSaveAndDelete() {
+        broadcast.setStreamUrl("zixi://127.0.0.1:2077/stream1");
+        result = zixiPlugin.startClient(broadcast, false);
+        //it should be true
+        assertTrue(result.isSuccess());
 
-    }
-
-    
-    @Test
-    public void testStartStop() {
-
-        //this test requires pushing the stream to ZB 
-        startPushingToZixiBroadcaster();
-
-        ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream1", "stream1");
-       
-        assertEquals(0, ZixiClient.getSocketqueuemap().size());
-
-        assertTrue(client.start().isSuccess());
-
-       
-        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> {
-            return client.getPrepared().get();
-        });
-
-        assertEquals(1, ZixiClient.getSocketqueuemap().size());
-        Broadcast broadcast = dtStore.get("stream1");
+        Broadcast broadcastTmp = dtStore.get(result.getDataId());
+        assertEquals(broadcast.getStreamUrl(), broadcastTmp.getStreamUrl());
         assertEquals(ZixiPlugin.PUBLISH_TYPE_ZIXI_CLIENT, broadcast.getPublishType());
 
-        assertTrue(client.stop().isSuccess());
-        assertTrue(client.getStopRequested().get());
+        //it should be zero because "start" was false
+        assertEquals(0, zixiPlugin.getZixiClientMap().size());
 
-        assertFalse(client.getStopped().get());
-        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> {
-            return client.getStopped().get();
-        });
-        assertEquals(0, ZixiClient.getSocketqueuemap().size());
+        String streamId = broadcastTmp.getStreamId();
+        result = zixiPlugin.stopClient(streamId);
+        //it should be false because it's not started
+        assertFalse(result.isSuccess());
+        assertNotNull(dtStore.get(streamId));
 
-        stopPushingToZixiBroadcaster();
+        result = zixiPlugin.deleteClient(streamId);
+        //it should be true because there is a broadcast in the datastore
+        assertTrue(result.isSuccess());
+
+
+        result = zixiPlugin.stopClient("stream1");
+        //it should be false because there is no stream with stream1
+        assertFalse(result.isSuccess());
+
+
+        String streamIdTmp = dtStore.save(new Broadcast());
+        assertNotNull(streamIdTmp);
+        result = zixiPlugin.deleteClient(streamIdTmp);
+        //it should be false because streamIdTmp is not zixi type
+        assertFalse(result.isSuccess());
+
     }
+
+
 
 
     //test eof

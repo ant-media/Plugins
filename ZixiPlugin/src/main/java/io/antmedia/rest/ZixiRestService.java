@@ -30,24 +30,46 @@ public class ZixiRestService {
 
 	@Context
 	protected ServletContext servletContext;
-	Gson gson = new Gson();
 
-	
+	/**
+	 * 
+	 */
 	@POST
 	@Path("/client")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result createZixiClient(Broadcast broadcast) {
+	public Result createZixiClient(Broadcast broadcast, @PathParam("start") boolean start) {
 		//broadcast object should have streamURL
-		return  getZixiPlugin().startClient(broadcast);
+		return  getZixiPlugin().startClient(broadcast, start);
 	}
+
+
+	@POST
+	@Path("/client/start/{streamId}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result startZixiClient(@PathParam("streamId") String streamId) {
+		//broadcast object should have streamURL
+		return  getZixiPlugin().startClient(streamId);
+	}
+
+
+	@POST
+	@Path("/client/stop/{streamId}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result stopZixiClient(@PathParam("streamId") String streamId) {
+		//broadcast object should have streamURL
+		return  getZixiPlugin().stopClient(streamId);
+	}
+
 	
 	@DELETE
 	@Path("/client/{streamId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result deleteZixiClient(@PathParam("streamId") String streamId) {
-		return  getZixiPlugin().stopClient(streamId);
+		return  getZixiPlugin().deleteClient(streamId);
 	}
 	
 	@POST
