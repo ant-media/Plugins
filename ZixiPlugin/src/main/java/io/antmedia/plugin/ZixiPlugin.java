@@ -5,18 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
-
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.bytedeco.javacpp.BytePointer;
-import org.bytedeco.javacpp.LongPointer;
-import org.bytedeco.javacpp.Pointer;
-import org.bytedeco.javacpp.PointerPointer;
-import org.bytedeco.zixi.client.ZIXI_BITRATE_CHANGED_FUNC;
-import org.bytedeco.zixi.client.ZIXI_CALLBACKS;
-import org.bytedeco.zixi.client.ZIXI_LOG_FUNC;
-import org.bytedeco.zixi.client.ZIXI_NEW_STREAM_FUNC;
-import org.bytedeco.zixi.client.ZIXI_STATUS_FUNC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -31,14 +20,11 @@ import io.antmedia.app.SamplePacketListener;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
-import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.RestServiceBase;
 import io.antmedia.rest.model.Result;
 import io.antmedia.zixi.ZixiClient;
 import io.vertx.core.Vertx;
-import static org.bytedeco.zixi.global.client.*;
-import org.bytedeco.zixi.global.client;
 
 @Component(value="io.antmedia.zixi.ZixiPlugin")
 public class ZixiPlugin implements ApplicationContextAware, IStreamListener{

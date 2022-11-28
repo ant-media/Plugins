@@ -1,6 +1,5 @@
 package io.antmedia.zixi;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,36 +34,17 @@ import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.PointerPointer;
 import org.bytedeco.zixi.client.ZIXI_BITRATE_CHANGED_FUNC;
 import org.bytedeco.zixi.client.ZIXI_CALLBACKS;
-import org.bytedeco.zixi.client.ZIXI_LOG_FUNC;
 import org.bytedeco.zixi.client.ZIXI_NEW_STREAM_FUNC;
 import org.bytedeco.zixi.client.ZIXI_STATUS_FUNC;
 import org.red5.server.api.scope.IScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.BeansException;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
-import org.springframework.stereotype.Component;
-
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.app.SampleFrameListener;
-import io.antmedia.app.SamplePacketListener;
-import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
-import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.ZixiPlugin;
-import io.antmedia.plugin.api.IFrameListener;
-import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
 import io.vertx.core.Vertx;
-import static org.bytedeco.zixi.global.client.*;
-import static org.bytedeco.ffmpeg.global.avformat.av_dump_format;
-import static org.bytedeco.ffmpeg.global.avformat.avio_alloc_context;
-import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
-import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
-import static org.bytedeco.ffmpeg.global.avutil.av_dict_free;
-import static org.bytedeco.ffmpeg.global.avutil.av_dict_set;
 import static org.bytedeco.zixi.global.client.*;
 
 /**

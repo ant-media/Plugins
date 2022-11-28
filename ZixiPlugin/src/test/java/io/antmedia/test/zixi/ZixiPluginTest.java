@@ -71,7 +71,6 @@ public class ZixiPluginTest {
         Mockito.when(context.getBean(IDataStoreFactory.BEAN_NAME)).thenReturn(dsf);
         Mockito.when(dsf.getDataStore()).thenReturn(dtStore);
 
-        ApplicationContext appCtx = context.getApplicationContext();
         Mockito.when(appContext.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(appAdaptor);
         
 
