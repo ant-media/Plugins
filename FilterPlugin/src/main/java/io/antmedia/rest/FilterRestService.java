@@ -46,7 +46,7 @@ public class FilterRestService {
 		AntMediaApplicationAdapter adaptor = (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
 		
-		return new Result(filtersManager.createFilter(filterConfiguration, adaptor));
+		return filtersManager.createFilter(filterConfiguration, adaptor);
 	}
 	
 	@ApiOperation(value = "Returns the list of filters effective in the application", notes = "", response = Result.class)
@@ -65,7 +65,7 @@ public class FilterRestService {
 		/* FIXME:
 		 * implement size, sort if necessary
 		 */
-		return filtersManager.getfilters();
+		return filtersManager.getFilterConfigurations();
 	}
 
 	@ApiOperation(value = "Delete the filter according to the filterId", notes = "", response = Result.class)
@@ -78,7 +78,7 @@ public class FilterRestService {
 		AntMediaApplicationAdapter adaptor = (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
 		
-		return new Result(filtersManager.delete(id, adaptor));
+		return filtersManager.delete(id, adaptor);
 	}
 	
 	@ApiOperation(value = "Creates MCU filter for non MCU room")
@@ -149,7 +149,7 @@ public class FilterRestService {
 		MCUManager mcuManager = (MCUManager) appCtx.getBean(MCUManager.BEAN_NAME);
 		
 		
-		return new Result(mcuManager.customFilterRemoved(filterId));
+		return mcuManager.customFilterRemoved(filterId);
 	}
 	
 	

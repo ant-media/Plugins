@@ -29,12 +29,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
+import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.IPacketListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
+import io.antmedia.rest.model.Result;
 import io.vertx.core.Vertx;
 
 /**
@@ -49,7 +52,6 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	private FilterGraph videoFilterGraph = null;
 	private FilterGraph audioFilterGraph = null;
 
-	List<String> currentInStreams = new ArrayList<>();
 	Map<String, IFrameListener> currentOutStreams = new LinkedHashMap<>();
 
 	// stream Id to video/audio stream params map
@@ -210,8 +212,11 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	/*
 	 * Update filter graph according to the newly added or removed streams
 	 */
-	public boolean update() 
+	public Result update() 
 	{
+		
+		Result result = new Result(true);
+		
 		Map<String, Filter> videoSourceFiltersMap = new LinkedHashMap<>();
 		Map<String, Filter> videoSinkFiltersMap = new LinkedHashMap<>();
 		Map<String, Filter> audioSourceFiltersMap = new LinkedHashMap<>();
@@ -220,7 +225,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		
 		
 		//prepare buffer for video and audio frames to feed the filter graph
-		for (String streamId : currentInStreams) 
+		for (String streamId : filterConfiguration.getInputStreams()) 
 		{
 			StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
 			if(videoStreamParams.isEnabled()) {
@@ -251,8 +256,6 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 			i++;
 		}
-		FilterGraph prevVideoFilterGraph = videoFilterGraph;
-
 		
 		/*
 		 * Buffersinks for video and audio to get the output of the filter graph
@@ -276,13 +279,14 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			 */
 			videoFilterGraph = new FilterGraph(filterConfiguration.getVideoFilter(), videoSourceFiltersMap , videoSinkFiltersMap);
 			if(!videoFilterGraph.isInitiated()) {
+				result.setMessage("Video filter graph can not be initiated: "+filterConfiguration.getVideoFilter());
 				logger.error("Video filter graph can not be initiated: {}", filterConfiguration.getVideoFilter());
-				return false;
+				return result;
 			}
 			videoFilterGraph.setCurrentPts(currentVideoPts);
 
 			/*
-			 * Set the listener of video filter graph. FilterGrapah calls the listener for the filtered output frame
+			 * Set the listener of video filter graph. FilterGraph calls the listener for the filtered output frame
 			 */
 			videoFilterGraph.setListener((streamId, frame)->{
 				if(frame != null && currentOutStreams.containsKey(streamId)) {
@@ -296,16 +300,10 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 					}
 				}
 			});
-
-			if(prevVideoFilterGraph != null) {
-				prevVideoFilterGraph.close();
-			}
 		}
 		
 		if(filterConfiguration.isAudioEnabled()) {
-			FilterGraph prevAudioFilterGraph = audioFilterGraph;
 			long currentAudioPts = 0;
-
 
 			if(audioFilterGraph != null) {
 				currentAudioPts = audioFilterGraph.getCurrentPts();
@@ -313,8 +311,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 			audioFilterGraph = new FilterGraph(filterConfiguration.getAudioFilter(), audioSourceFiltersMap , audioSinkFiltersMap);
 			if(!audioFilterGraph.isInitiated()) {
+				result.setMessage("Audio filter graph can not be initiated: "+filterConfiguration.getVideoFilter());
 				logger.error("Audio filter graph can not be initiated:{}", filterConfiguration.getAudioFilter());
-				return false;
+				return result;
 			}
 			audioFilterGraph.setCurrentPts(currentAudioPts);
 			audioFilterGraph.setListener((streamId, frame)->{
@@ -333,13 +332,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 					}
 				}
 			});
-
-			if(prevAudioFilterGraph != null) {
-				prevAudioFilterGraph.close();
-			}
 		}
 		
-		return true;
+		return result;
 	}
 	
 	/*
@@ -347,56 +342,44 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	 * For example new inputs mat be added as an update
 	 */
 	
-	public synchronized boolean createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter app) {
+	public synchronized Result startFilterProcess(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter app) {
 		if(vertx == null) {
 			vertx = app.getVertx();
 		}
 		
+		Result result = new Result(true);
+		
 		this.filterConfiguration = filterConfiguration;
 		
+		// Check database if stream is not exist or stream is not broadcasting status
+   		for(String streamId : filterConfiguration.getInputStreams()) {
+   			Broadcast broadcast = app.getDataStore().get(streamId);
+   			if(broadcast == null || (broadcast != null && !broadcast.getStatus().contains(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING))) {
+   				result.setMessage("Filter saved but input stream ID: "+ streamId +" is not availlable");
+   				return result;
+   			}
+   		}
+   		for(String streamId : filterConfiguration.getOutputStreams()) {
+   			Broadcast broadcast = app.getDataStore().get(streamId);
+   			if(broadcast != null && broadcast.getStatus().contains(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING)) {
+   				result.setMessage("Filter saved but output stream ID: "+ streamId +" is already broadcasting");
+   				return result;
+   			}
+  		}
+    	
 		/*
 		 * create custom broadcast for each output and add them to the map
 		 *  if an outputstream is same with an input stream no need the create custombroadcast 
 		 * 		instead we feed input stream with filtered frame
 		 */
 		for (String streamId : filterConfiguration.getOutputStreams()) {
-			if(!currentOutStreams.containsKey(streamId)) {
-				if(filterConfiguration.getInputStreams().contains(streamId)) {
-					currentOutStreams.put(streamId, null);
-				}
-				else {
 					IFrameListener broadcast = app.createCustomBroadcast(streamId);
 					startBroadcast(streamId, broadcast, filterConfiguration.isVideoEnabled(), filterConfiguration.isAudioEnabled());
 					currentOutStreams.put(streamId, broadcast);
-				}
-			}		
 		}
 
-		
-		// check the inseted or removed streams to the filter as an update
-		List<String> inserted = filterConfiguration.getInputStreams();
-		List<String> removed = new ArrayList<>();
-		for (String streamId : currentInStreams) {
-			if(filterConfiguration.getInputStreams().contains(streamId)) {
-				inserted.remove(streamId);
-			}
-			else {
-				removed.add(streamId);
-			}
-		}
-		
-		boolean noChange = inserted.isEmpty() && removed.isEmpty();
-		
-		if(!noChange) {
-			
-			// deregister plugin for the streams removed from filter
-			for (String streamId : removed) {
-				app.removeFrameListener(streamId, this);
-				currentInStreams.remove(streamId);
-			}
-			
-			// register plugin for the streams inserted to the filter
-			for (String streamId : inserted) {
+		// register plugin for the streams inserted to the filter
+			for (String streamId : filterConfiguration.getInputStreams()) {
 				
 				if(selfDecodeStreams) {
 					app.addFrameListener(streamId, this); //to get decoded audioframes
@@ -405,11 +388,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				else {
 					app.addFrameListener(streamId, this);
 				}
-				currentInStreams.add(streamId);
 			}
-			
-			filterConfiguration.setInputStreams(currentInStreams);
-		}
 		
 		//we need to update the filter graph to make the configuration changes will be effective
 		return update();
@@ -460,15 +439,20 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	}
 
 	public boolean close(AntMediaApplicationAdapter app) {
-		for(String streamId : currentInStreams) {
+		for(String streamId : filterConfiguration.getInputStreams()) {
 			app.removeFrameListener(streamId, this);
 			app.removePacketListener(streamId, this);
 		}
 		for (String streamId : filterConfiguration.getOutputStreams()) {
 			app.stopCustomBroadcast(streamId);
 		}
-		videoFilterGraph.close();
-		audioFilterGraph.close();
+		
+		if(getVideoFilterGraph() != null) {
+			getVideoFilterGraph().close();
+		}
+		if (getAudioFilterGraph() != null){
+			getAudioFilterGraph().close();
+		}
 
 		return true;
 		
@@ -524,6 +508,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 	public void setAudioFilterGraphForTest(FilterGraph filterGraph) {
 		this.audioFilterGraph = filterGraph;
+	}
+	
+	public FilterGraph getVideoFilterGraph() {
+		return videoFilterGraph;
+	}
+	public FilterGraph getAudioFilterGraph() {
+		return audioFilterGraph;
 	}
 
 }

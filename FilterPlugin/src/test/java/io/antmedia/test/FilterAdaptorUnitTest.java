@@ -36,6 +36,8 @@ import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.datastore.db.DataStore;
+import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.Utils;
 import io.antmedia.filter.utils.Filter;
@@ -44,6 +46,7 @@ import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.filter.utils.IFilteredFrameListener;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
+import io.antmedia.rest.model.Result;
 import io.vertx.core.Vertx;
 
 public class FilterAdaptorUnitTest {
@@ -79,7 +82,8 @@ public class FilterAdaptorUnitTest {
 	@Test
 	public void testFilterGraphVideoFeed() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
-		doReturn(true).when(filterAdaptor).update();
+		Result result = new Result(true);
+		doReturn(result).when(filterAdaptor).update();
 		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
@@ -88,7 +92,10 @@ public class FilterAdaptorUnitTest {
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		when(app.getVertx()).thenReturn(vertx);
 		
-		filterAdaptor.createFilter(filterConf, app);
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore );
+		
+		filterAdaptor.startFilterProcess(filterConf, app);
 
 		
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
@@ -123,7 +130,9 @@ public class FilterAdaptorUnitTest {
 	@Test
 	public void testFilterGraphAudioFeed() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
-		doReturn(true).when(filterAdaptor).update();
+		Result result = new Result(true);
+		
+		doReturn(result).when(filterAdaptor).update();
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
 		filterConf.setOutputStreams(new ArrayList<>());
@@ -131,7 +140,10 @@ public class FilterAdaptorUnitTest {
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		when(app.getVertx()).thenReturn(vertx);
 		
-		filterAdaptor.createFilter(filterConf, app);
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore );
+		
+		filterAdaptor.startFilterProcess(filterConf, app);
 
 		
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
@@ -182,6 +194,9 @@ public class FilterAdaptorUnitTest {
 	public void testFiltering(boolean videoEnabled, String videoFilter, boolean audioEnabled, String audioFilter) {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore );
+		
 		when(app.createCustomBroadcast(anyString())).thenReturn(mock(IFrameListener.class));
 
 		String stream1 = "inStream1";
@@ -217,7 +232,7 @@ public class FilterAdaptorUnitTest {
 		conf.setInputStreams(Arrays.asList(stream1, stream2, stream3));
 		conf.setOutputStreams(Arrays.asList(output1));
 		
-		assertTrue(filterAdaptor.createFilter(conf, app));
+		assertTrue(filterAdaptor.startFilterProcess(conf, app).isSuccess());
 	}
 
 	public StreamParametersInfo getStreamInfo() {

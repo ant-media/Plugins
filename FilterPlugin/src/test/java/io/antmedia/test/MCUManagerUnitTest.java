@@ -1,4 +1,5 @@
 package io.antmedia.test;
+import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H264;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -42,14 +43,12 @@ import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.ConferenceRoom;
 import io.antmedia.filter.FilterAdaptor;
-import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
-import io.antmedia.filter.utils.IFilteredFrameListener;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
-import io.antmedia.rest.FilterRestService;
+import io.antmedia.rest.model.Result;
 import io.antmedia.websocket.WebSocketConstants;
 import io.vertx.core.Vertx;
 
@@ -134,7 +133,8 @@ public class MCUManagerUnitTest {
 		
 		doReturn(filtersManager).when(mcuManager).getFiltersManager();
 		
-		doReturn(true).when(filtersManager).createFilter(any(), any());
+		Result result = new Result(true);
+		doReturn(result).when(filtersManager).createFilter(any(), any());
 
 		
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
@@ -166,4 +166,52 @@ public class MCUManagerUnitTest {
 		verify(filtersManager, timeout(MCUManager.CONFERENCE_INFO_POLL_PERIOD_MS*4000).times(1)).createFilter(any(), eq(app));
 
 	}
+	
+	
+	@Test
+	public void testStartStreamFilterProcess() {
+		MCUManager mcuManager = spy(new MCUManager());
+		
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore );
+		when(app.getVertx()).thenReturn(Vertx.vertx());
+		doReturn(app).when(mcuManager).getApplication();
+		
+		FiltersManager filtersManager = spy(new FiltersManager());
+		doReturn(filtersManager).when(mcuManager).getFiltersManager();
+		
+		FilterConfiguration filterConfiguration = spy(new FilterConfiguration());
+		List<String> streamIdList = new ArrayList<String>();
+		streamIdList.add("stream1");
+		
+		filterConfiguration.setInputStreams(streamIdList);
+		
+		filterConfiguration.setOutputStreams(new ArrayList<String>());
+		
+		List<FilterConfiguration> filters = new ArrayList<>();
+		filters.add(filterConfiguration);
+		
+		Map<String, FilterAdaptor> filterList = new LinkedHashMap<>();
+		
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
+		filterList.put(filterConfiguration.getFilterId(), filterAdaptor);
+		
+		doReturn(filters).when(filtersManager).getFilterConfigurations();
+		doReturn(filterList).when(filtersManager).getFilterAdaptorList();
+		
+		doReturn(new Result(true)).when(filterAdaptor).update();
+	
+		mcuManager.streamStarted("stream1");		
+		Mockito.verify(filterAdaptor).startFilterProcess(filterConfiguration, app);
+		
+		FilterGraph filterGraph = mock(FilterGraph.class);
+		filterAdaptor.setAudioFilterGraphForTest(filterGraph);
+		filterAdaptor.setVideoFilterGraphForTest(filterGraph);
+		
+		mcuManager.streamFinished("stream1");		
+		Mockito.verify(filterAdaptor).close(app);
+	}
+	
+	
 }

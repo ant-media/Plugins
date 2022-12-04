@@ -19,10 +19,12 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.ConferenceRoom;
+import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.MCUFilterTextGenerator;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.api.IStreamListener;
+import io.antmedia.rest.model.Result;
 import io.antmedia.websocket.WebSocketConstants;
 
 @Component(value="filters.mcu")
@@ -66,7 +68,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		}
 	}
 
-	public boolean customFilterRemoved(String roomId) {
+	public Result customFilterRemoved(String roomId) {
 		roomsHasCustomFilters.remove(roomId);
 		return updateRoomFilter(roomId);
 	}
@@ -85,11 +87,11 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		return filtersManager;
 	}
 
-	public synchronized boolean updateRoomFilter(String roomId) 
+	public synchronized Result updateRoomFilter(String roomId) 
 	{
 		DataStore datastore = getApplication().getDataStore();
 		ConferenceRoom room = datastore.getConferenceRoom(roomId);
-		boolean result = false;
+		Result result = new Result(false);
 		if(room == null) 
 		{
 			result = getFiltersManager().delete(roomId, getApplication());
@@ -198,12 +200,28 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	@Override
 	public void streamStarted(String streamId) {
-		//No need to implement for MCU
+		for(FilterConfiguration filter:  getFiltersManager().getFilterConfigurations()) {
+			if(filter.getInputStreams().contains(streamId)) {
+				System.out.println("***************");
+				System.err.println("streamStarted stream Id " + streamId + " found in this filter: " + filter.getFilterId());
+				System.out.println("***************");
+				FilterAdaptor filterAdaptor = getFiltersManager().getFilterAdaptorList().get(filter.getFilterId());
+				filterAdaptor.startFilterProcess(filter, getApplication());
+			}
+		}
 	}
 
 	@Override
 	public void streamFinished(String streamId) {
-		//No need to implement for MCU
+		for(FilterConfiguration filter:  getFiltersManager().getFilterConfigurations()) {
+			if(filter.getInputStreams().contains(streamId)) {
+				System.out.println("***************");
+				System.err.println("streamFinished stream Id " + streamId + " found in this filter: " + filter.getFilterId());
+				System.out.println("***************");
+				FilterAdaptor filterAdaptor = getFiltersManager().getFilterAdaptorList().get(filter.getFilterId());
+				filterAdaptor.close(getApplication());
+			}
+		}
 	}
 
 	public void setPluginType(String type) {

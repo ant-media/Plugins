@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.utils.FilterConfiguration;
+import io.antmedia.rest.model.Result;
 
 @Component(value="filters.manager")
 public class FiltersManager {
@@ -17,12 +18,20 @@ public class FiltersManager {
 	public static final String BEAN_NAME = "filters.manager";
 	private Map<String, FilterAdaptor> filterList = new LinkedHashMap<>();
 
+	public void setFilterList(Map<String, FilterAdaptor> filterList) {
+		this.filterList = filterList;
+	}
+
+	public Map<String, FilterAdaptor> getFilterAdaptorList() {
+		return filterList;
+	}
+
 	/**
 	 * Creates or updates the filter 
 	 * @param filterConfiguration
 	 * @param appAdaptor
 	 */
-	public boolean createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter appAdaptor) {
+	public Result createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter appAdaptor) {
 		boolean decodeStreams = appAdaptor.getAppSettings().getEncoderSettings().isEmpty();
 		String filter = filterConfiguration.getFilterId();
 		FilterAdaptor filterAdaptor = filterList.get(filter);
@@ -31,14 +40,14 @@ public class FiltersManager {
 			filterList.put(filter, filterAdaptor);
 		}
 
-		return filterAdaptor.createFilter(filterConfiguration, appAdaptor);
+		return filterAdaptor.startFilterProcess(filterConfiguration, appAdaptor);
 	}
 
 	/**
-	 * Returns the filters active in the app
+	 * Returns the active  filter configurations in the app
 	 * @return
 	 */
-	public List<FilterConfiguration> getfilters() {
+	public List<FilterConfiguration> getFilterConfigurations() {
 		List<FilterConfiguration> filters = new ArrayList<>();
 		for (FilterAdaptor filterAdaptor : filterList.values()) {
 			filters.add(filterAdaptor.getCurrentFilterConfiguration());
@@ -54,13 +63,15 @@ public class FiltersManager {
 	 * @param app
 	 * @return
 	 */
-	public boolean delete(String id, AntMediaApplicationAdapter app) {
+	public Result delete(String id, AntMediaApplicationAdapter app) {
+		Result result = new Result(false);
 		FilterAdaptor filterAdaptor = filterList.get(id);
 		if(filterAdaptor != null) {
 			filterList.remove(id);
-			return filterAdaptor.close(app);
+			result.setSuccess(filterAdaptor.close(app));
+			return result;
 		}
-		return false;
+		return result;
 	}
 
 	public boolean hasFilter(String filterId) {
