@@ -136,7 +136,6 @@ public class ZixiClientTest {
     @Test
     public void testConnectAndDisconnect(){
        
-
         ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream1","stream1");
        // assertTrue(client.init());
 
@@ -151,7 +150,6 @@ public class ZixiClientTest {
     @Test
     public void testConnectAndDisconnectNotExistStream(){
        
-
         ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream_not_exists","stream1");
        // assertTrue(client.init());
         assertFalse(client.start().isSuccess());
@@ -198,10 +196,5 @@ public class ZixiClientTest {
 
         stopPushingToZixiBroadcaster();
     }
-
-
-    //test eof
-
-    //test no input is coming
 
 }

@@ -7,9 +7,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.TimeUnit;
-
-import org.awaitility.Awaitility;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -26,7 +23,6 @@ import io.antmedia.filter.StreamAcceptFilter;
 import io.antmedia.plugin.ZixiPlugin;
 import io.antmedia.rest.model.Result;
 import io.antmedia.settings.ServerSettings;
-import io.antmedia.zixi.ZixiClient;
 import io.vertx.core.Vertx;
 
 public class ZixiPluginTest {

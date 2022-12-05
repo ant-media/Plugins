@@ -8,6 +8,7 @@ import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avformat.AVFormatContext;
 import org.bytedeco.ffmpeg.avformat.AVIOContext;
 import org.bytedeco.ffmpeg.avformat.AVStream;
+import org.bytedeco.ffmpeg.avformat.Write_packet_Pointer_BytePointer_int;
 import org.bytedeco.ffmpeg.avformat.Write_packet_Pointer_byte___int;
 import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.javacpp.BytePointer;
@@ -63,7 +64,7 @@ public class ZixiFeeder extends Muxer {
     private BytePointer opaque;
     private AVIOContext avioContext;
     private AtomicBoolean connected = new AtomicBoolean(false);
-    private byte[] dataBuffer;
+    private BytePointer dataBuffer;
 
     //1316 is the max pkt size
     protected static final int BUFFER_SIZE = 1316;
@@ -79,16 +80,18 @@ public class ZixiFeeder extends Muxer {
 		}
 	};
 
-    static Write_packet_Pointer_byte___int writeCallback = new Write_packet_Pointer_byte___int() {
+    static Write_packet_Pointer_BytePointer_int writeCallback = new Write_packet_Pointer_BytePointer_int() {
 
         @Override
-        public int call(Pointer opaque, byte[] buf, int buf_size) {
-            logger.info("write callback is called");
+        public int call(Pointer opaque, BytePointer buf, int buf_size) {
+            logger.debug("write callback is called with buf_size:{}", buf_size);
 
 			ZixiFeeder zixiFeeder = zixiFeederMap.get(opaque);
             if (zixiFeeder.connected.get()) 
             {
-                int ret = zixi_send_frame(zixiFeeder.zixiHandle, buf, buf_size, (int)(System.currentTimeMillis()*90));
+                byte[] data = new byte[buf_size];
+                buf.get(data, 0, buf_size);
+                int ret = zixi_send_frame(zixiFeeder.zixiHandle, data, buf_size, (int)(System.currentTimeMillis()*90));
 
                 if (ret == ZIXI_ERROR_NOT_READY)
                 {
@@ -96,8 +99,10 @@ public class ZixiFeeder extends Muxer {
                                     zixiFeeder.url, zixiFeeder.streamId);
                 }
                 else {
-                    logger.info("Packet is written to zixi url");
+                    logger.debug("Packet is written to zixi url->{} buf size:{}", zixiFeeder.url, buf_size);
                 }
+
+
             }
             else {
                 logger.warn("Zixi Feeder is not connected to the url:{} but it still try to send data", zixiFeeder.url);
@@ -177,12 +182,19 @@ public class ZixiFeeder extends Muxer {
         if (result) {
             connected.set(true);
             opaque = new BytePointer(streamId);
-            dataBuffer = new byte[BUFFER_SIZE];
+            dataBuffer = new BytePointer(av_malloc(BUFFER_SIZE));
+            
             zixiFeederMap.put(opaque, this);
-            avioContext = avio_alloc_context(dataBuffer, dataBuffer.length, 1, 
+            avioContext = avio_alloc_context(dataBuffer, BUFFER_SIZE, 1, 
                                 opaque, null, writeCallback, null);
 
             getOutputFormatContext().pb(avioContext);
+
+            int nofile = (outputFormatContext.flags() & AVFMT_NOFILE);
+            logger.info("nofile:{} ", nofile);
+
+            //outputFormatContext.o
+
             logger.info("Write callback method is created for zixi feeder stream:{} and zixi url:{}", streamId, url);
         }
         return result;
@@ -303,54 +315,32 @@ public class ZixiFeeder extends Muxer {
 		return super.addStream(codecParameters, timebase, streamIndex);
 	}
 
-        /**
-    * {@inheritDoc}
-    */
-    /*
-    @Override
-    public synchronized void writePacket(AVPacket pkt, AVStream stream) {
-        logger.info("write packet is called pkt and stream");
-    }
-     */
-	
-    /**
-    * {@inheritDoc}
-    */
-    /* 
-    @Override
-    public synchronized void writePacket(AVPacket pkt, AVCodecContext codecContext) {
-        logger.info("write packet is called pkt and codecContext");
-
-        //convert packet timestamp to 90KHz
-
-        //mpegts transport stream data with buffer length of 188 to 1316 bytes
-    }
-    */
-
-    @Override
-    protected void writeAudioFrame(AVPacket pkt, AVRational inputTimebase, AVRational outputTimebase,
-            AVFormatContext context, long dts) {
-        super.writeAudioFrame(pkt, inputTimebase, outputTimebase, context, dts);
-    }
-
-    @Override
-    protected void writeVideoFrame(AVPacket pkt, AVFormatContext context) {
-        super.writeVideoFrame(pkt, context);
-    }
-
     @Override
     public synchronized void writeTrailer() {
-        super.writeTrailer();
+        logger.info("Calling writeTrailer buffer -> {}", outputFormatContext.pb().buf_ptr().isNull() );
+
+        //Don't call super.writeTrailer for 2.5.1 and older version
+        //super.writeTrailer();
+
+		isRunning.set(false);
+		av_write_trailer(outputFormatContext);
+
+        logger.info("output format context is null -> {}", outputFormatContext.isNull());
+
         disconnect();
 
-        if (avioContext != null) {
+        if (avioContext != null) 
+        {
             if (avioContext.buffer() != null) {
                 av_free(avioContext.buffer());
                 avioContext.buffer(null);
             }
             av_free(avioContext);
             avioContext = null;
+            outputFormatContext.pb(null);
         }
+
+        clearResource();
 
         if (opaque != null) 
         {
@@ -361,9 +351,9 @@ public class ZixiFeeder extends Muxer {
     }
 
     public AVFormatContext getOutputFormatContext() {
-		if (outputFormatContext == null) {
-
-			outputFormatContext= new AVFormatContext(null);
+		if (outputFormatContext == null) 
+        {
+			outputFormatContext = new AVFormatContext(null);
 			int ret = avformat_alloc_output_context2(outputFormatContext, null, format, null);
 			if (ret < 0) {
 				logger.info("Could not create output context for {}",  getOutputURL());

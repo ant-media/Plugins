@@ -534,7 +534,7 @@ public class ZixiClient {
 
 	private synchronized void releasePrepareContext() {
 
-		logger.info("Releasing resources for SRT stream:{} and scope:{}", streamId, appAdaptor.getScope().getName());
+		logger.info("Releasing resources for zixi stream:{} and scope:{}", streamId, appAdaptor.getScope().getName());
 		if (pkt != null) 
 		{
 			av_packet_free(pkt);

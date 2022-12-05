@@ -41,8 +41,13 @@ import io.antmedia.filter.StreamAcceptFilter;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.settings.ServerSettings;
+import io.antmedia.zixi.ZixiClient;
 import io.antmedia.zixi.ZixiFeeder;
 import io.vertx.core.Vertx;
+import static org.bytedeco.zixi.global.feeder.*;
+import static org.bytedeco.ffmpeg.global.avformat.*;
+import static org.bytedeco.ffmpeg.global.avutil.*;
+import static org.bytedeco.ffmpeg.global.avcodec.*;
 
 public class ZixiFeederTest {
     
@@ -50,6 +55,7 @@ public class ZixiFeederTest {
     private AntMediaApplicationAdapter appAdaptor;
     private InMemoryDataStore dtStore;
     private AppSettings appSettings;
+	private Process zixiClient;
 
     private static Logger log = LoggerFactory.getLogger(ZixiFeederTest.class);
 
@@ -153,6 +159,19 @@ public class ZixiFeederTest {
         assertTrue(zixiFeeder.disconnect());
     }
 
+	@Test
+	public void testPrepareAndStop() {
+		ZixiFeeder zixiFeeder = new ZixiFeeder("zixi://127.0.0.1:2088/stream1", vertx);
+
+		zixiFeeder.init(appAdaptor.getScope(), "stream1", 0, null, 0);
+	
+		//zixiFeeder.prepareIO();
+
+		zixiFeeder.openIO();
+		
+		//avio_closep(zixiFeeder.getOutputFormatContext().pb());
+	}
+
 
     @Test
     public void testConnectFail() {
@@ -221,7 +240,7 @@ public class ZixiFeederTest {
 			Awaitility.await().atMost(10, TimeUnit.SECONDS)
 					.until(() -> zixiFeeder.getIsRunning().get());
 
-			Thread.sleep(500000);
+			checkStream();
 
 			muxAdaptor.stop(true);
 
@@ -298,12 +317,33 @@ public class ZixiFeederTest {
 				muxAdaptor.packetReceived(null, streamPacket);
 
 			}
-
-
-
-           
-            
 		}
+	}
+
+
+	public void checkStream(){
+		//String zixiClientCommand = "src/test/resources/zixi_sdks-antmedia-linux64-14.13.44304/test/zixiClient.sh";
+        //zixiClient = ZixiClientTest.execute(zixiClientCommand);
+
+		appSettings.setMp4MuxingEnabled(true);
+
+		ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream1", "stream1");
+		
+		assertTrue(client.start().isSuccess());
+		    
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> {
+            return client.getPrepared().get();
+        });
+
+		Awaitility.await()
+			.pollDelay(10, TimeUnit.SECONDS)
+			.atMost(15, TimeUnit.SECONDS)
+			.until(() -> true);
+
+		
+		client.stop();
+
+
 	}
 
    
