@@ -362,4 +362,9 @@ public class ZixiFeeder extends Muxer {
 		}
 		return outputFormatContext;
 	}
+    
+    @Override
+    public String getOutputURL() {
+    	return this.url;
+    }
 }

@@ -1,10 +1,14 @@
 package io.antmedia.plugin;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import javax.ws.rs.core.Response;
+
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +28,7 @@ import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.RestServiceBase;
 import io.antmedia.rest.model.Result;
 import io.antmedia.zixi.ZixiClient;
+import io.antmedia.zixi.ZixiFeeder;
 import io.vertx.core.Vertx;
 
 @Component(value="io.antmedia.zixi.ZixiPlugin")
@@ -39,6 +44,7 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 	private AntMediaApplicationAdapter app;
 
 	private final Map<String, ZixiClient> zixiClientMap = new ConcurrentHashMap<>();
+	private final Map<String, Queue<ZixiFeeder>> zixiFeederMap = new ConcurrentHashMap<>();
 	public static final String PUBLISH_TYPE_ZIXI_CLIENT = "ZixiClient";
 
 
@@ -89,29 +95,26 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 
 	@Override
 	public void streamStarted(String streamId) {
-		System.out.println("***************");
-		System.out.println("Stream Started:"+streamId);
-		System.out.println("***************");
+		//No need to implement
 	}
 
 	@Override
 	public void streamFinished(String streamId) {
-		System.out.println("***************");
-		System.out.println("Stream Finished:"+streamId);
-		System.out.println("***************");
+		//No need to implement
 	}
 
 	@Override
 	public void joinedTheRoom(String roomId, String streamId) {
-
+		//No need to implement
 	}
 
 	@Override
 	public void leftTheRoom(String roomId, String streamId) {
-
+		//No need to implement
 	}
 
-	public Result startClient(String streamId) {
+	public Result startClient(String streamId) 
+	{
 		Broadcast broadcast = app.getDataStore().get(streamId);
 		Result result = null;
 		//check the broadcast exists
@@ -237,12 +240,97 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 	}
 
 
-	public Response startFeeder(String streamId, String zixiEndpointURL) {
-		return null;
+	public synchronized Result startFeeder(String streamId, String zixiEndpointURL) {
+		
+		MuxAdaptor muxAdaptor = getMuxAdaptor(streamId);
+		boolean result = false;
+		String message = "";
+		//TODO: Add to database for better compatibility
+		if (muxAdaptor != null) 
+		{
+			ZixiFeeder zixiFeeder = new ZixiFeeder(zixiEndpointURL, vertx);
+			result = muxAdaptor.addMuxer(zixiFeeder);
+			if (result) 
+			{
+				if (!zixiFeederMap.containsKey(streamId)) 
+				{
+					zixiFeederMap.put(streamId, new ConcurrentLinkedQueue<>());		
+				}
+				zixiFeederMap.get(streamId).add(zixiFeeder);
+			}
+			else 
+			{
+				message = "ZixiFeeder cannot be prepared by MuxerAdaptor";
+				muxAdaptor.removeMuxer(zixiFeeder);
+			}
+		}
+		else 
+		{
+			message = "There is no active stream with streamId: " + streamId;
+		}
+		return new Result(result, message);
 	}
 
-	public Response stopFeeder(String streamId, String zixiEndpointURL) {
-		return null;
+	public synchronized Result stopFeeder(String streamId, String zixiEndpointURL) 
+	{
+		
+		boolean result = false;
+		String message = "";
+		Queue<ZixiFeeder> queue = zixiFeederMap.get(streamId);
+		MuxAdaptor muxAdaptor = getMuxAdaptor(streamId);
+		if (queue != null) 
+		{
+			ZixiFeeder foundZixiFeeder = null;
+			for (ZixiFeeder zixiFeeder : queue) 
+			{
+				if (zixiEndpointURL != null) 
+				{
+					if (zixiFeeder.getOutputURL().equals(zixiEndpointURL)) 
+					{
+						foundZixiFeeder = zixiFeeder;
+						queue.remove(zixiFeeder);
+						if (muxAdaptor != null) 
+						{
+							result = muxAdaptor.removeMuxer(foundZixiFeeder);
+						}
+						else {
+							//if there is no muxadaptor, it means that streaming has finished
+							result = true;
+							message = "MuxAdaptor is not found for streamId:" + streamId + ". It's likely the streaming has been stopped";
+							logger.info("Mux adaptor is not found for streamId: {}. It's likely the streaming has been stopped.Zixi URL:{} ", streamId, zixiEndpointURL);
+						}
+						break;
+					}
+				}
+				else 
+				{
+					//if there is not zixi endpoint url, remove all zixi feeder from the mux adaptor
+					//REFACTOR: Code duplication
+					queue.remove(zixiFeeder);
+					if (muxAdaptor != null) 
+					{
+						result = muxAdaptor.removeMuxer(zixiFeeder);
+					}
+					else 
+					{
+						//if there is no muxadaptor, it means that streaming has finished
+						result = true;
+						message = "MuxAdaptor is not found for streamId:" + streamId + ". It's likely the streaming has been stopped";
+						logger.info("Mux adaptor is not found for streamId: {}. It's likely the streaming has been stopped. Zixi URL is null", streamId);
+					}
+				}
+			}
+							
+			if (queue.isEmpty()) {
+				zixiFeederMap.remove(streamId);
+			}			
+		}
+		else 
+		{
+			message = "There is no ZixiFeeder for streamId: " + streamId;
+		}
+	
+		return new Result(result, message);
 	}
 
 
