@@ -7,11 +7,19 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.TimeUnit;
+
+import org.awaitility.Awaitility;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
+import org.junit.rules.TestWatcher;
 import org.mockito.Mockito;
 import org.red5.server.api.IContext;
 import org.red5.server.api.scope.IScope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 
 import io.antmedia.AntMediaApplicationAdapter;
@@ -36,6 +44,9 @@ public class ZixiPluginTest {
     private Process push2ZixiBC;
 
     private InMemoryDataStore dtStore;
+
+    private static Logger log = LoggerFactory.getLogger(ZixiPluginTest.class);
+
 
     /*
      * Zixi Broadcaster should be running in the local computer for these tests
@@ -123,12 +134,34 @@ public class ZixiPluginTest {
     }
 
     public void stopPushingToZixiBroadcaster() {
-        push2UDP.destroy();
-        push2ZixiBC.destroy();
+        if (push2UDP != null) {
+            push2UDP.destroyForcibly();
+        }
+        if (push2ZixiBC != null) {
+            push2ZixiBC.destroyForcibly();
+        }
     }
+
+    @Rule 
+    public TestRule watcher = new TestWatcher(){
+        protected void starting(org.junit.runner.Description description) {
+            log.info("--- starting test: " + description.getMethodName());
+        };
+
+        protected void failed(Throwable e, org.junit.runner.Description description) {
+            log.info("--- failed test: " + description.getMethodName());
+            stopPushingToZixiBroadcaster();
+        };
+
+        protected void finished(org.junit.runner.Description description) {
+            log.info("--- finished test: " + description.getMethodName());
+        };
+    };
+
 
     @Test
     public void testStartStopDeleteClientWithoutRealStart(){
+
         ZixiPlugin zixiPlugin = new ZixiPlugin();
         zixiPlugin.setApp(appAdaptor);
         zixiPlugin.setVertx(vertx);
@@ -187,6 +220,7 @@ public class ZixiPluginTest {
 
     @Test
     public void testStartRepeat() {
+
         ZixiPlugin zixiPlugin = new ZixiPlugin();
        
        
@@ -204,11 +238,15 @@ public class ZixiPluginTest {
         //it should save the stream id in dataId of the result but it should be false
         //because there is no stream on the server
         assertFalse(result.isSuccess());
-
+        String streamId = result.getDataId();
         startPushingToZixiBroadcaster();
 
-        result = zixiPlugin.startClient(result.getDataId());
-        assertTrue(result.isSuccess());
+        Awaitility.await().pollDelay(5, TimeUnit.SECONDS)
+            .atMost(15, TimeUnit.SECONDS)
+            .until(() -> {
+                Result resultTmp = zixiPlugin.startClient(streamId);
+                return resultTmp.isSuccess();
+            });
 
         result = zixiPlugin.stopClient(result.getDataId());
         assertTrue(result.isSuccess());
