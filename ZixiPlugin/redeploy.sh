@@ -7,8 +7,8 @@ if [ $OUT -ne 0 ]; then
     exit $OUT
 fi
 
-rm -r $AMS_DIR/plugins/ZixiPlugin.jar
-cp target/ZixiPlugin.jar $AMS_DIR/plugins/
+rm -r $AMS_DIR/plugins/zixi-plugin.jar
+cp target/zixi-plugin.jar $AMS_DIR/plugins/
 
 OUT=$?
 

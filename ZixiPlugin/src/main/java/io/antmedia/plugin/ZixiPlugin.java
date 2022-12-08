@@ -100,7 +100,7 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 
 	@Override
 	public void streamFinished(String streamId) {
-		//No need to implement
+		zixiFeederMap.remove(streamId);
 	}
 
 	@Override
@@ -146,10 +146,15 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 	}
 
 
-	private Result startZixiClientInternal(Broadcast broadcast) {
+	private Result startZixiClientInternal(Broadcast broadcast) 
+	{
 		ZixiClient zixiClient = new ZixiClient(vertx, getApplication(), broadcast.getStreamUrl(), broadcast.getStreamId());
-		zixiClientMap.put(broadcast.getStreamId(), zixiClient);
-		return zixiClient.start();
+		Result result = zixiClient.start();
+		if (result.isSuccess()) 
+		{
+			zixiClientMap.put(broadcast.getStreamId(), zixiClient);
+		}
+		return result;
 	}
 
 
@@ -248,20 +253,41 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 		//TODO: Add to database for better compatibility
 		if (muxAdaptor != null) 
 		{
-			ZixiFeeder zixiFeeder = new ZixiFeeder(zixiEndpointURL, vertx);
-			result = muxAdaptor.addMuxer(zixiFeeder);
-			if (result) 
+			Queue<ZixiFeeder> zixiFeederQueue = zixiFeederMap.get(streamId);
+			boolean alreadyExist = false;
+			if (zixiFeederQueue != null) 
 			{
-				if (!zixiFeederMap.containsKey(streamId)) 
-				{
-					zixiFeederMap.put(streamId, new ConcurrentLinkedQueue<>());		
+				for (ZixiFeeder feeder : zixiFeederQueue) {
+					if (feeder.getOutputURL().equals(zixiEndpointURL)) {
+						alreadyExist = true;
+						break;
+					}
 				}
-				zixiFeederMap.get(streamId).add(zixiFeeder);
+			}
+
+			if (!alreadyExist) 
+			{
+				ZixiFeeder zixiFeeder = new ZixiFeeder(zixiEndpointURL, vertx);
+				result = muxAdaptor.addMuxer(zixiFeeder);
+				if (result) 
+				{
+					//if zixi feeder queue is null, it means there is no queue
+					if (zixiFeederQueue == null) 
+					{
+						zixiFeederMap.put(streamId, new ConcurrentLinkedQueue<>());		
+					}
+					zixiFeederMap.get(streamId).add(zixiFeeder);
+				}
+				else 
+				{
+					message = "ZixiFeeder cannot be prepared by MuxerAdaptor";
+					muxAdaptor.removeMuxer(zixiFeeder);
+				}
 			}
 			else 
 			{
-				message = "ZixiFeeder cannot be prepared by MuxerAdaptor";
-				muxAdaptor.removeMuxer(zixiFeeder);
+				message = "There is already a zixi feeder for this url:" + zixiEndpointURL;
+				logger.warn("There is already a zixi feeder for this url:{} and streamId:{}", zixiEndpointURL, streamId);
 			}
 		}
 		else 
@@ -317,6 +343,7 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 						result = true;
 						message = "MuxAdaptor is not found for streamId:" + streamId + ". It's likely the streaming has been stopped";
 						logger.info("Mux adaptor is not found for streamId: {}. It's likely the streaming has been stopped. Zixi URL is null", streamId);
+						break;
 					}
 				}
 			}

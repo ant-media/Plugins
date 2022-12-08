@@ -185,9 +185,41 @@ public class ZixiPluginTest {
 
     }
 
+    @Test
+    public void testStartRepeat() {
+        ZixiPlugin zixiPlugin = new ZixiPlugin();
+       
+       
+       // return (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
+        ApplicationContext appContext = Mockito.mock(ApplicationContext.class);
+        Mockito.when(appContext.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(appAdaptor);
+        zixiPlugin.setApplicationContext(appContext);
+        zixiPlugin.setVertx(vertx);
+        zixiPlugin.setApp(appAdaptor);
+
+        Broadcast broadcast = new Broadcast();
+        broadcast.setStreamUrl("zixi://127.0.0.1:2077/stream1");
+        //start 
+        Result result = zixiPlugin.startClient(broadcast, true);
+        //it should save the stream id in dataId of the result but it should be false
+        //because there is no stream on the server
+        assertFalse(result.isSuccess());
+
+        startPushingToZixiBroadcaster();
+
+        result = zixiPlugin.startClient(result.getDataId());
+        assertTrue(result.isSuccess());
+
+        result = zixiPlugin.stopClient(result.getDataId());
+        assertTrue(result.isSuccess());
+
+        stopPushingToZixiBroadcaster();
+
+    }
 
 
-
+    //Test WebRTC Ingest and Zixi Feeder
+    //Test Ingest with Adaptive Bitrate
     //test eof
 
     //test no input is coming

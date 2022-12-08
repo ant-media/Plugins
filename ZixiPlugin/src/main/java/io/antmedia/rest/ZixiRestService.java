@@ -26,13 +26,21 @@ public class ZixiRestService {
 	protected ServletContext servletContext;
 
 	/**
+	 * Creates a ZixiClient to connect to ZixiBroadcaster.
 	 * 
+	 * @param
+	 * broadcast: The broadcast object that  have streamURL is defined as zixi url 
+	 * start: If start is true, it automatically starts the ZixiClient. By default it's false
+	 * 
+	 * @return
+	 * The status of the operation. If start is false, it returns the stream id in the dataId field
+	 * The dataId field can be use start/stop the Zixi Client
 	 */
 	@POST
 	@Path("/client")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result createZixiClient(Broadcast broadcast, @PathParam("start") boolean start) {
+	public Result createZixiClient(Broadcast broadcast, @QueryParam("start") boolean start) {
 		//broadcast object should have streamURL
 		return  getZixiPlugin().startClient(broadcast, start);
 	}

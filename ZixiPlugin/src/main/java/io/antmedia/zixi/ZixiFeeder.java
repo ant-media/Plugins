@@ -76,7 +76,6 @@ public class ZixiFeeder extends Muxer {
 		@Override
 		public void call(org.bytedeco.javacpp.Pointer userData, int level, org.bytedeco.javacpp.BytePointer msg) {
 			logger.info("zixi feeder log: {}", msg.getString());
-			
 		}
 	};
 
@@ -99,10 +98,8 @@ public class ZixiFeeder extends Muxer {
                                     zixiFeeder.url, zixiFeeder.streamId);
                 }
                 else {
-                    logger.debug("Packet is written to zixi url->{} buf size:{}", zixiFeeder.url, buf_size);
+                    logger.info("Packet is written to zixi url->{} buf size:{}", zixiFeeder.url, buf_size);
                 }
-
-
             }
             else {
                 logger.warn("Zixi Feeder is not connected to the url:{} but it still try to send data", zixiFeeder.url);
@@ -125,7 +122,7 @@ public class ZixiFeeder extends Muxer {
         boolean result = false;
         try 
         {
-            if (url.startsWith("zixi:")) {
+            if (url != null && url.startsWith("zixi:")) {
                 //just a trick to make the URL object parse correctly
                 String changedURL = url.replace("zixi://", "http://");
 
@@ -172,8 +169,14 @@ public class ZixiFeeder extends Muxer {
 
     @Override
     public boolean isCodecSupported(int codecId) {
-        //TODO: check supported codecs
-        return true;
+
+
+        boolean result = codecId == AV_CODEC_ID_AAC || codecId == AV_CODEC_ID_H264 ||
+                codecId == AV_CODEC_ID_H265;
+        if (!result) {
+            logger.warn("Codec:{} is not support for ZixiFeeder", codecId);
+        }
+        return result;
     }
 
     @Override
@@ -189,11 +192,11 @@ public class ZixiFeeder extends Muxer {
                                 opaque, null, writeCallback, null);
 
             getOutputFormatContext().pb(avioContext);
+            //Set the custom io flag, it's critical to clear the resources
+            //it crashes in the avio_closep when clearResources is called
+            outputFormatContext.flags(outputFormatContext.flags() | AVFormatContext.AVFMT_FLAG_CUSTOM_IO); 
 
             int nofile = (outputFormatContext.flags() & AVFMT_NOFILE);
-            logger.info("nofile:{} ", nofile);
-
-            //outputFormatContext.o
 
             logger.info("Write callback method is created for zixi feeder stream:{} and zixi url:{}", streamId, url);
         }
@@ -317,16 +320,10 @@ public class ZixiFeeder extends Muxer {
 
     @Override
     public synchronized void writeTrailer() {
-        logger.info("Calling writeTrailer buffer -> {}", outputFormatContext.pb().buf_ptr().isNull() );
 
-        //Don't call super.writeTrailer for 2.5.1 and older version
-        //super.writeTrailer();
+        super.writeTrailer();
 
 		isRunning.set(false);
-		av_write_trailer(outputFormatContext);
-
-        logger.info("output format context is null -> {}", outputFormatContext.isNull());
-
         disconnect();
 
         if (avioContext != null) 
@@ -337,11 +334,7 @@ public class ZixiFeeder extends Muxer {
             }
             av_free(avioContext);
             avioContext = null;
-            outputFormatContext.pb(null);
         }
-
-        clearResource();
-
         if (opaque != null) 
         {
             zixiFeederMap.remove(opaque);
