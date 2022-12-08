@@ -4,12 +4,9 @@ import org.apache.tika.utils.ExceptionUtils;
 import org.bytedeco.ffmpeg.avcodec.AVCodec;
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
-import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avformat.AVFormatContext;
 import org.bytedeco.ffmpeg.avformat.AVIOContext;
-import org.bytedeco.ffmpeg.avformat.AVStream;
 import org.bytedeco.ffmpeg.avformat.Write_packet_Pointer_BytePointer_int;
-import org.bytedeco.ffmpeg.avformat.Write_packet_Pointer_byte___int;
 import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.javacpp.BytePointer;
 import org.bytedeco.javacpp.IntPointer;
@@ -24,7 +21,6 @@ import org.slf4j.Logger;
 
 
 import io.antmedia.muxer.Muxer;
-import io.antmedia.rest.model.Result;
 import io.vertx.core.Vertx;
 import static org.bytedeco.zixi.global.feeder.*;
 import static org.bytedeco.ffmpeg.global.avformat.*;
@@ -98,7 +94,7 @@ public class ZixiFeeder extends Muxer {
                                     zixiFeeder.url, zixiFeeder.streamId);
                 }
                 else {
-                    logger.info("Packet is written to zixi url->{} buf size:{}", zixiFeeder.url, buf_size);
+                    logger.debug("Packet is written to zixi url->{} buf size:{}", zixiFeeder.url, buf_size);
                 }
             }
             else {
