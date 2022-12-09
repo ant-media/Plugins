@@ -59,10 +59,10 @@ PAY ATTENTION: We cannot run the Zixi SDK command line tools(`feeder_interface_t
    ```
    The method should return something below. Please pay attention to `dataId` field because it's the stream id to play the stream in Ant Media Server
    ```json
-   {"success":"true", "message":"Stream pulling is started for ",dataId":"zLgmkdjhdhd","errorId":0}
+   {"success":"true", "message":"Stream pulling is started for ",dataId":"zLPmjtlT7whX1670583419181","errorId":0}
    ``` 
-6. Visit `http://AMS_SERVER_IP:5080/LiveApp/player.html`. Write the stream id to the box below and Click the `Play` to start playing 
- 
+6. Visit `http://AMS_SERVER_IP:5080/LiveApp/player.html`. Write the stream id to the box below and click the `Start Playing` button.
+  ![Screenshot from 2022-12-09 14-04-08](https://user-images.githubusercontent.com/3456251/206688427-e6c07187-595b-4f24-b6d9-82ad0c90fcef.png)
 
 
 
