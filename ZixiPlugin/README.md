@@ -9,10 +9,11 @@ It can connect and pulls the stream from ZixiBroadcaster to Ant Media Server so 
 It can push the stream in Ant Media Server to ZixiBroadcaster so that any stream ingested by WebRTC, RTSP, RTMP, SRT, etc. in Ant Media Server can be available in ZixiBroadcaster 
 
 ## How to Install
-### Pre-request, 
+### Pre-request
 You need to install Ant Media Server Enterprise Edition in your instance. 
 ZixiPlugin is compatible with Ant Media Server 2.5.2 and later versions. 
 
+### Install
 1. Download the pre-built `zixi-plugin.jar` file
   ```
   wget 
@@ -30,6 +31,10 @@ ZixiPlugin is compatible with Ant Media Server 2.5.2 and later versions.
 ZixiPlugins have REST Methods so start ZixiClient and ZixiFeeder.
 
 ### Start a ZixiClient
-1. Install your ZixiBroadcast to your instance. Please reach out to [Zixi](https://zixi.com) to have ZixiBroadcaster. 
-2. Create a INPUT stream in ZixiBroadcaster as 
+1. Install your ZixiBroadcast to your instance. Please reach out to [Zixi](https://zixi.com) to have ZixiBroadcaster and instructions.
+2. Click INPUTs in ZixiBroadcaster and then Click `New Input` 
+
+
+
+
 
