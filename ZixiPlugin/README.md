@@ -8,6 +8,9 @@ It can connect and pulls the stream from ZixiBroadcaster to Ant Media Server so 
 ### ZixiFeeder
 It can push the stream in Ant Media Server to ZixiBroadcaster so that any stream ingested by WebRTC, RTSP, RTMP, SRT, etc. in Ant Media Server can be available in ZixiBroadcaster 
 
+### REST Methods
+You can control everything through REST Methods. REST Methods will be available for each application in the Ant Media Server. For all methods, please take a look at the [ZixiRestService.java](https://github.com/ant-media/Plugins/blob/zixi/ZixiPlugin/src/main/java/io/antmedia/rest/ZixiRestService.java)
+
 ## How to Install
 ### Pre-request
 You need to install Ant Media Server Enterprise Edition in your instance. 
@@ -33,7 +36,7 @@ Firstly, please install your ZixiBroadcast to your instance. Please reach out to
 
 
 ### Start a ZixiClient
-1. Click INPUTs in ZixiBroadcaster and then Click `New Input` 
+1. Click `INPUTS` in ZixiBroadcaster and then Click `New Input` 
    <img width="1141" alt="Screenshot 2022-12-09 at 12 06 28" src="https://user-images.githubusercontent.com/3456251/206665747-93d6b3d7-1742-4839-b563-757c614a1bc4.png">
 2. Add a new stream with `Push` type. You can give any name for stream id. In the sample below, we use as `stream1`.
    <img width="1211" alt="Screenshot 2022-12-09 at 12 08 47" src="https://user-images.githubusercontent.com/3456251/206666230-69d74581-ee1f-4df6-9551-d2fc5ffdaba2.png">
@@ -63,6 +66,23 @@ PAY ATTENTION: We cannot run the Zixi SDK command line tools(`feeder_interface_t
    ``` 
 6. Visit `http://AMS_SERVER_IP:5080/LiveApp/player.html`. Write the stream id to the box below and click the `Start Playing` button.
   ![Screenshot from 2022-12-09 14-04-08](https://user-images.githubusercontent.com/3456251/206688427-e6c07187-595b-4f24-b6d9-82ad0c90fcef.png)
+  
+7. Stop the streaming from client. Pay attention that the stream id(`zLPmjtlT7whX1670583419181`) is being used in the URL 
+   ```
+   curl -X "DELETE" http://127.0.0.1/LiveApp/rest/zixi/client/zLPmjtlT7whX1670583419181 -H 'Content-Type: application/json'
+   ```
 
+### Start a ZixiFeeder
+1. Click `INPUTS` in ZixiBroadcaster and then Click `New Input` 
+   <img width="1141" alt="Screenshot 2022-12-09 at 12 06 28" src="https://user-images.githubusercontent.com/3456251/206665747-93d6b3d7-1742-4839-b563-757c614a1bc4.png">
+2. Add a new stream with `Push` type. You can give any name for stream id. In the sample below, we use as `stream2`.
+   <img width="1212" alt="Screenshot 2022-12-09 at 14 11 17" src="https://user-images.githubusercontent.com/3456251/206689716-9c1ddd1c-4d4f-4b78-be1e-918bb1672553.png">
+3. Publish a stream to Ant Media Server through WebRTC on https://AMS_FQDN_DOMAIN:5443/LiveApp as shown below with 'webrtc_stream'
 
-
+4. Call the following REST method to push the 'webrtc_stream' to the ZixiBroadcaster 
+   ```
+   ```
+5. Go to the ZixiBroadcaster and see that it's available `stream2` connected on ZixiBroadcaster
+6. Stop the ZixiFeeder with the following command
+   ```
+   ```
