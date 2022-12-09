@@ -57,12 +57,12 @@ PAY ATTENTION: We cannot run the Zixi SDK command line tools(`feeder_interface_t
    ```
    curl -X "POST" http://127.0.0.1:5080/LiveApp/rest/zixi/client?start=true -H 'Content-Type: application/json' -d '{"streamUrl":"zixi://127.0.0.1:2077/stream1"}'
    ```
-   The method should return something below
-   ```
-   The method should return something below
+   The method should return something below. Please pay attention to `dataId` field because it's the stream id to play the stream in Ant Media Server
+   ```json
+   {"success":"true", "message":"Stream pulling is started for ",dataId":"zLgmkdjhdhd","errorId":0}
    ``` 
-   
-   
+6. Visit `http://AMS_SERVER_IP:5080/LiveApp/player.html`. Write the stream id to the box below and Click the `Play` to start playing 
+ 
 
 
 
