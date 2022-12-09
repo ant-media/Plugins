@@ -79,11 +79,16 @@ PAY ATTENTION: We cannot run the Zixi SDK command line tools(`feeder_interface_t
 2. Add a new stream with `Push` type. You can give any name for stream id. In the sample below, we use as `stream2`.
    <img width="1212" alt="Screenshot 2022-12-09 at 14 11 17" src="https://user-images.githubusercontent.com/3456251/206689716-9c1ddd1c-4d4f-4b78-be1e-918bb1672553.png">
 3. Publish a stream to Ant Media Server through WebRTC on https://AMS_FQDN_DOMAIN:5443/LiveApp as shown below with 'webrtc_stream'
+![Screenshot from 2022-12-09 14-33-29](https://user-images.githubusercontent.com/3456251/206694528-55edc0dd-36a3-49cb-85de-1b5845834e8f.png)
 
-4. Call the following REST method to push the 'webrtc_stream' to the ZixiBroadcaster 
+4. Call the following REST method to push the 'webrtc_stream' to the ZixiBroadcaster. Pay attention that we use `webrtc_stream` in the url below and add the ZixiBroadcaster endpoint as url parameter(`zixi://127.0.0.1:2088/stream2`)
    ```
+   curl -X "POST" http://127.0.0.1:5080/LiveApp/rest/zixi/feeder/webrtc_stream?url=zixi://127.0.0.1:2088/stream2  -H 'Content-Type: application/json'
    ```
-5. Go to the ZixiBroadcaster and see that it's available `stream2` connected on ZixiBroadcaster
-6. Stop the ZixiFeeder with the following command
+5. Go to the ZixiBroadcaster and see that `stream2` is connected on ZixiBroadcaster
+   ![Screenshot from 2022-12-09 14-34-16](https://user-images.githubusercontent.com/3456251/206694160-37400fdd-4343-4ea7-99db-61fe4bab3660.png)
+   
+6. Stop the ZixiFeeder with the following command by using stream id `webrtc_stream` at the end of the url
    ```
+   curl -X "DELETE" http://127.0.0.1:5080/LiveApp/rest/zixi/feeder/webrtc_stream  -H 'Content-Type: application/json'
    ```
