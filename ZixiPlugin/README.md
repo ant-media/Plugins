@@ -37,9 +37,9 @@ Firstly, please install your ZixiBroadcast to your instance. Please reach out to
 
 ### Start a ZixiClient
 1. Click `INPUTS` in ZixiBroadcaster and then Click `New Input` 
-   <img width="1141" alt="Screenshot 2022-12-09 at 12 06 28" src="https://user-images.githubusercontent.com/3456251/206665747-93d6b3d7-1742-4839-b563-757c614a1bc4.png">
+   <img width="800" alt="Screenshot 2022-12-09 at 12 06 28" src="https://user-images.githubusercontent.com/3456251/206665747-93d6b3d7-1742-4839-b563-757c614a1bc4.png">
 2. Add a new stream with `Push` type. You can give any name for stream id. In the sample below, we use as `stream1`.
-   <img width="1211" alt="Screenshot 2022-12-09 at 12 08 47" src="https://user-images.githubusercontent.com/3456251/206666230-69d74581-ee1f-4df6-9551-d2fc5ffdaba2.png">
+   <img width="800" alt="Screenshot 2022-12-09 at 12 08 47" src="https://user-images.githubusercontent.com/3456251/206666230-69d74581-ee1f-4df6-9551-d2fc5ffdaba2.png">
 3. Push a stream to ZixiBroadcaster. You need to have Zixi SDK to push the stream to ZixiBroadcaster. Here are the commands we use to push the stream [ZixiSDK]([url](https://github.com/ant-media/Plugins/tree/zixi/ZixiPlugin/src/test/resources/zixi_sdks-antmedia-linux64-14.13.44304)). 
 PAY ATTENTION: We cannot run the Zixi SDK command line tools(`feeder_interface_tester`, `client_interface_tester`) in Virtual Instances. They work for us in baremetal instances. 
    ```
@@ -55,17 +55,18 @@ PAY ATTENTION: We cannot run the Zixi SDK command line tools(`feeder_interface_t
    ```
    The command above gets the packet from 1234 port and push to the ZixiBroadcasters in 127.0.0.1 through 2088 port and stream1 channel.   
 4. You must see that `stream1` is online on the ZixiBroadcaster as shown below
-   <img width="1134" alt="Screenshot 2022-12-09 at 12 27 39" src="https://user-images.githubusercontent.com/3456251/206669919-0ae484fa-fe8d-4c5f-b142-838c8aa8c264.png">
+   <img width="800" alt="Screenshot 2022-12-09 at 12 27 39" src="https://user-images.githubusercontent.com/3456251/206669919-0ae484fa-fe8d-4c5f-b142-838c8aa8c264.png">
 5. Call the REST Method below to let Ant Media Server pull the stream from ZixiBroadcaster through the following url `zixi://127.0.0.1:2077/stream1`
    ```
    curl -X "POST" http://127.0.0.1:5080/LiveApp/rest/zixi/client?start=true -H 'Content-Type: application/json' -d '{"streamUrl":"zixi://127.0.0.1:2077/stream1"}'
    ```
    The method should return something below. Please pay attention to `dataId` field because it's the stream id to play the stream in Ant Media Server
    ```json
-   {"success":"true", "message":"Stream pulling is started for ",dataId":"zLPmjtlT7whX1670583419181","errorId":0}
+   {"success":"true", "message":"Stream pulling is started for ", "dataId":"zLPmjtlT7whX1670583419181", "errorId":0}
    ``` 
-6. Visit `http://AMS_SERVER_IP:5080/LiveApp/player.html`. Write the stream id to the box below and click the `Start Playing` button.
-  ![Screenshot from 2022-12-09 14-04-08](https://user-images.githubusercontent.com/3456251/206688427-e6c07187-595b-4f24-b6d9-82ad0c90fcef.png)
+6. Visit `http://AMS_SERVER_IP:5080/LiveApp/player.html`. Write the stream id(`zLPmjtlT7whX1670583419181`) to the box below and click the `Start Playing` button.
+
+   <img width="800" alt="Screenshot 2022-12-09 at 12 27 39" src="https://user-images.githubusercontent.com/3456251/206688427-e6c07187-595b-4f24-b6d9-82ad0c90fcef.png">
   
 7. Stop the streaming from client. Pay attention that the stream id(`zLPmjtlT7whX1670583419181`) is being used in the URL 
    ```
