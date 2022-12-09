@@ -19,7 +19,7 @@ ZixiPlugin is compatible with Ant Media Server 2.5.2 and later versions. Current
 ### Install
 1. Download the pre-built `zixi-plugin.jar` file
   ```
-  wget 
+  wget https://github.com/ant-media/Plugins/raw/master/ZixiPlugin/build/zixi-plugin.jar
   ```
 2. Copy the `zixi-plugin.jar` file to `plugins` directory under `/usr/local/antmedia`
   ```
