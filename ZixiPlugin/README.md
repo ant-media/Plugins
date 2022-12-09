@@ -79,6 +79,7 @@ PAY ATTENTION: We cannot run the Zixi SDK command line tools(`feeder_interface_t
 2. Add a new stream with `Push` type. You can give any name for stream id. In the sample below, we use as `stream2`.
    <img width="800" alt="Screenshot 2022-12-09 at 14 11 17" src="https://user-images.githubusercontent.com/3456251/206689716-9c1ddd1c-4d4f-4b78-be1e-918bb1672553.png">
 3. Publish a stream to Ant Media Server through WebRTC on https://AMS_FQDN_DOMAIN:5443/LiveApp as shown below with 'webrtc_stream'
+
    <img width="800" src="https://user-images.githubusercontent.com/3456251/206694528-55edc0dd-36a3-49cb-85de-1b5845834e8f.png" >
 
 4. Call the following REST method to push the 'webrtc_stream' to the ZixiBroadcaster. Pay attention that we use `webrtc_stream` in the url below and add the ZixiBroadcaster endpoint as url parameter(`zixi://127.0.0.1:2088/stream2`)
