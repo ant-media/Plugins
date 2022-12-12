@@ -70,7 +70,7 @@ PAY ATTENTION: We cannot run the Zixi SDK command line tools(`feeder_interface_t
   
 7. Stop the streaming from client. Pay attention that the stream id(`zLPmjtlT7whX1670583419181`) is being used in the URL 
    ```
-   curl -X "DELETE" http://127.0.0.1/LiveApp/rest/zixi/client/zLPmjtlT7whX1670583419181 -H 'Content-Type: application/json'
+   curl -X "DELETE" http://127.0.0.1:5080/LiveApp/rest/zixi/client/zLPmjtlT7whX1670583419181 -H 'Content-Type: application/json'
    ```
 
 ### Start a ZixiFeeder
