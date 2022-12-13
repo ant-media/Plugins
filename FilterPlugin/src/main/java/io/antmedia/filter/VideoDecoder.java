@@ -51,7 +51,7 @@ public class VideoDecoder {
 		
 		String decoderName = null;
 		AVCodec codec = null;
-		if (GPUUtils.getInstance().getDeviceCount() > 0 && streamParameters.codecParameters.codec_id() == AV_CODEC_ID_H264) {
+		if (GPUUtils.getInstance().getDeviceCount() > 0 && streamParameters.getCodecParameters().codec_id() == AV_CODEC_ID_H264) {
 			if (SystemUtils.OS_TYPE == SystemUtils.LINUX || SystemUtils.OS_TYPE == SystemUtils.WINDOWS) {
 				decoderName = "h264_cuvid";
 			} else if (SystemUtils.OS_TYPE == SystemUtils.MAC_OS_X) {
@@ -69,7 +69,7 @@ public class VideoDecoder {
 		boolean result = false;
 		if (decoderName != null) {
 			codec = avcodec_find_decoder_by_name(decoderName);
-			result = openDecoder(codec, streamParameters.codecParameters);
+			result = openDecoder(codec, streamParameters.getCodecParameters());
 		}
 
 		if (!result) {
@@ -77,8 +77,8 @@ public class VideoDecoder {
 				codec.close();
 				codec = null;
 			}
-			codec = avcodec_find_decoder(streamParameters.codecParameters.codec_id());
-			result = openDecoder(codec, streamParameters.codecParameters);
+			codec = avcodec_find_decoder(streamParameters.getCodecParameters().codec_id());
+			result = openDecoder(codec, streamParameters.getCodecParameters());
 		}
 		
 		BytePointer name = codec.name();
@@ -123,9 +123,9 @@ public class VideoDecoder {
 		return true;
 	}
 	
-	public AVFrame decodeVideoPacket(AVPacket pkt) {
+	public synchronized AVFrame decodeVideoPacket(AVPacket pkt) {
 		av_packet_rescale_ts(pkt,
-				streamParameters.timeBase,
+				streamParameters.getTimeBase(),
 				Utils.TIME_BASE_FOR_MS
 				);
 		
