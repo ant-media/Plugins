@@ -5,7 +5,12 @@ Webpage Recording Plugin can stream everything on the given web page with video 
 ## Features
 
 ### 1. Broadcast the whole web page
+
+You can broadcast the whole web page with video and audio in realtime.
+
 ### 2. Record the broadcast if needed
+
+You can record the broadcast if needed. But you need to start the recording manually with REST Api or on Ant Media Server Dashboard.
 
 ## How to Install
 
