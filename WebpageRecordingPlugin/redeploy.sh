@@ -1,5 +1,5 @@
 #!/bin/sh
-AMS_DIR=~/softwares/ant-media-server
+AMS_DIR=/usr/local/antmedia/
 mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
 OUT=$?
 
