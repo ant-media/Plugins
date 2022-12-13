@@ -11,14 +11,12 @@ Webpage Recording Plugin can stream everything on the given web page with video 
 
 ### Clone the repository
 
-Get the source code from GitHub.
     ```
     git clone https://github.com/ant-media/Plugins
     ```
 
 ### Go to the Webpage Recording Plugin directory
 
-Run following question to go to the Webpage Recording Plugin directory
     ```
     cd Plugins/WebpageRecordingPlugin
     ```
@@ -31,7 +29,6 @@ Run following question to go to the Webpage Recording Plugin directory
 
 ### Build & install the plugin
 
-You can build the plugin with the following command
     ```
     chmode +x redeploy.sh
     ./redeploy.sh
@@ -39,7 +36,6 @@ You can build the plugin with the following command
 
 ### Restart Ant Media Server
 
-After you restart Ant Media Server, plugin will be installed, and you can use it.
     ```
     sudo service antmedia restart
     ```
@@ -63,9 +59,9 @@ Call the REST Method below to let Ant Media Server with the stream id you specif
    ```
 
 ### Customization
-
 Other than that, you can modify the code and build the plugin by yourself to make it work with your own needs. For example, you can play the video or login to the web page with your own credentials before starting the broadcast.
 Go to the WebpageRecordingPlugin and modify the customModification method as you wish. Then build the plugin with the following command.
+
    ```
    chmode +x redeploy.sh
    ./redeploy.sh
