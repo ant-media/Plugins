@@ -1,4 +1,6 @@
 package io.antmedia.test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -242,6 +244,64 @@ public class FilterAdaptorUnitTest {
 
 		return si;
 	}
+	
+	/*
+	 * In synchronous mode output frame pts should be the same with input,
+	 * because we apply filter on going original stream without creating a new stream.
+	 */
+	@Test
+	public void testTimeBaseInSyncMode() {
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
+		doReturn(true).when(filterAdaptor).update();
+		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
+		FilterConfiguration filterConf = new FilterConfiguration();
+		filterConf.setInputStreams(new ArrayList<>());
+		filterConf.setOutputStreams(new ArrayList<>());
+		filterConf.setType(FilterConfiguration.SYNCHRONOUS);
 
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+		when(app.getVertx()).thenReturn(vertx);
 
+		filterAdaptor.createFilter(filterConf, app);
+
+		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
+		FilterGraph filterGraph = mock(FilterGraph.class);
+		filterAdaptor.setVideoFilterGraphForTest(filterGraph);
+		filterAdaptor.setAudioFilterGraphForTest(filterGraph);
+
+		when(filterGraph.isInitiated()).thenReturn(true);
+		when(filterGraph.getListener()).thenReturn(mock(IFilteredFrameListener.class));
+		AVFrame filterOutputFrame = new AVFrame();
+		filterOutputFrame.width(100);
+		filterOutputFrame.height(100);
+		when(filterGraph.doFilterSync(eq(streamId), any())).thenReturn(filterOutputFrame);
+
+		StreamParametersInfo streamInfo = getStreamInfo();
+		filterAdaptor.setVideoStreamInfo(streamId, streamInfo);
+		filterAdaptor.setAudioStreamInfo(streamId, streamInfo);
+
+		//for video
+		for(int i = 0; i < 100; i++) {
+			AVFrame frame = new AVFrame();
+			frame.width(streamInfo.getCodecParameters().width());
+			frame.height(streamInfo.getCodecParameters().height());
+			frame.pts(RandomUtils.nextLong(0, 5000));
+			AVFrame filteredFrame = filterAdaptor.onVideoFrame(streamId, frame);
+
+			//check the output is different than input but pts values are same
+			assertNotEquals(filteredFrame, frame);
+			assertEquals(filteredFrame.pts(), frame.pts());
+		}
+
+		//for audio
+		for(int i = 0; i < 100; i++) {
+			AVFrame frame = new AVFrame();
+			frame.pts(RandomUtils.nextLong(0, 5000));
+			AVFrame filteredFrame = filterAdaptor.onAudioFrame(streamId, frame);
+
+			//check the output is different than input but pts values are same
+			assertNotEquals(filteredFrame, frame);
+			assertEquals(filteredFrame.pts(), frame.pts());
+		}
+	}
 }
