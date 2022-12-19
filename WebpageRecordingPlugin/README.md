@@ -12,59 +12,76 @@ You can broadcast the whole web page with video and audio in realtime.
 
 You can record the broadcast if needed. But you need to start the recording manually with REST Api or on Ant Media Server Dashboard.
 
-## How to Install
+## How to Install 
 
-### Clone the repository
+1. Download the pre-built `webpage-recording-plugin.jar` file
+  ```
+  wget https://github.com/ant-media/Plugins/raw/master/WebpageRecordingPlugin/build/webpage-recording-plugin.jar
+  ```
+2. Copy the `webpage-recording-plugin.jar` file to `plugins` directory under `/usr/local/antmedia`
+  ```
+  sudo cp webpage-recording-plugin.jar /usr/local/antmedia/plugins
+  ```
+3. Restart the service
+  ```
+  sudo service antmedia restart
+  ```
+
+## How to Use
+
+Webpage Recording Plugin have REST API to control the plugin. 
+
+* Start the broadcast
+
+Call the REST Method below to let Ant Media Server broadcast the web page. You should pass the url of the web page and can pass streamId as query parameter you wanted to use as a parameter.
+   ```
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "http://localhost:5080/WebRTCAppEE/rest/webpage/record/start" -d '{"url": "http://example.com"}'
+   ```
+
+* Stop the broadcast
+
+Call the REST Method below to let Ant Media Server with the stream id you specified in the start method.
+   ```
+   curl -i -X GET -H "Accept: Application/json" "http://localhost:5080/WebRTCAppEE/rest/webpage/record/stop/{streamId}"
+   ```
+
+
+   
+## How to Build from Source Code
+
+- Clone the repository
 
     ```
     git clone https://github.com/ant-media/Plugins
     ```
 
-### Go to the Webpage Recording Plugin directory
+- Go to the Webpage Recording Plugin directory
 
     ```
     cd Plugins/WebpageRecordingPlugin
     ```
 
-### Modify the redeploy.sh file with your Ant Media Server installation path
+- Modify the redeploy.sh file with your Ant Media Server installation path
 
     ```
     Change AMS_DIR=/usr/local/antmedia/
     ```
 
-### Build & install the plugin
+- Build & install the plugin
 
     ```
     chmode +x redeploy.sh
     ./redeploy.sh
     ```
 
-### Restart Ant Media Server
+- Restart Ant Media Server
 
     ```
     sudo service antmedia restart
     ```
 
-## How to Use
-
-Webpage Recording Plugin have REST API to control the plugin. 
-
-### 1. Start the broadcast
-
-Call the REST Method below to let Ant Media Server broadcast the web page. You should pass the url of the web page and streamId you wanted to use as a parameter.
-   ```
-   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "http://localhost:5080/WebRTCAppEE/rest/v2/webpage/record/start" -d '{"streamId":"streamId","webpageUrl": "http://example.com"}'
-   ```
-
-### 2. Stop the broadcast
-
-Call the REST Method below to let Ant Media Server with the stream id you specified in the start method.
-   ```
-   curl -i -X GET -H "Accept: Application/json" "http://localhost:5080/WebRTCAppEE/rest/v2/webpage/record/stop/{streamId}"
-   ```
-
-### Customization
-Other than that, you can modify the code and build the plugin by yourself to make it work with your own needs. For example, you can play the video or login to the web page with your own credentials before starting the broadcast.
+### How to Customize
+You can modify the code and build the plugin by yourself to make it work with your own needs. For example, you can play the video or login to the web page with your own credentials before starting the broadcast.
 Go to the WebpageRecordingPlugin and modify the customModification method as you wish. Then build the plugin with the following command.
 
    ```

@@ -8,7 +8,7 @@ if [ $OUT -ne 0 ]; then
 fi
 
 rm -r $AMS_DIR/plugins/webpage-recording-plugin*
-cp target/WebpageRecordingPlugin-plugin.jar $AMS_DIR/plugins/
+cp target/webpage-recording-plugin.jar $AMS_DIR/plugins/
 
 OUT=$?
 

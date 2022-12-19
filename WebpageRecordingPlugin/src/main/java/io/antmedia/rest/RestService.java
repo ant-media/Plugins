@@ -7,12 +7,15 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 
 import io.antmedia.plugin.WebpageRecordingPlugin;
+import io.antmedia.rest.model.Result;
+
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,7 +24,7 @@ import org.springframework.web.context.WebApplicationContext;
 import java.net.URISyntaxException;
 
 @Component
-@Path("/v2/webpage/record")
+@Path("/webpage/record")
 public class RestService {
 
 	@Context
@@ -32,9 +35,9 @@ public class RestService {
 	@Path("/start")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Response startWebpageRecording(@RequestBody StartWebpageRecordingRequest request, @Context UriInfo uriInfo) throws URISyntaxException, InterruptedException {
+	public Result startWebpageRecording(@RequestBody Endpoint request, @Context UriInfo uriInfo, @QueryParam("streamId") String streamId) throws URISyntaxException, InterruptedException {
 		if (uriInfo == null) {
-			return Response.status(Response.Status.BAD_REQUEST).build();
+			return new Result(false, "Bad request");
 		}
 		
 		String websocketScheme = ("https".equals(uriInfo.getBaseUri().getScheme())) ? "wss" : "ws";
@@ -42,20 +45,17 @@ public class RestService {
 		String websocketUrl = websocketScheme + "://" + uriInfo.getBaseUri().getHost() + ":" + uriInfo.getBaseUri().getPort() + "/" + applicationName + "/websocket";
 
 		WebpageRecordingPlugin app = getPluginApp();
-		ResponsePair responsePair = app.startWebpageRecording(request.getStreamId(), websocketUrl, request.getWebpageUrl());
 
-		return Response.status(responsePair.getResponseCode()).entity(responsePair.getResponse()).build();
+		return app.startWebpageRecording(streamId, websocketUrl, request.getUrl());
 	}
 	
-	@GET
+	@POST
 	@Path("/stop/{streamId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Response stopWebpageRecording(@PathParam("streamId") String streamId) throws InterruptedException {
+	public Result stopWebpageRecording(@PathParam("streamId") String streamId) throws InterruptedException {
 		WebpageRecordingPlugin app = getPluginApp();
-		ResponsePair responsePair = app.stopWebpageRecording(streamId);
-
-		return Response.status(responsePair.getResponseCode()).entity(responsePair.getResponse()).build();
+		return app.stopWebpageRecording(streamId);
 	}
 	
 	private WebpageRecordingPlugin getPluginApp() {
