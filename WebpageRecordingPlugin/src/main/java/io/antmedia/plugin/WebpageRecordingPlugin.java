@@ -98,7 +98,6 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		WebDriver driver = drivers.get(streamId);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
 		js.executeScript(String.format("window.postMessage({ command:  'STOP', streamId: '%s' }, '*')", streamId));
-		TimeUnit.SECONDS.sleep(5);
 		driver.quit();
 		drivers.remove(streamId);
 		return new Result(true, "Webpage recording stopped");
