@@ -5,9 +5,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.EncoderSettings;
 import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.rest.model.Result;
@@ -31,13 +33,24 @@ public class FiltersManager {
 	 * @param filterConfiguration
 	 * @param appAdaptor
 	 */
-	public Result createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter appAdaptor) {
-		boolean decodeStreams = appAdaptor.getAppSettings().getEncoderSettings().isEmpty();
-		String filter = filterConfiguration.getFilterId();
-		FilterAdaptor filterAdaptor = filterList.get(filter);
+	public Result createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter appAdaptor) 
+	{
+		List<EncoderSettings> encoderSettings = appAdaptor.getAppSettings().getEncoderSettings();
+		boolean decodeStreams = false;
+		if (encoderSettings == null || encoderSettings.isEmpty()) {
+			decodeStreams = true;
+		}
+		String filterId = filterConfiguration.getFilterId();
+		
+		if (filterId == null || filterId.isBlank()) {
+			filterId = RandomStringUtils.randomAlphanumeric(12);
+			filterConfiguration.setFilterId(filterId);
+		}
+		
+		FilterAdaptor filterAdaptor = filterList.get(filterId);
 		if(filterAdaptor == null) {
 			filterAdaptor = new FilterAdaptor(decodeStreams);
-			filterList.put(filter, filterAdaptor);
+			filterList.put(filterId, filterAdaptor);
 		}
 
 		return filterAdaptor.startFilterProcess(filterConfiguration, appAdaptor);

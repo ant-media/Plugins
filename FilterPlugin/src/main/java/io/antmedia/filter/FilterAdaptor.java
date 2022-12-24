@@ -215,7 +215,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public Result update() 
 	{
 		
-		Result result = new Result(true);
+		Result result = new Result(false);
 		
 		Map<String, Filter> videoSourceFiltersMap = new LinkedHashMap<>();
 		Map<String, Filter> videoSinkFiltersMap = new LinkedHashMap<>();
@@ -334,6 +334,10 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			});
 		}
 		
+		result.setSuccess(true);
+		result.setDataId(filterConfiguration.getFilterId());
+		result.setMessage("Filter with id:" + filterConfiguration.getFilterId() + " is updated");
+		
 		return result;
 	}
 	
@@ -347,7 +351,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			vertx = app.getVertx();
 		}
 		
-		Result result = new Result(true);
+		Result result = new Result(false);
 		
 		this.filterConfiguration = filterConfiguration;
 		
@@ -355,7 +359,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
    		for(String streamId : filterConfiguration.getInputStreams()) {
    			Broadcast broadcast = app.getDataStore().get(streamId);
    			if(broadcast == null || (broadcast != null && !broadcast.getStatus().contains(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING))) {
-   				result.setMessage("Filter saved but input stream ID: "+ streamId +" is not availlable");
+   				result.setMessage("Filter saved. But input stream ID: "+ streamId +" is not actively streaming");
    				return result;
    			}
    		}

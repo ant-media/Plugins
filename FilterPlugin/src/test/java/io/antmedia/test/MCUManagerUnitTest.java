@@ -1,5 +1,8 @@
 package io.antmedia.test;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H264;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -37,7 +40,10 @@ import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.mockito.Mockito;
 
+import com.google.gson.Gson;
+
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.AppSettings;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.datastore.db.types.Broadcast;
@@ -121,7 +127,26 @@ public class MCUManagerUnitTest {
 		
 		verify(filtersManager, times(1)).delete(roomId, app);
 
-
+	}
+	
+	@Test
+	public void testNullFilterId() {
+		FiltersManager filtersManager = spy(new FiltersManager());
+		
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+		String filterString = "{\"inputStreams\":[\"4rTAkDZ9jzl11668516995404\"],\"outputStreams\":[\"CHVStreamAll\",\"CHVStreamActSpeaker\"],\"videoFilter\":\"[in0]split=2[out0][out1]\",\"audioFilter\":\"[in0]asplit=2[out0][out1]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"true\"}";
+		Gson gson = new Gson();
+		
+		FilterConfiguration filterConfiguration = gson.fromJson(filterString, FilterConfiguration.class);
+		assertNull(filterConfiguration.getFilterId());
+		when(app.getAppSettings()).thenReturn(new AppSettings());
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore );
+		
+		Result result = filtersManager.createFilter(filterConfiguration, app);
+		assertFalse(result.isSuccess());
+		assertNotNull(result.getDataId());
+		
 	}
 	
 	@Test
