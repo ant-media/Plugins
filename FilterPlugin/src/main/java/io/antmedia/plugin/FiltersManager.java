@@ -36,9 +36,12 @@ public class FiltersManager {
 	public Result createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter appAdaptor) 
 	{
 		List<EncoderSettings> encoderSettings = appAdaptor.getAppSettings().getEncoderSettings();
-		boolean decodeStreams = false;
+		final boolean decodeStreams;
 		if (encoderSettings == null || encoderSettings.isEmpty()) {
 			decodeStreams = true;
+		}
+		else {
+			decodeStreams = false;
 		}
 		String filterId = filterConfiguration.getFilterId();
 		
@@ -47,11 +50,8 @@ public class FiltersManager {
 			filterConfiguration.setFilterId(filterId);
 		}
 		
-		FilterAdaptor filterAdaptor = filterList.get(filterId);
-		if(filterAdaptor == null) {
-			filterAdaptor = new FilterAdaptor(decodeStreams);
-			filterList.put(filterId, filterAdaptor);
-		}
+		FilterAdaptor filterAdaptor = filterList.computeIfAbsent(filterId, key-> new FilterAdaptor(decodeStreams));
+		
 
 		return filterAdaptor.startFilterProcess(filterConfiguration, appAdaptor);
 	}

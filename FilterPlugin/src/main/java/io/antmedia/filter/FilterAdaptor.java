@@ -355,17 +355,17 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		
 		this.filterConfiguration = filterConfiguration;
 		
-		// Check database if stream is not exist or stream is not broadcasting status
+		// Check database if stream does not exist or stream is not broadcasting status
    		for(String streamId : filterConfiguration.getInputStreams()) {
    			Broadcast broadcast = app.getDataStore().get(streamId);
-   			if(broadcast == null || (broadcast != null && !broadcast.getStatus().contains(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING))) {
+   			if(broadcast == null || !IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus())) {
    				result.setMessage("Filter saved. But input stream ID: "+ streamId +" is not actively streaming");
    				return result;
    			}
    		}
    		for(String streamId : filterConfiguration.getOutputStreams()) {
    			Broadcast broadcast = app.getDataStore().get(streamId);
-   			if(broadcast != null && broadcast.getStatus().contains(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING)) {
+   			if(broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus())) {
    				result.setMessage("Filter saved but output stream ID: "+ streamId +" is already broadcasting");
    				return result;
    			}

@@ -202,9 +202,6 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	public void streamStarted(String streamId) {
 		for(FilterConfiguration filter:  getFiltersManager().getFilterConfigurations()) {
 			if(filter.getInputStreams().contains(streamId)) {
-				System.out.println("***************");
-				System.err.println("streamStarted stream Id " + streamId + " found in this filter: " + filter.getFilterId());
-				System.out.println("***************");
 				FilterAdaptor filterAdaptor = getFiltersManager().getFilterAdaptorList().get(filter.getFilterId());
 				filterAdaptor.startFilterProcess(filter, getApplication());
 			}
@@ -215,9 +212,6 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	public void streamFinished(String streamId) {
 		for(FilterConfiguration filter:  getFiltersManager().getFilterConfigurations()) {
 			if(filter.getInputStreams().contains(streamId)) {
-				System.out.println("***************");
-				System.err.println("streamFinished stream Id " + streamId + " found in this filter: " + filter.getFilterId());
-				System.out.println("***************");
 				FilterAdaptor filterAdaptor = getFiltersManager().getFilterAdaptorList().get(filter.getFilterId());
 				filterAdaptor.close(getApplication());
 			}

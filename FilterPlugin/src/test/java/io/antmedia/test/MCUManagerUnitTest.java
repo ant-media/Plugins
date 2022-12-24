@@ -4,6 +4,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -54,6 +55,7 @@ import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
+import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.rest.model.Result;
 import io.antmedia.websocket.WebSocketConstants;
 import io.vertx.core.Vertx;
@@ -130,11 +132,11 @@ public class MCUManagerUnitTest {
 	}
 	
 	@Test
-	public void testNullFilterId() {
+	public void testCheckResultandFilterId() {
 		FiltersManager filtersManager = spy(new FiltersManager());
 		
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
-		String filterString = "{\"inputStreams\":[\"4rTAkDZ9jzl11668516995404\"],\"outputStreams\":[\"CHVStreamAll\",\"CHVStreamActSpeaker\"],\"videoFilter\":\"[in0]split=2[out0][out1]\",\"audioFilter\":\"[in0]asplit=2[out0][out1]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"true\"}";
+		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream2\",\"stream3\"],\"videoFilter\":\"[in0]split=2[out0][out1]\",\"audioFilter\":\"[in0]asplit=2[out0][out1]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"true\"}";
 		Gson gson = new Gson();
 		
 		FilterConfiguration filterConfiguration = gson.fromJson(filterString, FilterConfiguration.class);
@@ -142,10 +144,12 @@ public class MCUManagerUnitTest {
 		when(app.getAppSettings()).thenReturn(new AppSettings());
 		DataStore dataStore = new InMemoryDataStore("test");
 		when(app.getDataStore()).thenReturn(dataStore );
+		when(app.createCustomBroadcast("stream2")).thenReturn(Mockito.mock(IFrameListener.class));
+		when(app.createCustomBroadcast("stream3")).thenReturn(Mockito.mock(IFrameListener.class));
 		
 		Result result = filtersManager.createFilter(filterConfiguration, app);
 		assertFalse(result.isSuccess());
-		assertNotNull(result.getDataId());
+		assertNotNull(filterConfiguration.getFilterId());
 		
 	}
 	
