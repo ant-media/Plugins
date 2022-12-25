@@ -1,7 +1,6 @@
 package io.antmedia.plugin;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -92,12 +91,14 @@ public class FiltersManager {
 	 * @return
 	 */
 	public boolean delete(String id, AntMediaApplicationAdapter app) {
+		boolean result = false;
 		FilterAdaptor filterAdaptor = filterList.get(id);
 		if(filterAdaptor != null) {
 			filterList.remove(id);
-			return filterAdaptor.close(app);
+			filterAdaptor.close(app);
+			result = true;
 		}
-		return false;
+		return result;
 	}
 
 	public boolean hasFilter(String filterId) {

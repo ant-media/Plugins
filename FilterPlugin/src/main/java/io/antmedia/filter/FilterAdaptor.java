@@ -2,19 +2,18 @@ package io.antmedia.filter;
 
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_AAC;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H264;
-import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_OPUS;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_ref;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_unref;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_CH_LAYOUT_MONO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
+import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_NEAR_INF;
+import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_PASS_MINMAX;
 import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLTP;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_clone;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_free;
 import static org.bytedeco.ffmpeg.global.avutil.av_rescale_q_rnd;
-import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_NEAR_INF;
-import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_PASS_MINMAX;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,7 +28,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
@@ -463,7 +461,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		return filterConfiguration;
 	}
 
-	public synchronized boolean close(AntMediaApplicationAdapter app) {
+	public synchronized void close(AntMediaApplicationAdapter app) {
 		for(String streamId : currentInStreams) {
 			app.removeFrameListener(streamId, this);
 			app.removePacketListener(streamId, this);
@@ -479,10 +477,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		if (audioFilterGraph != null){
 			audioFilterGraph.close();
 			audioFilterGraph = null;
-		}
-
-		return true;
-		
+		}		
 	}
 
 	@Override

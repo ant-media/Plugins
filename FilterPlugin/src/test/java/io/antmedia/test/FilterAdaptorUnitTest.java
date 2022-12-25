@@ -213,6 +213,12 @@ public class FilterAdaptorUnitTest {
 		conf.setOutputStreams(Arrays.asList(output1));
 		
 		assertTrue(filterAdaptor.createOrUpdateFilter(conf, app).isSuccess());
+		
+		filterAdaptor.close(app);
+		
+		//increase coverage and checking not throwing exception
+		filterAdaptor.close(app);
+		
 	}
 
 	public StreamParametersInfo getStreamInfo() {

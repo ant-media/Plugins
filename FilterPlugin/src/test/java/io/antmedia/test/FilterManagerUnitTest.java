@@ -72,7 +72,11 @@ public class FilterManagerUnitTest {
 		
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		
-		filtersManager.delete(filterConfiguration.getFilterId(), app);
+		boolean result = filtersManager.delete(filterConfiguration.getFilterId(), app);
+		assertTrue(result);
+		
+		result = filtersManager.delete(filterConfiguration.getFilterId(), app);
+		assertFalse(result);
 	}
 	
 	

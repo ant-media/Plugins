@@ -34,9 +34,6 @@ public class FilterRestService {
 	@Context
 	protected ServletContext servletContext;
 
-
-
-	
 	@ApiOperation(value = "Creates or update the filter. If the filterId of the FilterConfiguration is already available, it just updates the configuration. Otherwise it creates the filter", notes = "", response = Result.class)
 	@POST
 	@Path("/create")
@@ -153,5 +150,8 @@ public class FilterRestService {
 		return (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 	}
 	
+	public void setServletContext(ServletContext servletContext) {
+		this.servletContext = servletContext;
+	}
 
 }
