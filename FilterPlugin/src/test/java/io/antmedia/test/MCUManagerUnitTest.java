@@ -36,6 +36,8 @@ import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.mockito.Mockito;
 
+import com.google.gson.Gson;
+
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.InMemoryDataStore;
@@ -50,6 +52,7 @@ import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
 import io.antmedia.rest.FilterRestService;
+import io.antmedia.rest.model.Result;
 import io.antmedia.websocket.WebSocketConstants;
 import io.vertx.core.Vertx;
 
@@ -166,4 +169,5 @@ public class MCUManagerUnitTest {
 		verify(filtersManager, timeout(MCUManager.CONFERENCE_INFO_POLL_PERIOD_MS*4000).times(1)).createFilter(any(), eq(app));
 
 	}
+	
 }
