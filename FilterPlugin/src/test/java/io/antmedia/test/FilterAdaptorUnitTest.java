@@ -38,6 +38,7 @@ import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.filter.utils.IFilteredFrameListener;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
+import io.antmedia.rest.model.Result;
 import io.vertx.core.Vertx;
 
 public class FilterAdaptorUnitTest {
@@ -73,7 +74,7 @@ public class FilterAdaptorUnitTest {
 	@Test
 	public void testFilterGraphVideoFeed() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
-		doReturn(true).when(filterAdaptor).update();
+		doReturn(new Result(true)).when(filterAdaptor).update();
 		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
@@ -117,7 +118,7 @@ public class FilterAdaptorUnitTest {
 	@Test
 	public void testFilterGraphAudioFeed() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
-		doReturn(true).when(filterAdaptor).update();
+		doReturn(new Result(true)).when(filterAdaptor).update();
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
 		filterConf.setOutputStreams(new ArrayList<>());
@@ -244,7 +245,7 @@ public class FilterAdaptorUnitTest {
 	@Test
 	public void testTimeBaseInSyncMode() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
-		doReturn(true).when(filterAdaptor).update();
+		doReturn(new Result(true)).when(filterAdaptor).update();
 		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
