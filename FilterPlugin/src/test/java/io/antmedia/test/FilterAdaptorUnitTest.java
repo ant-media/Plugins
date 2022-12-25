@@ -16,19 +16,12 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
 
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.avutil.AVRational;
-import org.bytedeco.javacpp.Pointer;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -40,12 +33,12 @@ import org.junit.runner.Description;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.Utils;
-import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.filter.utils.IFilteredFrameListener;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
+import io.antmedia.rest.model.Result;
 import io.vertx.core.Vertx;
 
 public class FilterAdaptorUnitTest {
@@ -81,7 +74,7 @@ public class FilterAdaptorUnitTest {
 	@Test
 	public void testFilterGraphVideoFeed() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
-		doReturn(true).when(filterAdaptor).update();
+		doReturn(new Result(true)).when(filterAdaptor).update();
 		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
@@ -90,7 +83,7 @@ public class FilterAdaptorUnitTest {
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		when(app.getVertx()).thenReturn(vertx);
 		
-		filterAdaptor.createFilter(filterConf, app);
+		filterAdaptor.createOrUpdateFilter(filterConf, app);
 
 		
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
@@ -125,7 +118,7 @@ public class FilterAdaptorUnitTest {
 	@Test
 	public void testFilterGraphAudioFeed() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
-		doReturn(true).when(filterAdaptor).update();
+		doReturn(new Result(true)).when(filterAdaptor).update();
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
 		filterConf.setOutputStreams(new ArrayList<>());
@@ -133,7 +126,7 @@ public class FilterAdaptorUnitTest {
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		when(app.getVertx()).thenReturn(vertx);
 		
-		filterAdaptor.createFilter(filterConf, app);
+		filterAdaptor.createOrUpdateFilter(filterConf, app);
 
 		
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
@@ -219,7 +212,13 @@ public class FilterAdaptorUnitTest {
 		conf.setInputStreams(Arrays.asList(stream1, stream2, stream3));
 		conf.setOutputStreams(Arrays.asList(output1));
 		
-		assertTrue(filterAdaptor.createFilter(conf, app));
+		assertTrue(filterAdaptor.createOrUpdateFilter(conf, app).isSuccess());
+		
+		filterAdaptor.close(app);
+		
+		//increase coverage and checking not throwing exception
+		filterAdaptor.close(app);
+		
 	}
 
 	public StreamParametersInfo getStreamInfo() {
@@ -252,7 +251,7 @@ public class FilterAdaptorUnitTest {
 	@Test
 	public void testTimeBaseInSyncMode() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(false));
-		doReturn(true).when(filterAdaptor).update();
+		doReturn(new Result(true)).when(filterAdaptor).update();
 		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
@@ -262,7 +261,7 @@ public class FilterAdaptorUnitTest {
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		when(app.getVertx()).thenReturn(vertx);
 
-		filterAdaptor.createFilter(filterConf, app);
+		filterAdaptor.createOrUpdateFilter(filterConf, app);
 
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
 		FilterGraph filterGraph = mock(FilterGraph.class);

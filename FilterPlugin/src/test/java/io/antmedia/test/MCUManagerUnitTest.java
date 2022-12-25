@@ -1,5 +1,4 @@
 package io.antmedia.test;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -14,42 +13,25 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
 
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.bytedeco.ffmpeg.avutil.AVFrame;
-import org.bytedeco.javacpp.Pointer;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
-import org.mockito.Mockito;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.ConferenceRoom;
-import io.antmedia.filter.FilterAdaptor;
-import io.antmedia.filter.utils.Filter;
-import io.antmedia.filter.utils.FilterConfiguration;
-import io.antmedia.filter.utils.FilterGraph;
-import io.antmedia.filter.utils.IFilteredFrameListener;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
-import io.antmedia.rest.FilterRestService;
+import io.antmedia.rest.model.Result;
 import io.antmedia.websocket.WebSocketConstants;
 import io.vertx.core.Vertx;
 
@@ -134,7 +116,7 @@ public class MCUManagerUnitTest {
 		
 		doReturn(filtersManager).when(mcuManager).getFiltersManager();
 		
-		doReturn(true).when(filtersManager).createFilter(any(), any());
+		doReturn(new Result(true)).when(filtersManager).createFilter(any(), any());
 
 		
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
@@ -166,4 +148,5 @@ public class MCUManagerUnitTest {
 		verify(filtersManager, timeout(MCUManager.CONFERENCE_INFO_POLL_PERIOD_MS*4000).times(1)).createFilter(any(), eq(app));
 
 	}
+	
 }

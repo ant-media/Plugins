@@ -2,19 +2,18 @@ package io.antmedia.filter;
 
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_AAC;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H264;
-import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_OPUS;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_ref;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_unref;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_CH_LAYOUT_MONO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
+import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_NEAR_INF;
+import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_PASS_MINMAX;
 import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLTP;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_clone;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_free;
 import static org.bytedeco.ffmpeg.global.avutil.av_rescale_q_rnd;
-import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_NEAR_INF;
-import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_PASS_MINMAX;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -35,6 +34,7 @@ import io.antmedia.filter.utils.FilterGraph;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.IPacketListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
+import io.antmedia.rest.model.Result;
 import io.vertx.core.Vertx;
 
 /**
@@ -210,7 +210,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	/*
 	 * Update filter graph according to the newly added or removed streams
 	 */
-	public boolean update() 
+	public Result update() 
 	{
 		Map<String, Filter> videoSourceFiltersMap = new LinkedHashMap<>();
 		Map<String, Filter> videoSinkFiltersMap = new LinkedHashMap<>();
@@ -218,7 +218,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		Map<String, Filter> audioSinkFiltersMap = new LinkedHashMap<>();
 		int i = 0;
 		
-		
+		Result result = new Result(false);
 		//prepare buffer for video and audio frames to feed the filter graph
 		for (String streamId : currentInStreams) 
 		{
@@ -277,7 +277,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			videoFilterGraph = new FilterGraph(filterConfiguration.getVideoFilter(), videoSourceFiltersMap , videoSinkFiltersMap);
 			if(!videoFilterGraph.isInitiated()) {
 				logger.error("Video filter graph can not be initiated: {}", filterConfiguration.getVideoFilter());
-				return false;
+				result.setMessage("Video filter graph can not be initiated:" + filterConfiguration.getVideoFilter());
+				return result;
 			}
 			videoFilterGraph.setCurrentPts(currentVideoPts);
 
@@ -314,7 +315,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			audioFilterGraph = new FilterGraph(filterConfiguration.getAudioFilter(), audioSourceFiltersMap , audioSinkFiltersMap);
 			if(!audioFilterGraph.isInitiated()) {
 				logger.error("Audio filter graph can not be initiated:{}", filterConfiguration.getAudioFilter());
-				return false;
+				result.setMessage("Audio filter graph can not be initiated:" + filterConfiguration.getVideoFilter());
+				return result;
 			}
 			audioFilterGraph.setCurrentPts(currentAudioPts);
 			audioFilterGraph.setListener((streamId, frame)->{
@@ -338,8 +340,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				prevAudioFilterGraph.close();
 			}
 		}
-		
-		return true;
+		result.setSuccess(true);
+		return result;
 	}
 	
 	/*
@@ -347,7 +349,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	 * For example new inputs mat be added as an update
 	 */
 	
-	public synchronized boolean createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter app) {
+	public synchronized Result createOrUpdateFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter app) {
 		if(vertx == null) {
 			vertx = app.getVertx();
 		}
@@ -459,7 +461,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		return filterConfiguration;
 	}
 
-	public boolean close(AntMediaApplicationAdapter app) {
+	public synchronized void close(AntMediaApplicationAdapter app) {
 		for(String streamId : currentInStreams) {
 			app.removeFrameListener(streamId, this);
 			app.removePacketListener(streamId, this);
@@ -467,11 +469,15 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		for (String streamId : filterConfiguration.getOutputStreams()) {
 			app.stopCustomBroadcast(streamId);
 		}
-		videoFilterGraph.close();
-		audioFilterGraph.close();
-
-		return true;
 		
+		if(videoFilterGraph != null) {
+			videoFilterGraph.close();
+			videoFilterGraph = null;
+		}
+		if (audioFilterGraph != null){
+			audioFilterGraph.close();
+			audioFilterGraph = null;
+		}		
 	}
 
 	@Override
@@ -524,6 +530,10 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 	public void setAudioFilterGraphForTest(FilterGraph filterGraph) {
 		this.audioFilterGraph = filterGraph;
+	}
+	
+	public void setFilterConfiguration(FilterConfiguration filterConfiguration) {
+		this.filterConfiguration = filterConfiguration;
 	}
 
 }
