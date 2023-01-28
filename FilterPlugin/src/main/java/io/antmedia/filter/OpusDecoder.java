@@ -13,6 +13,7 @@ import static org.bytedeco.ffmpeg.global.avutil.AVERROR_EOF;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_CH_LAYOUT_STEREO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLTP;
+import static org.bytedeco.ffmpeg.global.avutil.av_channel_layout_default;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_alloc;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_free;
 import static org.bytedeco.ffmpeg.global.avutil.av_malloc;
@@ -23,6 +24,7 @@ import org.bytedeco.ffmpeg.avcodec.AVCodec;
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
+import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVDictionary;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.javacpp.BytePointer;
@@ -38,6 +40,8 @@ public class OpusDecoder {
 	protected int[] gotFrame;
 	private boolean initialized = false;
 
+	private AVChannelLayout channelLayout;
+
 
 	public void prepare(String streamId) 
 	{
@@ -46,8 +50,11 @@ public class OpusDecoder {
 		AVCodecParameters audioCodecParameters = new AVCodecParameters();
 		
 		audioCodecParameters.sample_rate(48000);
-		audioCodecParameters.channels(2);
-		audioCodecParameters.channel_layout(AV_CH_LAYOUT_STEREO);
+		channelLayout = new AVChannelLayout();
+		av_channel_layout_default(channelLayout, 2);
+		
+		audioCodecParameters.ch_layout(channelLayout);
+		
 		audioCodecParameters.codec_id(AV_CODEC_ID_OPUS);
 		audioCodecParameters.codec_type(AVMEDIA_TYPE_AUDIO);
 		audioCodecParameters.format(AV_SAMPLE_FMT_FLTP);
