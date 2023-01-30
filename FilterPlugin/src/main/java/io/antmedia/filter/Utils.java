@@ -1,5 +1,7 @@
 package io.antmedia.filter;
 
+import static org.bytedeco.ffmpeg.global.avutil.av_strerror;
+
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -41,6 +43,12 @@ public class Utils {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	public static String getErrorDefinition(int errorCode) {
+		byte[] data = new byte[128];
+		av_strerror(errorCode, data, data.length);
+		return new String(data, 0, data.length);
 	}
 }
 

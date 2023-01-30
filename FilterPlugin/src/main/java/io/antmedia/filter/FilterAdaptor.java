@@ -26,6 +26,7 @@ import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.avutil.AVRational;
+import org.bytedeco.ffmpeg.global.avutil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -242,7 +243,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
 			
 			if(audioStreamParams.isEnabled()) {
-				String audioFilterArgs = "channel_layout="+audioStreamParams.getCodecParameters().channel_layout()+":"
+				byte[] channelLayoutData = new byte[64];
+				
+				int length = avutil.av_channel_layout_describe(audioStreamParams.getCodecParameters().ch_layout(), channelLayoutData, channelLayoutData.length);
+				  
+				String channelLayoutName = new String(channelLayoutData, 0, length);
+				
+				String audioFilterArgs = "channel_layout="+ channelLayoutName +":"
 						+ "sample_fmt="+audioStreamParams.getCodecParameters().format()+":"
 						+ "time_base="+audioStreamParams.getTimeBase().num()+"/"+audioStreamParams.getTimeBase().den()+":"
 						+ "sample_rate="+audioStreamParams.getCodecParameters().sample_rate();
