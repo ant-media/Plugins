@@ -48,6 +48,16 @@ script:
   - cd ../TensorflowPlugin
   - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
   
+
+after_script:
+  - ls
     
 after_failure:
-  - cat hs_err_pid*.log  # cat hs_err_pid file if it exists
+  - export FILE=hs_err_pid*.log 
+  # cat hs_err_pid file if it exists
+  - (if  test -f $FILE ; then
+       echo "$FILE exists.";
+       cat $FILE;
+     else
+       echo "$FILE not exists.";  
+    fi)
