@@ -51,13 +51,13 @@ script:
   - echo $?
   
     
-#after_script:
-#  - ls
-#  - export FILE=hs_err_pid*.log 
+after_script:
+  - ls
+  - export FILE=hs_err_pid*.log 
   # cat hs_err_pid file if it exists
-#  - (if  test -f $FILE ; then
-#       echo "$FILE exists.";
-#       cat $FILE;
-#     else
-#       echo "$FILE not exists.";  
-#    fi)
+  - (if  test -f $FILE ; then
+       echo "$FILE exists.";
+       cat $FILE;
+     else
+       echo "$FILE not exists.";  
+    fi)
