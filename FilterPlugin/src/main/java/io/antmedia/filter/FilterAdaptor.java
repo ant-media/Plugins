@@ -11,6 +11,7 @@ import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
 import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_NEAR_INF;
 import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_PASS_MINMAX;
 import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLTP;
+import static org.bytedeco.ffmpeg.global.avutil.av_channel_layout_default;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_clone;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_free;
 import static org.bytedeco.ffmpeg.global.avutil.av_rescale_q_rnd;
@@ -22,8 +23,10 @@ import java.util.Map;
 
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
+import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.avutil.AVRational;
+import org.bytedeco.ffmpeg.global.avutil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,7 +74,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	 * So this parameters is used to provide synchronization of video and audio frames.
 	 */
 	private long audioVideoOffset; 
-	private boolean firstVideoReceived = false;;
+	private boolean firstVideoReceived = false;
+	private AVChannelLayout channelLayout;;
 
 	public FilterAdaptor(boolean selfDecodeVideo) {
 		this.selfDecodeStreams  = selfDecodeVideo;
@@ -239,7 +243,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
 			
 			if(audioStreamParams.isEnabled()) {
-				String audioFilterArgs = "channel_layout="+audioStreamParams.getCodecParameters().channel_layout()+":"
+				byte[] channelLayoutData = new byte[64];
+				
+				int length = avutil.av_channel_layout_describe(audioStreamParams.getCodecParameters().ch_layout(), channelLayoutData, channelLayoutData.length);
+				  
+				String channelLayoutName = new String(channelLayoutData, 0, length);
+				
+				String audioFilterArgs = "channel_layout="+ channelLayoutName +":"
 						+ "sample_fmt="+audioStreamParams.getCodecParameters().format()+":"
 						+ "time_base="+audioStreamParams.getTimeBase().num()+"/"+audioStreamParams.getTimeBase().den()+":"
 						+ "sample_rate="+audioStreamParams.getCodecParameters().sample_rate();
@@ -434,9 +444,12 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		audioCodecParameters.format(AV_SAMPLE_FMT_FLTP);
 		audioCodecParameters.sample_rate(44100);
 		//audioCodecParameters.sample_rate(48000);
-		audioCodecParameters.channels(1);
-		audioCodecParameters.channel_layout(AV_CH_LAYOUT_MONO);
 		
+		channelLayout = new AVChannelLayout();
+		av_channel_layout_default(channelLayout, 1);
+		
+		audioCodecParameters.ch_layout(channelLayout);
+				
 		audioCodecParameters.codec_tag(0);
 		
 		StreamParametersInfo videoStreamParametersInfo = new StreamParametersInfo();

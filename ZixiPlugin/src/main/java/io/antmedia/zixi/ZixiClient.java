@@ -345,7 +345,7 @@ public class ZixiClient {
 			av_dict_free(optionsDictionary);
 			optionsDictionary.close();
 
-			logger.info("Try to get stream info");
+			logger.info("Try to get stream info streamId:{}", streamId);
 			int ret = avformat.avformat_find_stream_info(inputFormatContext, (AVDictionary) null);
 			if (ret < 0) 
 			{

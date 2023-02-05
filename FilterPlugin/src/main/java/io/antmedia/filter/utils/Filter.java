@@ -5,6 +5,7 @@ import static org.bytedeco.ffmpeg.global.avfilter.avfilter_graph_create_filter;
 import static org.bytedeco.ffmpeg.global.avfilter.avfilter_inout_alloc;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avfilter.AVFilter;
@@ -14,6 +15,8 @@ import org.bytedeco.ffmpeg.avfilter.AVFilterInOut;
 import org.bytedeco.javacpp.BytePointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.antmedia.filter.Utils;
 
 /* 
  * source filters that do not have an audio/video input
@@ -28,16 +31,16 @@ public class Filter {
 	private static final Logger logger = LoggerFactory.getLogger(Filter.class);
 	AVFilterContext filterContext = new AVFilterContext();
 	AVFilterInOut filterInOut;
-	AVFilter filterBuffer;
+	AVFilter avFilter;
 	
 	String label;
 	private String filterArgs;
 	private String filterName;
 	private BytePointer labelPointer;
-	public long offset = 0;
-	public boolean isFirstFrame = true;
+	protected long offset = 0;
+	protected boolean isFirstFrame = true;
 	
-	public static ArrayList<BytePointer> labels = new ArrayList<BytePointer>();
+	public static List<BytePointer> labels = new ArrayList<>();
 
 	public Filter(String filterName, String filterArgs, String label) {
 		this.filterName = filterName;
@@ -54,10 +57,13 @@ public class Filter {
 	}
 
 	public void initFilterContex(AVFilterGraph filterGraph) {
-		filterBuffer = avfilter_get_by_name(filterName);
-		int ret = avfilter_graph_create_filter(filterContext, filterBuffer, label, filterArgs, null, filterGraph);
-		if (ret < 0) {
-			logger.error("Cannot create buffer source");
+		avFilter = avfilter_get_by_name(filterName);
+		int ret = avfilter_graph_create_filter(filterContext, avFilter, label, filterArgs, null, filterGraph);
+		if (ret < 0) 
+		{
+			String message = "Cannot create filter context. Label="+ label + " filterArgs:" + filterArgs + " filterName: " + filterName + " .Error is " + Utils.getErrorDefinition(ret);
+			logger.error(message);
+			throw new IllegalStateException(message);
 		}
 	}
 

@@ -20,8 +20,10 @@ import java.util.Arrays;
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
+import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.avutil.AVRational;
+import org.bytedeco.ffmpeg.global.avutil;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -226,7 +228,10 @@ public class FilterAdaptorUnitTest {
 		AVCodecParameters codecParams = mock(AVCodecParameters.class);
 		when(codecParams.height()).thenReturn(360);
 		when(codecParams.width()).thenReturn(640);
-		when(codecParams.channel_layout()).thenReturn(2L);
+		
+		AVChannelLayout channelLayout = new AVChannelLayout();
+		avutil.av_channel_layout_default(channelLayout, 2);
+		when(codecParams.ch_layout()).thenReturn(channelLayout);
 		when(codecParams.sample_rate()).thenReturn(16000);
 
 
