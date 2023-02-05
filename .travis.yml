@@ -50,4 +50,4 @@ script:
   
     
 after_failure:
-  - sudo cat hs_err_pid*.log  # cat hs_err_pid file if it exists
+  - cat hs_err_pid*.log  # cat hs_err_pid file if it exists
