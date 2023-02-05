@@ -1,11 +1,14 @@
 package io.antmedia.test;
+import static org.bytedeco.ffmpeg.global.avfilter.avfilter_graph_alloc;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.bytedeco.ffmpeg.avfilter.AVFilterGraph;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
@@ -16,7 +19,7 @@ import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterGraph;
 
 public class FilterGraphUnitTest {
-	
+
 	@Rule
 	public TestRule watcher = new TestWatcher() {
 		protected void starting(Description description) {
@@ -31,7 +34,7 @@ public class FilterGraphUnitTest {
 			System.out.println("Finishing test: " + description.getMethodName());
 		};
 	};
-	
+
 	@Test
 	public void testFilterGraphParse() {
 		assertFalse(createFilterGraph("dummy_filter_description", 1, 1));
@@ -39,15 +42,34 @@ public class FilterGraphUnitTest {
 		assertFalse(createFilterGraph("[in0][in1]dummy[out0]", 2, 1));
 		assertTrue(createFilterGraph("[in0]split[out0][out1]", 1, 2));
 	}
-	
+
+	@Test
+	public void testFilterThrowException() {
+
+		try {
+			String audioFilterArgs = "channel_layout=2:";
+
+			Filter sinkFilter = new Filter("buffersink", audioFilterArgs, "out");
+
+			AVFilterGraph filterGraph = avfilter_graph_alloc();
+			sinkFilter.initFilterContex(filterGraph);
+			
+			fail("It should throw exception above");
+		}
+		catch(Exception e) {
+			//No need to implement. It should throw exception
+		}
+	}
+
+
 	public boolean createFilterGraph(String filterDescription, int sources, int sinks) {
 		Map<String, Filter> sourceFiltersMap = new LinkedHashMap<String, Filter>();
-		
+
 		for (int i = 0; i < sources; i++) {
 			Filter sourceFilter = new Filter("buffer", "video_size=360x360:pix_fmt=0:time_base=1/20:pixel_aspect=1/1", "in"+i); 
 			sourceFiltersMap.put("stream"+i, sourceFilter);
 		}
-		
+
 		Map<String, Filter> sinkFiltersMap = new LinkedHashMap<String, Filter>();
 		for (int i = 0; i < sinks; i++) {
 			Filter sinkFilter = new Filter("buffersink", null, "out"+i); 

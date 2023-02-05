@@ -1,6 +1,8 @@
 package io.antmedia.test;
 
 
+import static org.junit.Assert.assertTrue;
+
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -8,8 +10,11 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 
 import org.bytedeco.ffmpeg.avutil.AVFrame;
+import org.junit.Test;
 
-public class Utils {
+import io.antmedia.filter.Utils;
+
+public class UtilsTest {
 
 	public static void save(AVFrame frame, String name) {
 		String format = "jpeg";
@@ -35,5 +40,14 @@ public class Utils {
 			e.printStackTrace();
 		}
 	}
+	
+	@Test
+	public void testErrorDefinition() {
+		String errorDefinition = Utils.getErrorDefinition(-22);
+		//invalid argument error
+		assertTrue(errorDefinition.contains("Invalid"));
+	}
+	
+	
 }
 

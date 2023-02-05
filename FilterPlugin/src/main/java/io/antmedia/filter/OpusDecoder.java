@@ -150,7 +150,7 @@ public class OpusDecoder {
 		int ret = avcodec_send_packet(audioContext, packet);
 		av_packet_unref(packet);
 		if (ret < 0) {
-			logger.error("Cannot send video packet for decoding for stream: {}", streamId);
+			logger.error("Cannot send video packet for decoding for stream: {}", Utils.getErrorDefinition(ret));
 		}
 		
 		ret = avcodec_receive_frame(audioContext, samplesFrame);
@@ -158,10 +158,8 @@ public class OpusDecoder {
 		if (ret == AVERROR_EAGAIN() || ret == AVERROR_EOF()) {
 			return null;
 		}
-		else if (ret < 0 && logger.isErrorEnabled()) {
-			byte[] data = new byte[2048];
-			av_strerror(ret, data, data.length);
-			logger.error("Decode video frame error: {}" , new String(data, 0, data.length));
+		else if (ret < 0) {
+			logger.error("Decode video frame error: {}" , Utils.getErrorDefinition(ret));
 			return null;
 		}
 		
