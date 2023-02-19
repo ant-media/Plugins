@@ -443,6 +443,7 @@ public class ZixiClient {
 					}
 					else if (ret != ZIXI_ERROR_NOT_READY) {
 						//it means there is a problem 
+						logger.warn("Zixi error:{} for stream:{}", ret, streamUrl);
 						stop();
 					}
 					
