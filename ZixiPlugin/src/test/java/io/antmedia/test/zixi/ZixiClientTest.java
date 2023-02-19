@@ -38,6 +38,9 @@ public class ZixiClientTest {
     private Process push2ZixiBC;
 
     private InMemoryDataStore dtStore;
+    
+    
+    private String zixiBroadcasterHost = "127.0.0.1";
 
     /*
      * Zixi Broadcaster should be running in the local computer for these tests
@@ -136,7 +139,7 @@ public class ZixiClientTest {
     @Test
     public void testConnectAndDisconnect(){
        
-        ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://127.0.0.1:2077/stream1","stream1");
+        ZixiClient client = new ZixiClient(vertx, appAdaptor, "zixi://"+zixiBroadcasterHost+":2077/stream1","stream1");
        // assertTrue(client.init());
 
         assertTrue(client.connect());

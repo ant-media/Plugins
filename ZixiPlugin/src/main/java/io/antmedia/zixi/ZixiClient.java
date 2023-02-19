@@ -250,7 +250,7 @@ public class ZixiClient {
 
 		//zixiHandle.position(0);
 		 
-		ret = zixi_configure_error_correction(zixiHandle, latency, ZIXI_LATENCY_STATIC, fec?ZIXI_FEC_ON:ZIXI_FEC_OFF, fec_overhead, fec_block_ms, fec_content_aware, false, 0, false);
+		ret = zixi_configure_error_correction(zixiHandle, latency, ZIXI_LATENCY_STATIC, fec?ZIXI_FEC_ON:ZIXI_FEC_OFF, fec_overhead, fec_block_ms, fec_content_aware, false, 0, false, ZIXI_ARQ_ON);
 		if (ret == 0) {
 			logger.info("zixi_configure_error_correction is successfull -> {}", ret);
 		}
@@ -267,7 +267,7 @@ public class ZixiClient {
 		cbs.zixi_status_changed(statusChangedFunction);
 		cbs.zixi_bitrate_changed(bitrateChangedFunction);
 
-		ret = zixi_connect_url(zixiHandle, streamUrl, true, cbs, true, false, true);
+		ret = zixi_connect_url(zixiHandle, streamUrl, true, cbs, true, false, true, "");
 		if (ret == ZIXI_ERROR_OK)
 		{
 			logger.info("Zixi connect url is successful to url:{}", streamUrl);
