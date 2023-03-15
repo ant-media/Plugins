@@ -367,7 +367,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			audioFilterGraph = new FilterGraph(filterConfiguration.getAudioFilter(), audioSourceFiltersMap , audioSinkFiltersMap);
 			if(!audioFilterGraph.isInitiated()) {
 				logger.error("Audio filter graph can not be initiated:{}", filterConfiguration.getAudioFilter());
-				result.setMessage("Audio filter graph can not be initiated:" + filterConfiguration.getVideoFilter());
+				result.setMessage("Audio filter graph can not be initiated:" + filterConfiguration.getAudioFilter());
 				return result;
 			}
 			audioFilterGraph.setCurrentPts(currentAudioPts);

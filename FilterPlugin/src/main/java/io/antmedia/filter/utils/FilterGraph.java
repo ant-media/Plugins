@@ -94,22 +94,18 @@ public class FilterGraph {
 			prev = sink;
 		}
 		
-		if (avfilter_graph_parse(filterGraph, filterDescription, listOfInputs, listOfOutputs, null) < 0) {
-			logger.error("error avfilter_graph_parse");
+		int ret;
+		if ((ret = avfilter_graph_parse(filterGraph, filterDescription, listOfInputs, listOfOutputs, null)) < 0) {
+			logger.error("error avfilter_graph_parse: {}", Utils.getErrorDefinition(ret));
 			return;
 		}
 
-		if (avfilter_graph_config(filterGraph, null) < 0) {
-			logger.error("error avfilter_graph_config");
+		if ((ret = avfilter_graph_config(filterGraph, null)) < 0) {
+			logger.error("error avfilter_graph_config: {}", Utils.getErrorDefinition(ret));
 			return;
 		}
 		setInitiated(true);
 	}
-	
-	public int index = 0;
-
-	
-	
 	
 	public synchronized void prepareFrame(AVFrame frame) 
 	{
@@ -186,7 +182,6 @@ public class FilterGraph {
 			frame.pts(allignedPts);
 			
 			currentPts = Math.max(allignedPts, currentPts);
-			index++;
 			
 			//Utils.save(frame, "filterInputframe_before_av_buffersrc_add_frame" + index);
 			/* push the decoded frame into the filtergraph */

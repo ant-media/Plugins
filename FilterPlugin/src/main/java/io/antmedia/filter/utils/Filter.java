@@ -77,7 +77,6 @@ public class Filter {
 			bytePointer.position(0);
 			
 			ret = avutil.av_opt_set_bin(filterContext,"pix_fmts", bytePointer, Pointer.sizeof(IntPointer.class), avutil.AV_OPT_SEARCH_CHILDREN);
-			//ret = avutil.av_opt_set_pixel_fmt(filterContext, "pix_fmts", pixelFormat, avutil.AV_OPT_SEARCH_CHILDREN);
 			if (ret < 0) 
 			{
 				String message = "Cannot set pixel format: "+ pixelFormat + " FilterArgs:" + filterArgs + " filterName: " + filterName + " .Error is " + Utils.getErrorDefinition(ret);
