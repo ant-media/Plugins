@@ -65,7 +65,7 @@ public class FiltersManager {
 	
 	
 	public FilterAdaptor getFilterAdaptor(String filterId, boolean decodeStreams) {
-		return filterList.computeIfAbsent(filterId, key -> new FilterAdaptor(decodeStreams));
+		return filterList.computeIfAbsent(filterId, key -> new FilterAdaptor(filterId, decodeStreams));
 	}
 	
 	

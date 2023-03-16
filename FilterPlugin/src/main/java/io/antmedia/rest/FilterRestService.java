@@ -15,11 +15,14 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.WebApplicationContext;
 
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
@@ -33,6 +36,9 @@ public class FilterRestService {
 
 	@Context
 	protected ServletContext servletContext;
+	
+	private static final Logger logger = LoggerFactory.getLogger(FilterRestService.class);
+
 
 	@ApiOperation(value = "Creates or update the filter. If the filterId of the FilterConfiguration is already available, it just updates the configuration. Otherwise it creates the filter", notes = "", response = Result.class)
 	@POST

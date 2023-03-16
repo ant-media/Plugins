@@ -12,7 +12,10 @@ import org.bytedeco.ffmpeg.avfilter.AVFilter;
 import org.bytedeco.ffmpeg.avfilter.AVFilterContext;
 import org.bytedeco.ffmpeg.avfilter.AVFilterGraph;
 import org.bytedeco.ffmpeg.avfilter.AVFilterInOut;
+import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacpp.BytePointer;
+import org.bytedeco.javacpp.IntPointer;
+import org.bytedeco.javacpp.Pointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +43,8 @@ public class Filter {
 	protected long offset = 0;
 	protected boolean isFirstFrame = true;
 	
+	private int pixelFormat = -1;
+	
 	public static List<BytePointer> labels = new ArrayList<>();
 
 	public Filter(String filterName, String filterArgs, String label) {
@@ -65,8 +70,28 @@ public class Filter {
 			logger.error(message);
 			throw new IllegalStateException(message);
 		}
+		
+		if (pixelFormat != -1) {
+			BytePointer bytePointer = new BytePointer(Pointer.sizeof(IntPointer.class));
+			bytePointer.putInt(pixelFormat);
+			bytePointer.position(0);
+			
+			ret = avutil.av_opt_set_bin(filterContext,"pix_fmts", bytePointer, Pointer.sizeof(IntPointer.class), avutil.AV_OPT_SEARCH_CHILDREN);
+			if (ret < 0) 
+			{
+				logAndThrowException(ret);
+			}
+		}
+	}
+	
+	public void logAndThrowException(int errorCode) {
+		String message = "Cannot set pixel format: "+ pixelFormat + " FilterArgs:" + filterArgs + " filterName: " + filterName + " .Error is " + Utils.getErrorDefinition(errorCode);
+		logger.error(message);
+		throw new IllegalStateException(message);
 	}
 
+
+	
 	/*
 	 * returns
 	 * filter out for Source filter 
@@ -81,5 +106,9 @@ public class Filter {
 			filterInOut.next(null);
 		}
 		return filterInOut;
+	}
+	
+	public void setPixelFormat(int pixelFormat) {
+		this.pixelFormat = pixelFormat;
 	}
 }
