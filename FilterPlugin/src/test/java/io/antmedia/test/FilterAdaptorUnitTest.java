@@ -3,6 +3,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -32,6 +33,7 @@ import org.junit.Test;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
+import org.mockito.Mockito;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.filter.FilterAdaptor;
@@ -94,17 +96,17 @@ public class FilterAdaptorUnitTest {
 		FilterGraph filterGraph = mock(FilterGraph.class);
 
 		filterAdaptor.onVideoFrame(streamId, frame);
-		verify(filterGraph, never()).doFilter(streamId, frame, any());
+		verify(filterGraph, never()).doFilter(streamId, frame, false);
 
 		filterAdaptor.setVideoFilterGraphForTest(filterGraph);
 
 		filterAdaptor.onVideoFrame(streamId, frame);
-		verify(filterGraph, never()).doFilter(streamId, frame, any());
+		verify(filterGraph, never()).doFilter(streamId, frame, false);
 
 		when(filterGraph.isInitiated()).thenReturn(true);
 
 		filterAdaptor.onVideoFrame(streamId, frame);
-		verify(filterGraph, never()).doFilter(streamId, frame, any());
+		verify(filterGraph, never()).doFilter(streamId, frame, false);
 
 		when(filterGraph.getListener()).thenReturn(mock(IFilteredFrameListener.class));
 
@@ -114,7 +116,7 @@ public class FilterAdaptorUnitTest {
 		filterAdaptor.setVideoStreamInfo(streamId, vsi);
 		
 		filterAdaptor.onVideoFrame(streamId, frame);
-		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any(), any());
+		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any(), Mockito.anyBoolean());
 	}
 	
 	
@@ -137,22 +139,22 @@ public class FilterAdaptorUnitTest {
 		FilterGraph filterGraph = mock(FilterGraph.class);
 
 		filterAdaptor.onAudioFrame(streamId, frame);
-		verify(filterGraph, never()).doFilter(streamId, frame, any());
+		verify(filterGraph, never()).doFilter(streamId, frame, false);
 
 		filterAdaptor.setAudioFilterGraphForTest(filterGraph);
 
 		filterAdaptor.onAudioFrame(streamId, frame);
-		verify(filterGraph, never()).doFilter(streamId, frame, any());
+		verify(filterGraph, never()).doFilter(streamId, frame, false);
 
 		when(filterGraph.isInitiated()).thenReturn(true);
 
 		filterAdaptor.onAudioFrame(streamId, frame);
-		verify(filterGraph, never()).doFilter(streamId, frame, any());
+		verify(filterGraph, never()).doFilter(streamId, frame, false);
 
 		when(filterGraph.getListener()).thenReturn(mock(IFilteredFrameListener.class));
 
 		filterAdaptor.onAudioFrame(streamId, frame);
-		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any(), any());
+		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any(), anyBoolean());
 	}
 	
 	@Test
@@ -279,7 +281,7 @@ public class FilterAdaptorUnitTest {
 		AVFrame filterOutputFrame = new AVFrame();
 		filterOutputFrame.width(100);
 		filterOutputFrame.height(100);
-		when(filterGraph.doFilter(eq(streamId), any(), any())).thenReturn(filterOutputFrame);
+		when(filterGraph.doFilter(eq(streamId), any(), anyBoolean())).thenReturn(filterOutputFrame);
 
 		StreamParametersInfo streamInfo = getStreamInfo();
 		filterAdaptor.setVideoStreamInfo(streamId, streamInfo);
