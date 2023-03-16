@@ -127,6 +127,8 @@ public class FilterGraph {
 		}
 	}
 	
+	
+	
 	public synchronized AVFrame resetIfRequired(AVFrame frame) {
 		
 		if (frame.linesize(0) < 0) 
@@ -183,7 +185,6 @@ public class FilterGraph {
 			
 			currentPts = Math.max(allignedPts, currentPts);
 			
-			//Utils.save(frame, "filterInputframe_before_av_buffersrc_add_frame" + index);
 			/* push the decoded frame into the filtergraph */
 			if ((ret = av_buffersrc_add_frame_flags(sourceFiltersMap.get(streamId).filterContext, frame, AV_BUFFERSRC_FLAG_PUSH)) < 0) {
 				logger.error("Error while feeding the filtergraph {}", ret);
@@ -230,9 +231,6 @@ public class FilterGraph {
 								listener.onFilteredFrame(outStreamId, filterOutputFrame);
 							}
 						}
-						//Utils.save(filterOutputFrame, "out"+(count++));
-						//Utils.save(filterOutputFrame, "filterOutputFrame" + index);
-						
 					}
 					av_frame_unref(filterOutputFrame);
 				}
@@ -301,5 +299,9 @@ public class FilterGraph {
 
 	public void setInitiated(boolean initiated) {
 		this.initiated = initiated;
+	}
+
+	public AVFrame getPicture() {
+		return picture;
 	}
 }

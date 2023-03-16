@@ -105,7 +105,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			},b->{});
 			filterOutputFrame = audioFrame;
 		}
-		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) {
+		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) 
+		{
 			filterInputframe = audioFrame;
 			vertx.executeBlocking(a->{
 				audioFilterGraph.doFilter(streamId, filterInputframe, false);
@@ -113,20 +114,16 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 			filterOutputFrame = null; //lastpoint
 		}
-		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS)){
+		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS))
+		{
 			filterInputframe = audioFrame;
 			long orgPts = filterInputframe.pts();
 			filterOutputFrame = audioFilterGraph.doFilter(streamId, filterInputframe, true);
 			if(filterOutputFrame != null) 
 			{
-				if (filterOutputFrame.width() == 0) 
-				{
-					filterOutputFrame = null;
-					logger.warn("Sync filter output has not created frame for streamId:{} and filterId:{}", streamId, filterId);
-				}
-				else {
-					filterOutputFrame.pts(orgPts);
-				}
+				
+				filterOutputFrame.pts(orgPts);
+				
 			}
 		}
 		return filterOutputFrame;

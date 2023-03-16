@@ -79,12 +79,18 @@ public class Filter {
 			ret = avutil.av_opt_set_bin(filterContext,"pix_fmts", bytePointer, Pointer.sizeof(IntPointer.class), avutil.AV_OPT_SEARCH_CHILDREN);
 			if (ret < 0) 
 			{
-				String message = "Cannot set pixel format: "+ pixelFormat + " FilterArgs:" + filterArgs + " filterName: " + filterName + " .Error is " + Utils.getErrorDefinition(ret);
-				logger.error(message);
-				throw new IllegalStateException(message);
+				logAndThrowException(ret);
 			}
 		}
 	}
+	
+	public void logAndThrowException(int errorCode) {
+		String message = "Cannot set pixel format: "+ pixelFormat + " FilterArgs:" + filterArgs + " filterName: " + filterName + " .Error is " + Utils.getErrorDefinition(errorCode);
+		logger.error(message);
+		throw new IllegalStateException(message);
+	}
+
+
 	
 	/*
 	 * returns
@@ -100,10 +106,6 @@ public class Filter {
 			filterInOut.next(null);
 		}
 		return filterInOut;
-	}
-	
-	public AVFilterContext getFilterContext() {
-		return filterContext;
 	}
 	
 	public void setPixelFormat(int pixelFormat) {
