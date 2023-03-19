@@ -128,9 +128,11 @@ public class MCUManagerUnitTest {
 		String roomId = "room"+RandomUtils.nextInt();
 		MCUManager mcuManager = spy(new MCUManager());
 		FiltersManager filtersManager = spy(new FiltersManager());
+		IWebRTCAdaptor webRTCAdaptor = mock(IWebRTCAdaptor.class);
 		
 		doReturn(filtersManager).when(mcuManager).getFiltersManager();
-		
+		doReturn(true).when(mcuManager).isVideoEnabled(anyString());
+
 		doReturn(new Result(true)).when(filtersManager).createFilter(any(), any());
 
 		

@@ -82,7 +82,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	}
 	
 	public IWebRTCAdaptor getWebRTCAdaptor() {
-		if(webRTCAdaptor  == null) {
+		if(webRTCAdaptor == null) {
 			webRTCAdaptor = (IWebRTCAdaptor) applicationContext.getBean(IWebRTCAdaptor.BEAN_NAME);
 		}
 		return webRTCAdaptor;
@@ -120,7 +120,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 						streams.remove(streamId);
 					}
 					else {
-						boolean isVideoEnabled = getWebRTCAdaptor().getStreamInfo(streamId).get(0).getVideoCodec() != VideoCodec.NOVIDEO;
+						boolean isVideoEnabled = isVideoEnabled(streamId);
 						if(isVideoEnabled) {
 							videoEnabledIndices.add(index);	
 						}
@@ -172,6 +172,10 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		}
 
 		return result;
+	}
+
+	public boolean isVideoEnabled(String streamId) {
+		return getWebRTCAdaptor().getStreamInfo(streamId).get(0).getVideoCodec() != VideoCodec.NOVIDEO;
 	}
 
 	private void roomHasChange(String roomId) {
