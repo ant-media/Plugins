@@ -41,6 +41,7 @@ import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.ConferenceRoom;
 import io.antmedia.datastore.db.types.StreamInfo;
 import io.antmedia.filter.utils.FilterConfiguration;
+import io.antmedia.filter.utils.MCUFilterTextGenerator;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
@@ -270,6 +271,26 @@ public class MCUManagerUnitTest {
 		assertFalse(filterConf.getValue().getVideoFilter().contains("in1"));
 		assertTrue(filterConf.getValue().getVideoFilter().contains("in2"));
 
+	}
+	
+	@Test
+	public void testCreateVideoFilter() {
+		String filter = MCUFilterTextGenerator.createVideoFilter(5);
+		assertTrue(filter.contains("in0"));
+		assertTrue(filter.contains("in1"));
+		assertTrue(filter.contains("in2"));
+		assertTrue(filter.contains("in3"));
+		assertTrue(filter.contains("in4"));
+		
+		
+		List<Integer> inputIndices = new ArrayList<Integer>();
+		inputIndices.add(1);
+		inputIndices.add(3);
+		String filter2 = MCUFilterTextGenerator.createVideoFilter(inputIndices.size(), inputIndices);
+		assertTrue(!filter2.contains("in0"));
+		assertTrue(filter2.contains("in1"));
+		assertTrue(!filter2.contains("in2"));
+		assertTrue(filter2.contains("in3"));
 	}
 	
 }
