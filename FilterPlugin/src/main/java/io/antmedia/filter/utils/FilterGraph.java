@@ -164,8 +164,9 @@ public class FilterGraph {
 				logger.warn("Video filter graph is not initated yet for stream:{}", streamId);
 				return null;
 			}
-			
+						
 			int ret;
+			
 			
 			Filter sourceFilter = sourceFiltersMap.get(streamId);
 			// TODO this check is for such a case:
@@ -180,7 +181,7 @@ public class FilterGraph {
 				sourceFilter.offset = currentPts - frame.pts();
 				sourceFilter.isFirstFrame = false;
 			}
-			long allignedPts = frame.pts()+sourceFilter.offset;
+			long allignedPts = frame.pts() + sourceFilter.offset;
 			frame.pts(allignedPts);
 			
 			currentPts = Math.max(allignedPts, currentPts);

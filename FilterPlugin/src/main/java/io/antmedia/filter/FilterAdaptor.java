@@ -6,7 +6,6 @@ import static org.bytedeco.ffmpeg.global.avcodec.av_packet_ref;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_unref;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
-import static org.bytedeco.ffmpeg.global.avutil.AV_CH_LAYOUT_MONO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
 import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_NEAR_INF;
 import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_PASS_MINMAX;
@@ -27,8 +26,6 @@ import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.ffmpeg.global.avutil;
-import org.bytedeco.javacpp.BytePointer;
-import org.bytedeco.javacpp.IntPointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -166,13 +163,14 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) 
 		{
-			filterInputframe = videoFrame;
+			filterInputframe = av_frame_clone(videoFrame);
 			rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
 
 			filterOutputFrame = null; //lastpoint
 
 			vertx.executeBlocking(a->{
 				videoFilterGraph.doFilter(streamId, filterInputframe, false);
+				av_frame_free(filterInputframe);
 			}, b->{});
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS))
@@ -341,6 +339,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 						if(!firstVideoReceived) {
 							firstVideoReceived = true;
 						}
+						//rescale the pts if the filter timebase is different
+						frame.pts(av_rescale_q_rnd(frame.pts(), videoSinkFiltersMap.get(streamId).getFilterContext().inputs(0).time_base(), Utils.TIME_BASE_FOR_MS, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX));
 						//framelistener is a custombroadcast
 						frameListener.onVideoFrame(streamId, frame);
 					}
@@ -431,7 +431,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 
 
-		// check the inseted or removed streams to the filter as an update
+		// check the inserted or removed streams to the filter as an update
 		List<String> inserted = filterConfiguration.getInputStreams();
 		List<String> removed = new ArrayList<>();
 		for (String streamId : currentInStreams) {
@@ -450,6 +450,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			// deregister plugin for the streams removed from filter
 			for (String streamId : removed) {
 				app.removeFrameListener(streamId, this);
+				app.removePacketListener(streamId, this);
 				currentInStreams.remove(streamId);
 				logger.info("StreamId:{} is being removed from the filter:{}", streamId, filterId);
 			}

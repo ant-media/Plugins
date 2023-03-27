@@ -3,18 +3,13 @@ package io.antmedia.test;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H264;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_unref;
 import static org.bytedeco.ffmpeg.global.avformat.av_read_frame;
+import static org.bytedeco.ffmpeg.global.avformat.avformat_close_input;
 import static org.bytedeco.ffmpeg.global.avformat.avformat_find_stream_info;
 import static org.bytedeco.ffmpeg.global.avformat.avformat_open_input;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
-import static org.bytedeco.ffmpeg.global.avutil.av_frame_alloc;
 import static org.bytedeco.ffmpeg.global.avutil.av_image_fill_arrays;
-import static org.bytedeco.ffmpeg.global.avutil.av_image_get_buffer_size;
 import static org.bytedeco.ffmpeg.global.avutil.av_malloc;
-import static org.bytedeco.ffmpeg.global.swscale.SWS_ACCURATE_RND;
-import static org.bytedeco.ffmpeg.global.swscale.SWS_BILINEAR;
-import static org.bytedeco.ffmpeg.global.swscale.sws_getCachedContext;
-import static org.bytedeco.ffmpeg.global.swscale.sws_scale;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -40,9 +35,7 @@ import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.ffmpeg.global.avformat;
 import org.bytedeco.ffmpeg.global.avutil;
-import org.bytedeco.ffmpeg.swscale.SwsContext;
 import org.bytedeco.javacpp.BytePointer;
-import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacpp.PointerPointer;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -167,24 +160,25 @@ public class FilterManagerUnitTest {
 	public void testVflip() {
 		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"[in0]vflip[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
 		String rawFile = "src/test/resources/raw_frame_640_480_yuv420.yuv";
-		
 
-		testBugVideoFilterNotWorking(filterString, rawFile, 640, 480);
+
+		testBugVideoFilterNotWorking(filterString, rawFile, 640, 480, 500);
 	}
-	
+
 	@Test
 	public void testVirtualBackground() 
 	{
 		//movie=src/test/resources/background.jpeg[background];[background][in0]chromakey=0x6de61b:0.1:0.2[transparent];
 		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png[background];[in0]chromakey=0x6de61b:0.1:0.2[transparent];[background][transparent]overlay[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
 		String rawFile = "src/test/resources/green_screen_1280x720.yuv";
-		
-		testBugVideoFilterNotWorking(filterString, rawFile, 1280, 720);
+
+		testBugVideoFilterNotWorking(filterString, rawFile, 1280, 720, 100);
 	}
-	
-	
-	
-	public void testBugVideoFilterNotWorking(String filterString, String rawFile, int sourceWidth, int sourceHeight) {
+
+
+
+
+	public void testBugVideoFilterNotWorking(String filterString, String rawFile, int sourceWidth, int sourceHeight, int pts) {
 
 
 		avutil.av_log_set_level(avutil.AV_LOG_TRACE);
@@ -265,6 +259,7 @@ public class FilterManagerUnitTest {
 
 			rawVideoBuffer.position(0);
 			rawVideoBuffer.put(frameData, 0, frameData.length);
+			rawVideoFrame.pts(pts);
 			Utils.save(rawVideoFrame, "before_process_"+rawVideoFrame.width()+"x"+rawVideoFrame.height());
 
 
@@ -275,6 +270,8 @@ public class FilterManagerUnitTest {
 
 			Utils.save(onVideoFrame, "after_process_"+ onVideoFrame.width() + "x" + onVideoFrame.height());
 
+			assertEquals(pts, onVideoFrame.pts());
+
 			filterAdaptor.close(app);
 
 		} catch (IOException e) {
@@ -283,8 +280,185 @@ public class FilterManagerUnitTest {
 		}
 	}
 
-	boolean videoFrameReceived = false;
+	@Test
+	public void testFixVideoPTSInFilter() {
+		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"test\"],\"videoFilter\":\"movie=src/test/resources/background.png[background];[in0]chromakey=0x6de61b:0.1:0.2[transparent];[background][transparent]overlay[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"asynchronous\"}";
+		String rawFile = "src/test/resources/green_screen_1280x720.yuv";
+
+		int sourceWidth = 1280;
+		int sourceHeight = 720;
+		
+		testFixVideoPtsInFilter(filterString, rawFile, sourceWidth, sourceHeight);
+	}
 	
+	@Test
+	public void testFixVideoPTSInLastPointFilter() {
+		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"test\"],\"videoFilter\":\"movie=src/test/resources/background.png[background];[in0]chromakey=0x6de61b:0.1:0.2[transparent];[background][transparent]overlay[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"lastpoint\"}";
+		String rawFile = "src/test/resources/green_screen_1280x720.yuv";
+
+		int sourceWidth = 1280;
+		int sourceHeight = 720;
+		
+		testFixVideoPtsInFilter(filterString, rawFile, sourceWidth, sourceHeight);
+	}
+	
+
+	long pts = -1;
+	int callCount = 0;
+
+	
+	public void testFixVideoPtsInFilter(String filterString, String rawFile, int sourceWidth, int sourceHeight) {
+		
+
+
+		FiltersManager filtersManager = spy(new FiltersManager());
+
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+
+		Mockito.when(app.getVertx()).thenReturn(Vertx.vertx());
+
+		Gson gson = new Gson();
+		FilterConfiguration filterConfiguration = gson.fromJson(filterString, FilterConfiguration.class);
+		assertNull(filterConfiguration.getFilterId());
+
+		AppSettings appSettings = new AppSettings();
+		appSettings.setEncoderSettings(Arrays.asList(new EncoderSettings(480, 500000, 64000, false)));
+
+		when(app.getAppSettings()).thenReturn(appSettings);
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore);
+
+		Broadcast broadcast = new Broadcast();
+		try {
+			broadcast.setStreamId("stream1");
+		} catch (Exception e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+		}
+		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
+		dataStore.save(broadcast);
+
+		callCount = 0;
+		IFrameListener frameListener = new IFrameListener() {
+
+			@Override
+			public void writeTrailer(String streamId) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void start() {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public AVFrame onVideoFrame(String streamId, AVFrame videoFrame) {
+
+				Utils.save(videoFrame, streamId);
+				pts = videoFrame.pts();
+				callCount++;
+				return null;
+			}
+
+			@Override
+			public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
+				// TODO Auto-generated method stub
+				return null;
+			}
+		};
+
+		when(app.createCustomBroadcast(Mockito.anyString())).thenReturn(frameListener);
+
+		FilterAdaptor filterAdaptor = new FilterAdaptor("filter1", false);
+		AVCodecParameters videoCodecParameters = new AVCodecParameters();
+		videoCodecParameters.width(sourceWidth);
+		videoCodecParameters.height(sourceHeight);
+
+		videoCodecParameters.codec_id(AV_CODEC_ID_H264);
+		videoCodecParameters.codec_type(AVMEDIA_TYPE_VIDEO);		
+		videoCodecParameters.format(AV_PIX_FMT_YUV420P);
+		videoCodecParameters.codec_tag(0);
+
+		StreamParametersInfo streamParams = new StreamParametersInfo();
+		streamParams.setEnabled(true);
+		streamParams.setCodecParameters(videoCodecParameters);
+		streamParams.setTimeBase(Utils.TIME_BASE_FOR_MS);
+
+
+		filterAdaptor.setVideoStreamInfo("stream1", streamParams);
+
+		filterAdaptor.setAudioStreamInfo("stream1", new StreamParametersInfo());
+
+		Mockito.when(filtersManager.getFilterAdaptor(Mockito.anyString(), Mockito.anyBoolean())).thenReturn(filterAdaptor);
+
+		Result result = filtersManager.createFilter(filterConfiguration, app);
+		assertTrue(result.isSuccess());
+
+		AVFrame rawVideoFrame = new AVFrame();
+
+		rawVideoFrame.width(sourceWidth);
+		rawVideoFrame.height(sourceHeight);
+		rawVideoFrame.format(AV_PIX_FMT_YUV420P);
+
+
+		rawVideoFrame.pts(0);
+
+		int inputPts = 1000;
+		try {
+			//byte[] frameData = Files.readAllBytes(Path.of("src/test/resources/green_screen_yuv420p_2554_1428.yuv"));
+
+			byte[] frameData = Files.readAllBytes(Path.of(rawFile));
+
+			BytePointer rawVideoBuffer = new BytePointer(av_malloc(frameData.length));
+
+			av_image_fill_arrays(new PointerPointer(rawVideoFrame), rawVideoFrame.linesize(), rawVideoBuffer, AV_PIX_FMT_YUV420P, rawVideoFrame.width(), rawVideoFrame.height(), 1);
+			rawVideoFrame.linesize(0, sourceWidth);
+			rawVideoFrame.linesize(1, sourceWidth/2);
+			rawVideoFrame.linesize(2, sourceWidth/2);
+
+			rawVideoBuffer.position(0);
+			rawVideoBuffer.put(frameData, 0, frameData.length);
+			Utils.save(rawVideoFrame, "before_process_"+rawVideoFrame.width()+"x"+rawVideoFrame.height());
+
+
+			filterAdaptor.onVideoFrame("stream1", rawVideoFrame);
+
+			//give two frames because first frame pts is reset
+
+			rawVideoFrame.pts(inputPts);
+			filterAdaptor.onVideoFrame("stream1", rawVideoFrame);
+
+
+			Awaitility.await().atMost(5, TimeUnit.SECONDS).until(() -> callCount == 2);
+			//it was failing before the fix
+			assertEquals(inputPts, pts);
+
+
+			filterAdaptor.close(app);
+
+		} catch (IOException e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+		}
+
+	}
+
+	boolean videoFrameReceived = false;
+
 	/**
 	 * This test crashes the JVM before the fix
 	 */
@@ -303,6 +477,7 @@ public class FilterManagerUnitTest {
 		int height = 360;
 		String filepath = "src/test/resources/test_video_360p_video_only.ts";
 
+		videoFrameReceived = false;
 		IFrameListener frameListener = new IFrameListener() {
 
 			@Override
@@ -434,5 +609,7 @@ public class FilterManagerUnitTest {
 
 		Awaitility.await().atMost(5, TimeUnit.SECONDS).until(() -> videoFrameReceived);
 	}
+
+
 
 }

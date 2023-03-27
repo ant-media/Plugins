@@ -111,4 +111,8 @@ public class Filter {
 	public void setPixelFormat(int pixelFormat) {
 		this.pixelFormat = pixelFormat;
 	}
+	
+	public AVFilterContext getFilterContext() {
+		return filterContext;
+	}
 }
