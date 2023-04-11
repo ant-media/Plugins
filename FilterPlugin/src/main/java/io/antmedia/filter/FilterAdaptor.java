@@ -333,18 +333,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			 * Set the listener of video filter graph. FilterGrapah calls the listener for the filtered output frame
 			 */
 			videoFilterGraph.setListener((streamId, frame)->{
-				if(frame != null && currentOutStreams.containsKey(streamId)) {
-					IFrameListener frameListener = currentOutStreams.get(streamId);
-					if(frameListener != null) { 
-						if(!firstVideoReceived) {
-							firstVideoReceived = true;
-						}
-						//rescale the pts if the filter timebase is different
-						frame.pts(av_rescale_q_rnd(frame.pts(), videoSinkFiltersMap.get(streamId).getFilterContext().inputs(0).time_base(), Utils.TIME_BASE_FOR_MS, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX));
-						//framelistener is a custombroadcast
-						frameListener.onVideoFrame(streamId, frame);
-					}
-				}
+				onFilteredVideoFrame(videoSinkFiltersMap, streamId, frame);
 			});
 
 			if(prevVideoFilterGraph != null) {
@@ -368,22 +357,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				return result;
 			}
 			audioFilterGraph.setCurrentPts(currentAudioPts);
-			audioFilterGraph.setListener((streamId, frame)->{
-				if(frame != null && currentOutStreams.containsKey(streamId)) {
-					IFrameListener frameListener = currentOutStreams.get(streamId);
-					if(frameListener != null) { 
-						if(!firstVideoReceived) {
-							audioVideoOffset = frame.pts();
-						}
-						else {
-							frame.pts(frame.pts()-audioVideoOffset);						
-
-							//framelistener is a custombroadcast
-							frameListener.onAudioFrame(streamId, frame);
-						}
-					}
-				}
-			});
+			audioFilterGraph.setListener(this::onFilteredAudioFrame);
 
 			if(prevAudioFilterGraph != null) {
 				prevAudioFilterGraph.close();
@@ -392,6 +366,42 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		result.setSuccess(true);
 		result.setDataId(filterId);
 		return result;
+	}
+
+	public void onFilteredVideoFrame(Map<String, Filter> videoSinkFiltersMap, String streamId, AVFrame frame) {
+		if(frame != null && currentOutStreams.containsKey(streamId)) {
+			IFrameListener frameListener = currentOutStreams.get(streamId);
+			if(frameListener != null) {
+				if(!firstVideoReceived) {
+					firstVideoReceived = true;
+				}
+				//rescale the pts if the filter timebase is different
+				frame.pts(av_rescale_q_rnd(frame.pts(), getFilterTimebase(videoSinkFiltersMap, streamId), Utils.TIME_BASE_FOR_MS, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX));
+				//framelistener is a custombroadcast
+				frameListener.onVideoFrame(streamId, frame);
+			}
+		}
+	}
+
+	public AVRational getFilterTimebase(Map<String, Filter> videoSinkFiltersMap, String streamId) {
+		return videoSinkFiltersMap.get(streamId).getFilterContext().inputs(0).time_base();
+	}
+
+	public void onFilteredAudioFrame(String streamId, AVFrame frame) {
+		if(frame != null && currentOutStreams.containsKey(streamId)) {
+			IFrameListener frameListener = currentOutStreams.get(streamId);
+			if(frameListener != null) {
+				if(filterConfiguration.isVideoEnabled() && !firstVideoReceived) {
+					audioVideoOffset = frame.pts();
+				}
+				else {
+					frame.pts(frame.pts()-audioVideoOffset);
+
+					//framelistener is a custombroadcast
+					frameListener.onAudioFrame(streamId, frame);
+				}
+			}
+		}
 	}
 
 	/*
@@ -604,4 +614,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		this.filterConfiguration = filterConfiguration;
 	}
 
+	public Map<String, IFrameListener> getCurrentOutStreams() {
+		return currentOutStreams;
+	}
 }
