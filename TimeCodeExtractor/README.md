@@ -52,6 +52,6 @@ Timecodes can b reachabe through REST API and WebRTC Data channel.
   ```
 - Run the `redeploy.sh`
   ```
-  ./redeploy.s
+  ./redeploy.sh
   ```
 - `TimeCodeExractor-{VERSION}.jar` should be under `target` directory
