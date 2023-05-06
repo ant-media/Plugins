@@ -70,9 +70,18 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		}
 		drivers.put(streamId, driver);
 		driver.get(url);
-		//TODO:
-		//Why do we need to wait here? Waiting is not generally acceptable approach
-		TimeUnit.SECONDS.sleep(5);
+		int timeout = 20;
+		// wait until page is loaded
+		while (driver.getTitle() == null || driver.getTitle().isEmpty()) {
+			TimeUnit.SECONDS.sleep(1);
+
+			// if page is not loaded in 20 seconds, return error to prevent infinite loop
+			timeout--;
+			if (timeout == 0) {
+				logger.error("Timeout while loading the page");
+				return new Result(false, streamId, "Timeout while loading the page");
+			}
+		}
 		customModification(driver);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
 		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s' }, '*')", streamId, websocketUrl));
