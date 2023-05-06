@@ -54,7 +54,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 
 	public Result startWebpageRecording(String streamId, String websocketUrl, String url) throws URISyntaxException, InterruptedException {
 		if (streamId == null || streamId.isEmpty()) {
-			//generate a tream
+			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
 		}
 		
@@ -108,13 +108,14 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		ChromeOptions options = new ChromeOptions();
 		List<String> args = new ArrayList<>();
 
+		args.add("--remote-allow-origins=*");
 		args.add("--enable-usermedia-screen-capturing");
 		args.add("--allow-http-screen-capture");
 		args.add("--disable-infobars");
 		args.add("--enable-tab-capture");
 		args.add("--no-sandbox");
-		args.add(String.format("--whitelisted-extension-id=%s", EXTENSION_ID));
-		args.add("--headless=chrome");
+		args.add(String.format("--allowlisted-extension-id=%s", EXTENSION_ID));
+		args.add("--headless=new");
 		try {
 			options.addExtensions(getExtensionFileFromResource());
 		} catch (IOException e) {
