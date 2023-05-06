@@ -15,11 +15,14 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.WebApplicationContext;
 
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
@@ -33,6 +36,8 @@ public class FilterRestService {
 
 	@Context
 	protected ServletContext servletContext;
+	
+	private static final Logger logger = LoggerFactory.getLogger(FilterRestService.class);
 
 
 	@ApiOperation(value = "Creates or update the filter. If the filterId of the FilterConfiguration is already available, it just updates the configuration. Otherwise it creates the filter", notes = "", response = Result.class)
@@ -42,11 +47,7 @@ public class FilterRestService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result create(@ApiParam(value="Filter object with the updates") FilterConfiguration filterConfiguration) 
 	{
-		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
-		AntMediaApplicationAdapter adaptor = (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
-		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
-		
-		return new Result(filtersManager.createFilter(filterConfiguration, adaptor));
+		return getFiltersManager().createFilter(filterConfiguration, getAppAdaptor());
 	}
 	
 	@ApiOperation(value = "Returns the list of filters effective in the application", notes = "", response = Result.class)
@@ -58,14 +59,11 @@ public class FilterRestService {
 			@ApiParam(value = "This is the offset of the list, it is useful for pagination. If you want to use sort mechanism, we recommend using Mongo DB.", required = true) @PathParam("offset") int offset,
 			@ApiParam(value = "Number of items that will be fetched. If there is not enough item in the datastore, returned list size may less then this value", required = true) @PathParam("size") int size) {
 
-		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
-		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
-		
 		
 		/* FIXME:
 		 * implement size, sort if necessary
 		 */
-		return filtersManager.getfilters();
+		return getFiltersManager().getfilters();
 	}
 
 	@ApiOperation(value = "Delete the filter according to the filterId", notes = "", response = Result.class)
@@ -74,11 +72,7 @@ public class FilterRestService {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result delete(@ApiParam(value="Filter id for deleting filter") @PathParam("id") String id) {
-		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
-		AntMediaApplicationAdapter adaptor = (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
-		FiltersManager filtersManager = (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
-		
-		return new Result(filtersManager.delete(id, adaptor));
+		return new Result(getFiltersManager().delete(id, getAppAdaptor()));
 	}
 	
 	@ApiOperation(value = "Creates MCU filter for non MCU room")
@@ -148,10 +142,22 @@ public class FilterRestService {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
 		MCUManager mcuManager = (MCUManager) appCtx.getBean(MCUManager.BEAN_NAME);
 		
-		
 		return new Result(mcuManager.customFilterRemoved(filterId));
 	}
 	
 	
+	private FiltersManager getFiltersManager() {
+		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
+		return (FiltersManager) appCtx.getBean(FiltersManager.BEAN_NAME);
+	}
+	
+	private AntMediaApplicationAdapter getAppAdaptor() {
+		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
+		return (AntMediaApplicationAdapter) appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
+	}
+	
+	public void setServletContext(ServletContext servletContext) {
+		this.servletContext = servletContext;
+	}
 
 }

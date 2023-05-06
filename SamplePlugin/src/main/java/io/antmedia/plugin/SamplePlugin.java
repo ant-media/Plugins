@@ -79,30 +79,22 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 
 	@Override
 	public void streamStarted(String streamId) {
-		System.out.println("***************");
-		System.out.println("Stream Started:"+streamId);
-		System.out.println("***************");
+		logger.info("*************** Stream Started: {} ***************", streamId);
 	}
 
 	@Override
 	public void streamFinished(String streamId) {
-		System.out.println("***************");
-		System.out.println("Stream Finished:"+streamId);
-		System.out.println("***************");
+		logger.info("*************** Stream Finished: {} ***************", streamId);
 	}
 
 	@Override
 	public void joinedTheRoom(String roomId, String streamId) {
-		// TODO Auto-generated method stub
-		
+		logger.info("*************** Stream Id:{} joined the room:{} ***************", streamId, roomId);
 	}
 
 	@Override
 	public void leftTheRoom(String roomId, String streamId) {
-		// TODO Auto-generated method stub
-		
+		logger.info("*************** Stream Id:{} left the room:{} ***************", streamId, roomId);	
 	}
-
-	
 
 }

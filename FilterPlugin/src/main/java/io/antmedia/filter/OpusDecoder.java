@@ -1,43 +1,35 @@
 package io.antmedia.filter;
 
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_OPUS;
-import static org.bytedeco.ffmpeg.global.avcodec.AV_PKT_FLAG_KEY;
-import static org.bytedeco.ffmpeg.global.avcodec.av_init_packet;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_unref;
 import static org.bytedeco.ffmpeg.global.avcodec.avcodec_alloc_context3;
-import static org.bytedeco.ffmpeg.global.avcodec.avcodec_decode_audio4;
 import static org.bytedeco.ffmpeg.global.avcodec.avcodec_find_decoder;
 import static org.bytedeco.ffmpeg.global.avcodec.avcodec_free_context;
 import static org.bytedeco.ffmpeg.global.avcodec.avcodec_open2;
 import static org.bytedeco.ffmpeg.global.avcodec.avcodec_parameters_to_context;
+import static org.bytedeco.ffmpeg.global.avcodec.avcodec_receive_frame;
+import static org.bytedeco.ffmpeg.global.avcodec.avcodec_send_packet;
+import static org.bytedeco.ffmpeg.global.avutil.AVERROR_EOF;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
-import static org.bytedeco.ffmpeg.global.avutil.AV_CH_LAYOUT_MONO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_CH_LAYOUT_STEREO;
-import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_NEAR_INF;
-import static org.bytedeco.ffmpeg.global.avutil.AV_ROUND_PASS_MINMAX;
-import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_S16;
 import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLTP;
+import static org.bytedeco.ffmpeg.global.avutil.av_channel_layout_default;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_alloc;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_free;
 import static org.bytedeco.ffmpeg.global.avutil.av_malloc;
-import static org.bytedeco.ffmpeg.global.avutil.av_rescale_q;
-import static org.bytedeco.ffmpeg.global.avutil.av_rescale_q_rnd;
-
-import java.nio.ByteBuffer;
+import static org.bytedeco.ffmpeg.global.avutil.av_strerror;
+import static org.bytedeco.ffmpeg.presets.avutil.AVERROR_EAGAIN;
 
 import org.bytedeco.ffmpeg.avcodec.AVCodec;
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
+import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVDictionary;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
-import org.bytedeco.ffmpeg.avutil.AVRational;
-import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.javacpp.BytePointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import io.antmedia.muxer.MuxAdaptor;
 
 public class OpusDecoder {
 	private Logger logger = LoggerFactory.getLogger(OpusDecoder.class);
@@ -48,6 +40,8 @@ public class OpusDecoder {
 	protected int[] gotFrame;
 	private boolean initialized = false;
 
+	private AVChannelLayout channelLayout;
+
 
 	public void prepare(String streamId) 
 	{
@@ -56,8 +50,11 @@ public class OpusDecoder {
 		AVCodecParameters audioCodecParameters = new AVCodecParameters();
 		
 		audioCodecParameters.sample_rate(48000);
-		audioCodecParameters.channels(2);
-		audioCodecParameters.channel_layout(AV_CH_LAYOUT_STEREO);
+		channelLayout = new AVChannelLayout();
+		av_channel_layout_default(channelLayout, 2);
+		
+		audioCodecParameters.ch_layout(channelLayout);
+		
 		audioCodecParameters.codec_id(AV_CODEC_ID_OPUS);
 		audioCodecParameters.codec_type(AVMEDIA_TYPE_AUDIO);
 		audioCodecParameters.format(AV_SAMPLE_FMT_FLTP);
@@ -149,13 +146,24 @@ public class OpusDecoder {
 
 
 	public AVFrame decode(AVPacket packet) {
-		int len = avcodec_decode_audio4(audioContext, samplesFrame, gotFrame, packet);
-		if (len >= 0 && gotFrame[0] != 0) {
 		
-			samplesFrame.pts(samplesFrame.best_effort_timestamp());
-			av_packet_unref(packet);
-			return samplesFrame;
+		int ret = avcodec_send_packet(audioContext, packet);
+		av_packet_unref(packet);
+		if (ret < 0) {
+			logger.error("Cannot send video packet for decoding for stream: {}", Utils.getErrorDefinition(ret));
 		}
-		return null;
+		
+		ret = avcodec_receive_frame(audioContext, samplesFrame);
+
+		if (ret == AVERROR_EAGAIN() || ret == AVERROR_EOF()) {
+			return null;
+		}
+		else if (ret < 0) {
+			logger.error("Decode video frame error: {}" , Utils.getErrorDefinition(ret));
+			return null;
+		}
+		
+		samplesFrame.pts(samplesFrame.best_effort_timestamp());
+		return samplesFrame;
 	}
 }

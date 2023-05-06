@@ -122,7 +122,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 					filterConfiguration.setAudioEnabled(true);
 					filterConfiguration.setType(pluginType);
 	
-					result = getFiltersManager().createFilter(filterConfiguration, getApplication());
+					result = getFiltersManager().createFilter(filterConfiguration, getApplication()).isSuccess();
 				}
 				else 
 				{
