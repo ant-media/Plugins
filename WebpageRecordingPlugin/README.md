@@ -14,15 +14,27 @@ You can record the broadcast if needed. But you need to start the recording manu
 
 ## How to Install 
 
-1. Download the pre-built `webpage-recording-plugin.jar` file
+### Install Google Chrome 112
+
+1. Webpage Recording Plugin uses Google Chrome 112 to broadcast the web page. So you need to install Google Chrome 112 to your server. You can install it on Ubuntu with the following commands.
+  ```
+  wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_112.0.5615.165-1_amd64.deb
+  ```
+  ```
+  sudo apt install -y /tmp/chrome.deb
+  ```
+  ```
+  rm /tmp/chrome.deb
+  ```
+2. Download the pre-built `webpage-recording-plugin.jar` file
   ```
   wget https://github.com/ant-media/Plugins/raw/master/WebpageRecordingPlugin/build/webpage-recording-plugin.jar
   ```
-2. Copy the `webpage-recording-plugin.jar` file to `plugins` directory under `/usr/local/antmedia`
+3. Copy the `webpage-recording-plugin.jar` file to `plugins` directory under `/usr/local/antmedia`
   ```
   sudo cp webpage-recording-plugin.jar /usr/local/antmedia/plugins
   ```
-3. Restart the service
+4. Restart the service
   ```
   sudo service antmedia restart
   ```
@@ -49,42 +61,56 @@ Call the REST Method below to let Ant Media Server with the stream id you specif
    
 ## How to Build from Source Code
 
+- Webpage Recording Plugin uses Google Chrome 112 to broadcast the web page. So you need to install Google Chrome 112 to your server. You can install it on Ubuntu with the following commands.
+
+  ```
+  wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_112.0.5615.165-1_amd64.deb
+  ```
+
+  ```
+  sudo apt install -y /tmp/chrome.deb
+  ```
+
+  ```
+  rm /tmp/chrome.deb
+  ```
+
 - Clone the repository
 
-    ```
-    git clone https://github.com/ant-media/Plugins
-    ```
+  ```
+  git clone https://github.com/ant-media/Plugins
+  ```
 
 - Go to the Webpage Recording Plugin directory
 
-    ```
-    cd Plugins/WebpageRecordingPlugin
-    ```
+  ```
+  cd Plugins/WebpageRecordingPlugin
+  ```
 
 - Modify the redeploy.sh file with your Ant Media Server installation path
 
-    ```
-    Change AMS_DIR=/usr/local/antmedia/
-    ```
+  ```
+  Change AMS_DIR=/usr/local/antmedia/
+  ```
 
 - Build & install the plugin
 
-    ```
-    chmode +x redeploy.sh
-    ./redeploy.sh
-    ```
+  ```
+  chmode +x redeploy.sh
+  ./redeploy.sh
+  ```
 
 - Restart Ant Media Server
 
-    ```
-    sudo service antmedia restart
-    ```
+  ```
+  sudo service antmedia restart
+  ```
 
 ### How to Customize
 You can modify the code and build the plugin by yourself to make it work with your own needs. For example, you can play the video or login to the web page with your own credentials before starting the broadcast.
 Go to the WebpageRecordingPlugin and modify the customModification method as you wish. Then build the plugin with the following command.
 
-   ```
-   chmode +x redeploy.sh
-   ./redeploy.sh
-   ```
+  ```
+  chmode +x redeploy.sh
+  ./redeploy.sh
+  ```
