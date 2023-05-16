@@ -103,7 +103,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 	public Result stopWebpageRecording(String streamId) {
 		if (!drivers.containsKey(streamId)) {
 			logger.warn("Driver does not exist for stream id: {}", streamId);
-			return new Result(false, "Driver does not exist for stream id: " + streamId);
+			return new Result(false, "Driver does not exist for stream id: " + streamId, 404);
 		}
 
 		WebDriver driver = drivers.get(streamId);

@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.context.WebApplicationContext;
 
 @Component
-@Path("/webpage-recording")
+@Path("/v1/webpage-recording")
 public class RestService {
 
 	@Context
