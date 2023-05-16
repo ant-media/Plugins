@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.context.WebApplicationContext;
 
 @Component
-@Path("/v2/webpage-recording")
+@Path("/webpage-recording")
 public class RestService {
 
 	@Context
@@ -34,10 +34,10 @@ public class RestService {
 	 * @BodyParam url: url of the webpage to be recorded and it's mandatory
 	 */
 	@POST
-	@Path("/start/{id}")
+	@Path("/start")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result startWebpageRecording(@RequestBody Endpoint request, @Context UriInfo uriInfo, @PathParam("id") String id) {
+	public Result startWebpageRecording(@RequestBody Endpoint request, @Context UriInfo uriInfo, @QueryParam("streamId") String streamId) {
 		if (uriInfo == null) {
 			return new Result(false, "Bad request");
 		}
@@ -48,7 +48,7 @@ public class RestService {
 
 		WebpageRecordingPlugin app = getPluginApp();
 
-		return app.startWebpageRecording(id, websocketUrl, request.getUrl());
+		return app.startWebpageRecording(streamId, websocketUrl, request.getUrl());
 	}
 
 	/*
