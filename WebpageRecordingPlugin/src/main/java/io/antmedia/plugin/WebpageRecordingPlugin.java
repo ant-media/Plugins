@@ -3,7 +3,6 @@ package io.antmedia.plugin;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +26,6 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
-import io.vertx.core.Vertx;
 
 @Component(value="plugin.webpageRecordingPlugin")
 public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamListener{
@@ -52,7 +50,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		app.addStreamListener(this);
 	}
 
-	public Result startWebpageRecording(String streamId, String websocketUrl, String url) throws URISyntaxException, InterruptedException {
+	public Result startWebpageRecording(String streamId, String websocketUrl, String url) {
 		if (streamId == null || streamId.isEmpty()) {
 			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
@@ -73,7 +71,11 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		int timeout = 20;
 		// wait until page is loaded
 		while (driver.getTitle() == null || driver.getTitle().isEmpty()) {
-			TimeUnit.SECONDS.sleep(1);
+			try {
+				TimeUnit.SECONDS.sleep(1);
+			} catch (InterruptedException e) {
+				logger.error(e.getMessage());
+			}
 
 			// if page is not loaded in 20 seconds, return error to prevent infinite loop
 			timeout--;
@@ -98,7 +100,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		 */
 	}
 
-	public Result stopWebpageRecording(String streamId) throws InterruptedException {
+	public Result stopWebpageRecording(String streamId) {
 		if (!drivers.containsKey(streamId)) {
 			logger.warn("Driver does not exist for stream id: {}", streamId);
 			return new Result(false, "Driver does not exist for stream id: " + streamId);
@@ -112,7 +114,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		return new Result(true, "Webpage recording stopped");
 	}
 
-	public WebDriver createDriver() throws URISyntaxException {
+	public WebDriver createDriver() {
 		WebDriverManager.chromedriver().setup();
 		ChromeOptions options = new ChromeOptions();
 		List<String> args = new ArrayList<>();
@@ -136,7 +138,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		return new ChromeDriver(options);
 	}
 
-	private File getExtensionFileFromResource() throws URISyntaxException, IOException {
+	private File getExtensionFileFromResource() throws IOException {
 
 		ClassLoader classLoader = getClass().getClassLoader();
 		InputStream inputStream = classLoader.getResourceAsStream("webpage-recording-extension.crx");

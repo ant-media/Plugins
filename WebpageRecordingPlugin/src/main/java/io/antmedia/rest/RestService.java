@@ -19,21 +19,25 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.context.WebApplicationContext;
 
-import java.net.URISyntaxException;
-
 @Component
-@Path("/webpage/record")
+@Path("/v2/webpage-recording")
 public class RestService {
 
 	@Context
 	protected ServletContext servletContext;
 
-	
+	/*
+	 * Start recording of a webpage with given id
+	 * If id is not provided, a random id will be generated
+	 *
+	 * @PathParam id: webpage recording streamId
+	 * @BodyParam url: url of the webpage to be recorded and it's mandatory
+	 */
 	@POST
-	@Path("/start")
+	@Path("/start/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result startWebpageRecording(@RequestBody Endpoint request, @Context UriInfo uriInfo, @QueryParam("streamId") String streamId) throws URISyntaxException, InterruptedException {
+	public Result startWebpageRecording(@RequestBody Endpoint request, @Context UriInfo uriInfo, @PathParam("id") String id) {
 		if (uriInfo == null) {
 			return new Result(false, "Bad request");
 		}
@@ -44,16 +48,21 @@ public class RestService {
 
 		WebpageRecordingPlugin app = getPluginApp();
 
-		return app.startWebpageRecording(streamId, websocketUrl, request.getUrl());
+		return app.startWebpageRecording(id, websocketUrl, request.getUrl());
 	}
-	
+
+	/*
+	 * Stop recording of a webpage with given id
+	 *
+	 * @PathParam id: webpage recording streamId
+	 */
 	@POST
-	@Path("/stop/{streamId}")
+	@Path("/stop/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result stopWebpageRecording(@PathParam("streamId") String streamId) throws InterruptedException {
+	public Result stopWebpageRecording(@PathParam("id") String id) {
 		WebpageRecordingPlugin app = getPluginApp();
-		return app.stopWebpageRecording(streamId);
+		return app.stopWebpageRecording(id);
 	}
 	
 	private WebpageRecordingPlugin getPluginApp() {
