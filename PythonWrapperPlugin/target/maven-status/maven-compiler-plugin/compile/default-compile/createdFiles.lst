@@ -1,0 +1,6 @@
+io/antmedia/app/AVFramePool.class
+io/antmedia/app/SampleFrameListener.class
+io/antmedia/app/Utils.class
+io/antmedia/app/SamplePacketListener.class
+io/antmedia/rest/RestService.class
+io/antmedia/plugin/SamplePlugin.class
