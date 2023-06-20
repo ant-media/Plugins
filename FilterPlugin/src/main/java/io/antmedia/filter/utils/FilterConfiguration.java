@@ -49,6 +49,16 @@ public class FilterConfiguration {
 	 */
 	private boolean audioEnabled;
 	
+	/**
+	 * Height for video filter output
+	 */
+	private int videoOutputHeight = 480;
+	
+	/**
+	 * Bitrate (in kbps) for video filter output
+	 */
+	private int videoOutputBitrate = 1500;
+	
 	public List<String> getInputStreams() {
 		return inputStreams;
 	}
@@ -111,5 +121,21 @@ public class FilterConfiguration {
 	
 	public void setAudioEnabled(boolean audioEnabled) {
 		this.audioEnabled = audioEnabled;
+	}
+
+	public int getVideoOutputHeight() {
+		return videoOutputHeight;
+	}
+
+	public void setVideoOutputHeight(int videoOutputHeight) {
+		this.videoOutputHeight = videoOutputHeight;
+	}
+
+	public int getVideoOutputBitrate() {
+		return videoOutputBitrate;
+	}
+
+	public void setVideoOutputBitrate(int videoOutputBitrate) {
+		this.videoOutputBitrate = videoOutputBitrate;
 	}
 }
