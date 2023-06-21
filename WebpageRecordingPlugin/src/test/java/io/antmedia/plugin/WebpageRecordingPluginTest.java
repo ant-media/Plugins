@@ -29,7 +29,7 @@ public class WebpageRecordingPluginTest extends TestCase {
         assertFalse(result.isSuccess());
 
         when(drivers.containsKey(anyString())).thenReturn(false);
-        when(plugin.createDriver()).thenReturn(null);
+        when(plugin.createDriver(endpoint)).thenReturn(null);
         result = plugin.startWebpageRecording("streamId", "websocketUrl", endpoint);
         assertFalse(result.isSuccess());
         driver.quit();
