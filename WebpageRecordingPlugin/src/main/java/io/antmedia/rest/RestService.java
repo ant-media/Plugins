@@ -48,7 +48,7 @@ public class RestService {
 
 		WebpageRecordingPlugin app = getPluginApp();
 
-		return app.startWebpageRecording(streamId, websocketUrl, request.getUrl());
+		return app.startWebpageRecording(streamId, websocketUrl, request);
 	}
 
 	/*
