@@ -11,18 +11,18 @@ public class Endpoint {
     public Endpoint() {
     }
 
-    public Endpoint(String url, int width, int height) {
-        this.url = url;
+    public Endpoint(String URL, int width, int height) {
+        this.URL = URL;
         this.width = width;
         this.height = height;
     }
 
 	public String getUrl() {
-		return url;
+		return URL;
 	}
 
-	public void setUrl(String url) {
-		this.url = url;
+	public void setUrl(String URL) {
+		this.URL = URL;
 	}
 
 	public int getWidth() {
