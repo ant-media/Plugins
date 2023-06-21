@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import io.antmedia.rest.Endpoint;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.openqa.selenium.JavascriptExecutor;
@@ -50,7 +51,8 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		app.addStreamListener(this);
 	}
 
-	public Result startWebpageRecording(String streamId, String websocketUrl, String url) {
+	public Result startWebpageRecording(String streamId, String websocketUrl, Endpoint request) {
+		String url = request.getUrl();
 		if (streamId == null || streamId.isEmpty()) {
 			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
@@ -61,7 +63,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 			return new Result(false, "Driver already exists for stream id: " + streamId);
 		}
 
-		WebDriver driver = createDriver();
+		WebDriver driver = createDriver(request);
 		if (driver == null) {
 			logger.error("Driver cannot created");
 			return new Result(false, "Driver cannot created");
@@ -81,6 +83,8 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 			timeout--;
 			if (timeout == 0) {
 				logger.error("Timeout while loading the page");
+				driver.quit();
+				drivers.remove(streamId);
 				return new Result(false, streamId, "Timeout while loading the page");
 			}
 		}
@@ -114,7 +118,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		return new Result(true, "Webpage recording stopped");
 	}
 
-	public WebDriver createDriver() {
+	public WebDriver createDriver(Endpoint request) {
 		WebDriverManager.chromedriver().setup();
 		ChromeOptions options = new ChromeOptions();
 		List<String> args = new ArrayList<>();
@@ -126,6 +130,9 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		args.add("--enable-tab-capture");
 		args.add("--no-sandbox");
 		args.add(String.format("--allowlisted-extension-id=%s", EXTENSION_ID));
+		if (request.getHeight() > 0 && request.getWidth() > 0) {
+			args.add(String.format("--window-size=%s,%s", request.getWidth(), request.getHeight()));
+		}
 		args.add("--headless=new");
 		try {
 			options.addExtensions(getExtensionFileFromResource());
