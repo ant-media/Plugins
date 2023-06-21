@@ -4,14 +4,25 @@ public class Endpoint {
 
     private String url;
 
+    private String kalturaId;
+
     public Endpoint() {
     }
 
-    public Endpoint(String url) {
+    public Endpoint(String url, String kalturaId) {
         this.url = url;
+        this.kalturaId = kalturaId;
     }
 
-	public String getUrl() {
+    public String getKalturaId() {
+        return kalturaId;
+    }
+
+    public void setKalturaId(String kalturaId) {
+        this.kalturaId = kalturaId;
+    }
+
+    public String getUrl() {
 		return url;
 	}
 

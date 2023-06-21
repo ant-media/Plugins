@@ -3,18 +3,25 @@ package io.antmedia.plugin;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import io.antmedia.rest.Endpoint;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -50,7 +57,8 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		app.addStreamListener(this);
 	}
 
-	public Result startWebpageRecording(String streamId, String websocketUrl, String url) {
+	public Result startWebpageRecording(String streamId, String websocketUrl, Endpoint request) {
+		String url = request.getUrl();
 		if (streamId == null || streamId.isEmpty()) {
 			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
@@ -81,23 +89,33 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 			timeout--;
 			if (timeout == 0) {
 				logger.error("Timeout while loading the page");
+				driver.quit();
+				drivers.remove(streamId);
 				return new Result(false, streamId, "Timeout while loading the page");
 			}
 		}
-		customModification(driver);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
 		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s' }, '*')", streamId, websocketUrl));
+		if (request.getKalturaId() != null && !request.getKalturaId().isEmpty()) {
+			customModification(driver, request.getKalturaId());
+		}
 		return new Result(true, streamId, "Webpage recording started");
 	}
 
-	public void customModification(WebDriver driver) {
-		// you add related selenium code here to play the video on a custom page or login to a page
+	public void customModification(WebDriver driver, String frameId) {
+		try {
+			WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+			wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(frameId + "_ifp"));
 
-		/* example code to start YouTube video
-		new Actions(driver)
-				.sendKeys("k")
-				.perform();
-		 */
+			//driver.switchTo().defaultContent();
+			WebElement webElement = driver.findElement(By.tagName("video"));
+			webElement.click();
+
+			Actions actions = new Actions(driver);
+			actions.doubleClick(webElement).perform();
+		} catch (Exception e) {
+			logger.error(e.getMessage());
+		}
 	}
 
 	public Result stopWebpageRecording(String streamId) {
@@ -126,7 +144,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		args.add("--enable-tab-capture");
 		args.add("--no-sandbox");
 		args.add(String.format("--allowlisted-extension-id=%s", EXTENSION_ID));
-		args.add("--headless=new");
+		//args.add("--headless=new");
 		try {
 			options.addExtensions(getExtensionFileFromResource());
 		} catch (IOException e) {
