@@ -33,7 +33,7 @@ public class PythonWrapperPlugin implements ApplicationContextAware, IStreamList
 		app.addStreamListener(this);
 	}
 	
-	public void startPythonProcess(String streamId, String pythonScriptPath) {
+	public void startPythonProcess(String streamId) {
 		AntMediaApplicationAdapter app = getApplication();
 		app.addFrameListener(streamId, frameListener);		
 		app.addPacketListener(streamId, packetListener);
@@ -47,10 +47,6 @@ public class PythonWrapperPlugin implements ApplicationContextAware, IStreamList
 	
 	public AntMediaApplicationAdapter getApplication() {
 		return (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
-	}
-
-	public String getStats() {
-		return frameListener.getStats() + "\t" + packetListener.getStats();
 	}
 
 	@Override

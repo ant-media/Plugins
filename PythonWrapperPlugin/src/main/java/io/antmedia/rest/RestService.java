@@ -30,9 +30,9 @@ public class RestService {
 	@Path("/start/{streamId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Response startPythonProcess(@RequestBody Endpoint request, @PathParam("streamId") String streamId) {
+	public Response startPythonProcess(@PathParam("streamId") String streamId) {
 		PythonWrapperPlugin app = getPythonWrapperApp();
-		app.startPythonProcess(streamId, request.getPythonScriptPath());
+		app.startPythonProcess(streamId);
 
 		return Response.status(Status.OK).entity("").build();
 	}
@@ -41,7 +41,7 @@ public class RestService {
 	@Path("/stop/{streamId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Response startPythonProcess(@PathParam("streamId") String streamId) {
+	public Response stopPythonProcess(@PathParam("streamId") String streamId) {
 		PythonWrapperPlugin app = getPythonWrapperApp();
 		app.stopPythonProcess(streamId);
 
