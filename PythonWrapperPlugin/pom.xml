@@ -7,7 +7,7 @@
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.antmedia.plugin</groupId>
-	<artifactId>SamplePlugin</artifactId>
+	<artifactId>PythonWrapperPlugin</artifactId>
 	<packaging>jar</packaging>
 	<name>Plugin Maven Webapp</name>
 	<url>http://maven.apache.org</url>
@@ -16,8 +16,8 @@
 	</properties>
 	<developers>
     		<developer>
-      		<id>burak</id>
-      		<email>burak@antmedia.io</email>
+      		<id>mustafa</id>
+      		<email>mustafa.boleken@antmedia.io</email>
     		</developer>
   	</developers>
   	<licenses>
@@ -276,7 +276,7 @@
 			<version>1.15.0</version>
 		</dependency>
 	</dependencies>
-	<description>PluginApp for Ant Media Server</description>
+	<description>PythonWrapperPlugin for Ant Media Server</description>
 	<organization>
 		<name>Ant Media</name>
 		<url>http://antmedia.io</url>

@@ -1,7 +1,5 @@
 package io.antmedia.plugin;
 
-import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -10,22 +8,20 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.app.SampleFrameListener;
-import io.antmedia.app.SamplePacketListener;
-import io.antmedia.muxer.MuxAdaptor;
-import io.antmedia.plugin.api.IFrameListener;
+import io.antmedia.app.PythonWrapperFrameListener;
+import io.antmedia.app.PythonWrapperPacketListener;
 import io.antmedia.plugin.api.IStreamListener;
 import io.vertx.core.Vertx;
 
-@Component(value="plugin.myplugin")
-public class SamplePlugin implements ApplicationContextAware, IStreamListener{
+@Component(value="plugin.pythonwrapperplugin")
+public class PythonWrapperPlugin implements ApplicationContextAware, IStreamListener{
 
 	public static final String BEAN_NAME = "web.handler";
-	protected static Logger logger = LoggerFactory.getLogger(SamplePlugin.class);
+	protected static Logger logger = LoggerFactory.getLogger(PythonWrapperPlugin.class);
 	
 	private Vertx vertx;
-	private SampleFrameListener frameListener = new SampleFrameListener();
-	private SamplePacketListener packetListener = new SamplePacketListener();
+	private PythonWrapperFrameListener frameListener = new PythonWrapperFrameListener();
+	private PythonWrapperPacketListener packetListener = new PythonWrapperPacketListener();
 	private ApplicationContext applicationContext;
 
 	@Override
@@ -36,29 +32,8 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 		AntMediaApplicationAdapter app = getApplication();
 		app.addStreamListener(this);
 	}
-		
-	public MuxAdaptor getMuxAdaptor(String streamId) 
-	{
-		AntMediaApplicationAdapter application = getApplication();
-		MuxAdaptor selectedMuxAdaptor = null;
-
-		if(application != null)
-		{
-			List<MuxAdaptor> muxAdaptors = application.getMuxAdaptors();
-			for (MuxAdaptor muxAdaptor : muxAdaptors) 
-			{
-				if (streamId.equals(muxAdaptor.getStreamId())) 
-				{
-					selectedMuxAdaptor = muxAdaptor;
-					break;
-				}
-			}
-		}
-
-		return selectedMuxAdaptor;
-	}
 	
-	public void register(String streamId) {
+	public void register(String streamId, String pythonScriptPath) {
 		AntMediaApplicationAdapter app = getApplication();
 		app.addFrameListener(streamId, frameListener);		
 		app.addPacketListener(streamId, packetListener);
@@ -66,11 +41,6 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 	
 	public AntMediaApplicationAdapter getApplication() {
 		return (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
-	}
-	
-	public IFrameListener createCustomBroadcast(String streamId) {
-		AntMediaApplicationAdapter app = getApplication();
-		return app.createCustomBroadcast(streamId);
 	}
 
 	public String getStats() {

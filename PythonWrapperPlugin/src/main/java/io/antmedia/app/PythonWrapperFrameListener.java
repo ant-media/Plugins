@@ -4,19 +4,16 @@ import org.bytedeco.ffmpeg.avutil.*;
 
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
-import org.bytedeco.ffmpeg.global.avutil;
-import org.bytedeco.javacpp.BytePointer;
-import org.tensorflow.Tensor;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.lang.ProcessBuilder;
 
-import static org.bytedeco.ffmpeg.global.avutil.av_frame_ref;
+import static io.antmedia.app.Utils.convertAVFrameToByteArray;
 
-public class SampleFrameListener implements IFrameListener{
+
+public class PythonWrapperFrameListener implements IFrameListener{
 
 	private int audioFrameCount = 0;
 	private int videoFrameCount = 0;
@@ -38,10 +35,6 @@ public class SampleFrameListener implements IFrameListener{
 			processVideoFrame(streamId, videoFrame, videoFrameCount);
 			isLocked = false;
 		}
-
-		//processVideoFrame(videoFrame);
-		//Thread t1= new Thread(() -> processVideoFrame(videoFrame));
-		//t1.start();
 
 		return videoFrame;
 	}
@@ -83,66 +76,24 @@ public class SampleFrameListener implements IFrameListener{
 		}
 	}
 
-	private static byte[] convertTensorToByteArray(Tensor<Float> tensor) {
-		// Convert the tensor data to a byte array
-		long dataSize = tensor.numElements() * Float.BYTES;
-		ByteBuffer byteBuffer = ByteBuffer.allocate((int) dataSize);
-		tensor.writeTo(byteBuffer);
-		return byteBuffer.array();
-	}
-
-	private static byte[] convertAVFrameToByteArray(AVFrame rgbFrame) {
-		byte[] RGBAdata = new byte[rgbFrame.width()*rgbFrame.height()*4];
-		rgbFrame.data(0).get(RGBAdata);
-		return RGBAdata;
-	}
-
-	private static float[][][] convertAVFrameToData(AVFrame avFrame) {
-		int height = avFrame.height();
-		int width = avFrame.width();
-		int channels = avFrame.channels();
-
-		// Allocate memory for the data
-		float[][][] frameData = new float[height][width][channels];
-
-		// Iterate over each row and column of the frame
-		for (int y = 0; y < height; y++) {
-			for (int x = 0; x < width; x++) {
-				// Get the pointer to the pixel data for the current position
-				BytePointer data = avFrame.data(0).position(y * avFrame.linesize(0) + x * channels);
-
-				// Read the pixel values for each channel
-				for (int c = 0; c < channels; c++) {
-					// Convert the byte value to float
-					float value = (float) (data.get(c) & 0xFF) / 255.0f;
-
-					// Store the pixel value in the frame data array
-					frameData[y][x][c] = value;
-				}
-			}
-		}
-
-		return frameData;
-	}
-
 	@Override
 	public void writeTrailer(String streamId) {
-		System.out.println("SampleFrameListener.writeTrailer()");
+		System.out.println("PythonWrapperFrameListener.writeTrailer()");
 	}
 
 	@Override
 	public void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
-		System.out.println("SampleFrameListener.setVideoStreamInfo()");		
+		System.out.println("PythonWrapperFrameListener.setVideoStreamInfo()");
 	}
 
 	@Override
 	public void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
-		System.out.println("SampleFrameListener.setAudioStreamInfo()");		
+		System.out.println("PythonWrapperFrameListener.setAudioStreamInfo()");
 	}
 
 	@Override
 	public void start() {
-		System.out.println("SampleFrameListener.start()");		
+		System.out.println("PythonWrapperFrameListener.start()");
 	}
 
 	public String getStats() {

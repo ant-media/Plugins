@@ -5,13 +5,13 @@ import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import io.antmedia.plugin.api.IPacketListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
 
-public class SamplePacketListener implements IPacketListener{
+public class PythonWrapperPacketListener implements IPacketListener{
 
 	private int packetCount = 0;
 
 	@Override
 	public void writeTrailer(String streamId) {
-		System.out.println("SamplePacketListener.writeTrailer()");
+		System.out.println("PythonWrapperPacketListener.writeTrailer()");
 		
 	}
 
@@ -29,12 +29,12 @@ public class SamplePacketListener implements IPacketListener{
 
 	@Override
 	public void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
-		System.out.println("SamplePacketListener.setVideoStreamInfo()");		
+		System.out.println("PythonWrapperPacketListener.setVideoStreamInfo()");
 	}
 
 	@Override
 	public void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
-		System.out.println("SamplePacketListener.setAudioStreamInfo()");		
+		System.out.println("PythonWrapperPacketListener.setAudioStreamInfo()");
 	}
 
 	public String getStats() {
