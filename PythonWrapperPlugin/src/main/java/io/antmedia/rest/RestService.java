@@ -25,13 +25,13 @@ public class RestService {
 
 	@Context
 	protected ServletContext servletContext;
-	
+
 	@POST
 	@Path("/start/{streamId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response startPythonProcess(@RequestBody Endpoint request, @PathParam("streamId") String streamId) {
-		PythonWrapperPlugin app = getPluginApp();
+		PythonWrapperPlugin app = getPythonWrapperApp();
 		app.startPythonProcess(streamId, request.getPythonScriptPath());
 
 		return Response.status(Status.OK).entity("").build();
@@ -42,13 +42,13 @@ public class RestService {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response startPythonProcess(@PathParam("streamId") String streamId) {
-		PythonWrapperPlugin app = getPluginApp();
+		PythonWrapperPlugin app = getPythonWrapperApp();
 		app.stopPythonProcess(streamId);
 
 		return Response.status(Status.OK).entity("").build();
 	}
 	
-	private PythonWrapperPlugin getPluginApp() {
+	private PythonWrapperPlugin getPythonWrapperApp() {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
 		return (PythonWrapperPlugin) appCtx.getBean("plugin.pythonwrapperplugin");
 	}

@@ -7,8 +7,8 @@ if [ $OUT -ne 0 ]; then
     exit $OUT
 fi
 
-rm -r $AMS_DIR/plugins/PluginApp*
-cp target/PluginApp.jar $AMS_DIR/plugins/
+rm -r $AMS_DIR/plugins/PythonWrapperApp*
+cp target/PythonWrapperApp.jar $AMS_DIR/plugins/
 
 OUT=$?
 
