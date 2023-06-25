@@ -1,53 +1,84 @@
-# SamplePlugin
-This is a sample plugin project for Ant Media Server. You can use this a basis for your plugin.
-With this plugin you can find:
-- Accessing the Ant Media Server ie. AntMediaApplicationAdaptor class
-- Registration of the plugin as the PacketListener and/or FrameListener 
-- Consuming packets and/or frames
-- REST interface implementation
+# PythonWrapperPlugin
 
-# Prerequests
-- Install Ant Media Server
-- Install Maven 
+You can send the broadcast to your Python Script with this plugin. You can use this plugin to send the broadcast to your own Python Script and do whatever you want with the broadcast. For example, you can run object detection models in real time.
 
-# Quick Start
+## How to Install
 
-- Clone the repository and go the Sample Plugin Directory
-  ```sh
-  git clone https://github.com/ant-media/Plugins.git
-  cd Plugins/SamplePlugin/
+1. Download the pre-built `PythonWrapperApp.jar` file
   ```
-- Build the Sample Plugin
-  ```sh
-  mvn install  -Dgpg.skip=true
+  wget https://github.com/ant-media/Plugins/raw/master/PythonWrapperPlugin/build/PythonWrapperApp.jar
   ```
-- Copy the generated jar file to your Ant Media Server's plugin directory
-  ```sh
-  cp target/PluginApp.jar /usr/local/antmedia/plugins
+3. Copy the `PythonWrapperApp.jar` file to `plugins` directory under `/usr/local/antmedia`
   ```
-- Restart the Ant Media Server
+  sudo cp PythonWrapperApp.jar /usr/local/antmedia/plugins
+  ```
+4. Restart the service
   ```
   sudo service antmedia restart
   ```
-- Publish/unPublish a Live Stream to Ant Media Server with WebRTC/RTMP/RTSP
-- Check the logs on the server side 
+5. Copy your own Python Script into the Ant Media Server Plugins directory. You can use the example script in https://github.com/ant-media/Plugins/raw/master/PythonWrapperPlugin/sample/python_script.py
   ```
-  tail -f /usr/local/antmedia/log/ant-media-server.log
+  sudo cp your_python_script.py /usr/local/antmedia/python_script.py
   ```
-  You would see the following logs
+    
+## How to Use
+
+Python Wrapper Plugin have REST API to control the plugin.
+
+* Start the Python Script
+
+Call the REST Method below to let Ant Media Server send broadcast into Python script. You should pass streamId as query parameter you wanted to use as a parameter.
+   ```
+   curl -i -X POST -H "Accept: Application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/python-wrapper-plugin/start"
+   ```
+
+* Stop the Python Script
+
+Call the REST Method below to let Ant Media Server with the stream id you specified in the start method.
+   ```
+   curl -i -X POST -H "Accept: Application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/python-wrapper-plugin/stop/{streamId}"
+   ```
+
+
+
+## How to Build from Source Code
+
+- Clone the repository
+
   ```
-  ...
-  ...
-  ...
-  io.antmedia.plugin.PythonWrapperPlugin - *************** Stream Started: streamIdXXXXX ***************
-  ...
-  ...
-  ...
-  io.antmedia.plugin.PythonWrapperPlugin - *************** Stream Finished: streamIdXXXXX ***************
-  ...
-  ...
-  ...
+  git clone https://github.com/ant-media/Plugins
   ```
 
-For more information about the plugins, [visit this post](https://antmedia.io/plugins-will-make-ant-media-server-more-powerful/)
-  
+- Go to the Python Wrapper Plugin directory
+
+  ```
+  cd Plugins/PythonWrapperPlugin
+  ```
+
+- Modify the redeploy.sh file with your Ant Media Server installation path
+
+  ```
+  Change AMS_DIR=/usr/local/antmedia/
+  ```
+
+- Build & install the plugin
+
+  ```
+  chmode +x redeploy.sh
+  ./redeploy.sh
+  ```
+
+- Restart Ant Media Server
+
+  ```
+  sudo service antmedia restart
+  ```
+
+### How to Customize
+You can modify the code and build the plugin by yourself to make it work with your own needs. For example, you can play the video or login to the web page with your own credentials before starting the broadcast.
+Go to the PythonWrapperPlugin and modify the customModification method as you wish. Then build the plugin with the following command.
+
+  ```
+  chmode +x redeploy.sh
+  ./redeploy.sh
+  ```

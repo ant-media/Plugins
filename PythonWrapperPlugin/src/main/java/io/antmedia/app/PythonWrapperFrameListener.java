@@ -76,8 +76,8 @@ public class PythonWrapperFrameListener implements IFrameListener{
 
 	public ProcessBuilder createPythonProcessBuilder(int width, int height, String frameOutputName) {
 		ProcessBuilder processBuilder = new ProcessBuilder("python3", "/usr/local/antmedia/python_script.py", Integer.toString(width), Integer.toString(height), frameOutputName);
-		processBuilder.redirectError(new File("/usr/local/antmedia/logger.log.err"));
-		processBuilder.redirectOutput(new File("/usr/local/antmedia/logger.log"));
+		processBuilder.redirectError(new File("/usr/local/antmedia/log/logger.log.err"));
+		processBuilder.redirectOutput(new File("/usr/local/antmedia/log/logger.log"));
 		return processBuilder;
 	}
 
