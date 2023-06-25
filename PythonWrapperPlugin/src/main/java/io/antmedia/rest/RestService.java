@@ -20,30 +20,32 @@ import org.springframework.web.context.WebApplicationContext;
 import io.antmedia.plugin.PythonWrapperPlugin;
 
 @Component
-@Path("/python-wrapper-plugin")
+@Path("/v1/python-wrapper-plugin")
 public class RestService {
 
 	@Context
 	protected ServletContext servletContext;
 	
 	@POST
-	@Path("/register/{streamId}")
+	@Path("/start/{streamId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Response register(@RequestBody Endpoint request, @PathParam("streamId") String streamId) {
+	public Response startPythonProcess(@RequestBody Endpoint request, @PathParam("streamId") String streamId) {
 		PythonWrapperPlugin app = getPluginApp();
-		app.register(streamId, request.getPythonScriptPath());
+		app.startPythonProcess(streamId, request.getPythonScriptPath());
 
 		return Response.status(Status.OK).entity("").build();
 	}
-	
-	@GET
-	@Path("/stats")
+
+	@POST
+	@Path("/stop/{streamId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public String getStats() {
+	public Response startPythonProcess(@PathParam("streamId") String streamId) {
 		PythonWrapperPlugin app = getPluginApp();
-		return app.getStats();
+		app.stopPythonProcess(streamId);
+
+		return Response.status(Status.OK).entity("").build();
 	}
 	
 	private PythonWrapperPlugin getPluginApp() {

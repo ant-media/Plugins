@@ -33,10 +33,16 @@ public class PythonWrapperPlugin implements ApplicationContextAware, IStreamList
 		app.addStreamListener(this);
 	}
 	
-	public void register(String streamId, String pythonScriptPath) {
+	public void startPythonProcess(String streamId, String pythonScriptPath) {
 		AntMediaApplicationAdapter app = getApplication();
 		app.addFrameListener(streamId, frameListener);		
 		app.addPacketListener(streamId, packetListener);
+	}
+
+	public void stopPythonProcess(String streamId) {
+		AntMediaApplicationAdapter app = getApplication();
+		app.removeFrameListener(streamId, frameListener);
+		app.removePacketListener(streamId, packetListener);
 	}
 	
 	public AntMediaApplicationAdapter getApplication() {
