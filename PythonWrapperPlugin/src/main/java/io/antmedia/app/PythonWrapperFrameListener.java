@@ -48,9 +48,7 @@ public class PythonWrapperFrameListener implements IFrameListener{
 			String frameOutputName = streamId + "_" + videoFrameCount;
 
 			// Start the Python process and pass the tensor as input
-			ProcessBuilder processBuilder = new ProcessBuilder("python3", "/usr/local/antmedia/python_script.py", Integer.toString(rgbFrame.width()), Integer.toString(rgbFrame.height()), frameOutputName);
-			processBuilder.redirectError(new File("/usr/local/antmedia/logger.log.err"));
-			processBuilder.redirectOutput(new File("/usr/local/antmedia/logger.log"));
+			ProcessBuilder processBuilder = createPythonProcessBuilder(rgbFrame.width(), rgbFrame.height(), frameOutputName);
 			process = processBuilder.start();
 
 			// Get the output stream of the Python process
@@ -74,6 +72,13 @@ public class PythonWrapperFrameListener implements IFrameListener{
 				process.destroy();
 			}
 		}
+	}
+
+	public ProcessBuilder createPythonProcessBuilder(int width, int height, String frameOutputName) {
+		ProcessBuilder processBuilder = new ProcessBuilder("python3", "/usr/local/antmedia/python_script.py", Integer.toString(width), Integer.toString(height), frameOutputName);
+		processBuilder.redirectError(new File("/usr/local/antmedia/logger.log.err"));
+		processBuilder.redirectOutput(new File("/usr/local/antmedia/logger.log"));
+		return processBuilder;
 	}
 
 	@Override
