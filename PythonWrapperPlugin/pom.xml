@@ -271,9 +271,10 @@
             <scope>provided</scope>
         </dependency>
 		<dependency>
-			<groupId>org.tensorflow</groupId>
-			<artifactId>tensorflow</artifactId>
-			<version>1.15.0</version>
+			<groupId>org.mockito</groupId>
+			<artifactId>mockito-all</artifactId>
+			<version>1.10.19</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 	<description>PythonWrapperPlugin for Ant Media Server</description>
