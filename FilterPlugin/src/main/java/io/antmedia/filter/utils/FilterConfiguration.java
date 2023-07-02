@@ -52,7 +52,7 @@ public class FilterConfiguration {
 	/**
 	 * Height for video filter output
 	 */
-	private int videoOutputHeight = 480;
+	private int videoOutputHeight = 720;
 	
 	/**
 	 * Bitrate (in kbps) for video filter output
