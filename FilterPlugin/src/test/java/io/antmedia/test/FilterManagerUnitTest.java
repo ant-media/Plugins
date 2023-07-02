@@ -180,10 +180,10 @@ public class FilterManagerUnitTest {
 		//movie=src/test/resources/background.jpeg[background];[background][in0]chromakey=0x6de61b:0.1:0.2[transparent];
 		
 		//SW
-		//String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png[background];[in0]chromakey=0x6de61b:1/10:2/10[transparent];[background][transparent]overlay[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
+		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png[background];[in0]chromakey=0x6de61b:1/10:2/10[transparent];[background][transparent]overlay[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
 		
-		//HW
-		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png,format=yuv420p[background];[background]hwupload_cuda,scale_npp=w=1280:h=720:format=yuv420p[mask];[in0]hwupload_cuda,scale_npp=w=1280:h=720:format=yuva420p,chromakey_cuda=0x6de61b:1/10:2/10[greenOut];[mask][greenOut]overlay_cuda[overlayed];[overlayed]hwdownload[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
+		//HW - run this on a machine with CUDA
+		//String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png,format=yuv420p[background];[background]hwupload_cuda,scale_npp=w=1280:h=720:format=yuv420p[mask];[in0]hwupload_cuda,scale_npp=w=1280:h=720:format=yuva420p,chromakey_cuda=0x6de61b:1/10:2/10[greenOut];[mask][greenOut]overlay_cuda[overlayed];[overlayed]hwdownload[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
 		
 		 
 		String rawFile = "src/test/resources/green_screen_1280x720.yuv";
