@@ -34,7 +34,15 @@ You can record the broadcast if needed. But you need to start the recording manu
   ```
   sudo cp webpage-recording-plugin.jar /usr/local/antmedia/plugins
   ```
-4. Restart the service
+4. Download the `media_push.html` file
+  ```
+  wget https://github.com/ant-media/Plugins/raw/master/WebpageRecordingPlugin/build/media_push.html
+  ```
+5. Copy the `media_push.html` file into directory under `/usr/local/antmedia/webapps/<your-webapp-name>/`
+  ```
+  sudo cp media_push.html /usr/local/antmedia/webapps/<your-webapp-name>/
+  ```
+6. Restart the service
   ```
   sudo service antmedia restart
   ```
