@@ -41,7 +41,7 @@ public class RestService {
 		if (uriInfo == null) {
 			return new Result(false, "Bad request");
 		}
-		
+
 		String websocketScheme = ("https".equals(uriInfo.getBaseUri().getScheme())) ? "wss" : "ws";
 		String applicationName = uriInfo.getBaseUri().getPath().split("/")[1];
 		String websocketUrl = websocketScheme + "://" + uriInfo.getBaseUri().getHost() + ((uriInfo.getBaseUri().getPort() != -1 ) ? ":" + uriInfo.getBaseUri().getPort() + "/" : "/") + applicationName + "/websocket";
@@ -49,6 +49,23 @@ public class RestService {
 		WebpageRecordingPlugin app = getPluginApp();
 
 		return app.startWebpageRecording(streamId, websocketUrl, request.getUrl());
+	}
+
+	/*
+	 * Send command to a webpage with given id
+	 *
+	 * @PathParam id: webpage recording streamId
+	 * @BodyParam event: event to be sent to the webpage
+	 */
+	@POST
+	@Path("/send-command")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result webpageRecordingSendCommand(@RequestBody Endpoint request, @QueryParam("streamId") String streamId) {
+
+		WebpageRecordingPlugin app = getPluginApp();
+
+		return app.sendCommand(streamId, request.getEvent());
 	}
 
 	/*
