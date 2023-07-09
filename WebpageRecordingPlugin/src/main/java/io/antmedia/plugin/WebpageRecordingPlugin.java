@@ -33,7 +33,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 
 	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(WebpageRecordingPlugin.class);
-	private final String EXTENSION_ID = "anoaibdoojapjdknicdngigmlijaanik";
+	private final String EXTENSION_ID = "kbcamcmeggifmomkpaidgbmekcfofbbl";
 
 	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
 
@@ -90,7 +90,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		}
 		customModification(driver);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
-		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s' }, '*')", streamId, websocketUrl));
+		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
 		return new Result(true, streamId, "Webpage recording started");
 	}
 

@@ -2,11 +2,7 @@
 
 import {WebRTCAdaptor} from "./js/webrtc_adaptor.js"
 
-function getVideoAudioStream(video, audio) {
-    let options = {
-        audio,
-        video
-    };
+function getVideoAudioStream(options) {
     return new Promise((resolve, reject) => {
         chrome.tabCapture.capture(options, stream => {
             resolve(stream);
@@ -18,13 +14,24 @@ chrome.runtime.onConnect.addListener(port => {
 
     let mediaConstraints = {
         video : true,
-        audio : true
+        audio : true,
+        videoConstraints : {
+            mandatory : {
+                chromeMediaSource : 'tab',
+                minFrameRate: 4,
+                maxFrameRate: 30,
+                maxWidth : message.width,
+                maxHeight : message.height,
+                minWidth : message.width,
+                minHeight : message.height
+            }
+        }
     };
 
     port.onMessage.addListener(async (message) => {
         console.log('GOT MESSAGE', message);
         if (message.command === 'WR_START_BROADCASTING') {
-            const stream = await getVideoAudioStream(mediaConstraints.video, mediaConstraints.audio);
+            const stream = await getVideoAudioStream(mediaConstraints);
 
             let pc_config = {
                 'iceServers' : [ {
