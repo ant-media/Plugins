@@ -45,6 +45,8 @@
     {
         if (loopRunning)
         {
+	    canvasStream = effectCanvas.captureStream(fps);
+	    webRTCAdaptorPublisher.updateVideoTrack(canvasStream, publisherId, null, true);
             return;
         }
 
