@@ -65,14 +65,25 @@ Call the REST Method below to let Ant Media Server with the stream id you specif
    curl -i -X POST -H "Accept: Application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/webpage-recording/stop/{streamId}"
    ```
 
+* Send javascript command to a webpage with given stream id
+
+Call the REST Method below to let Ant Media Server with the stream id you specified in the start method. You should pass the javascript command in the body.
+   ```
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/webpage-recording/send-command?streamId={streamId}"  -d '{"jsCommand": "{javascript_command_which_is_executed}"}'
+   ```
+
 
    
 ## How to Build from Source Code
 
-- Webpage Recording Plugin uses Google Chrome 112 to broadcast the web page. So you need to install Google Chrome 112 to your server. You can install it on Ubuntu with the following commands.
+- Webpage Recording Plugin uses Google Chrome 108 to broadcast the web page. So you need to install Google Chrome 108 to your server. You can install it on Ubuntu with the following commands.
 
   ```
-  wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_112.0.5615.165-1_amd64.deb
+  sudo apt-get purge google-chrome-stable
+  ```
+
+  ```
+  wget --no-verbose -O /tmp/chrome.deb http://trusty-packages.scrutinizer-ci.com/google/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_108.0.5359.71-1_amd64.deb
   ```
 
   ```
@@ -81,6 +92,10 @@ Call the REST Method below to let Ant Media Server with the stream id you specif
 
   ```
   rm /tmp/chrome.deb
+  ```
+
+  ```
+  sudo apt-mark hold google-chrome-stable
   ```
 
 - Clone the repository
