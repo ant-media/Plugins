@@ -33,7 +33,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 
 	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(WebpageRecordingPlugin.class);
-	private final String EXTENSION_ID = "kbcamcmeggifmomkpaidgbmekcfofbbl";
+	private final String EXTENSION_ID = "ajkfaolgdnokklgejfjobgbbihegbllg";
 
 	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
 
@@ -119,6 +119,9 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 	}
 
 	public WebDriver createDriver(Endpoint request) {
+		System.setProperty("webdriver.chrome.logfile", "/usr/local/antmedia/log/chromedriver.log");
+		System.setProperty("webdriver.chrome.verboseLogging", "true");
+
 		WebDriverManager.chromedriver().setup();
 		ChromeOptions options = new ChromeOptions();
 		List<String> args = new ArrayList<>();
@@ -133,7 +136,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		if (request.getHeight() > 0 && request.getWidth() > 0) {
 			args.add(String.format("--window-size=%s,%s", request.getWidth(), request.getHeight()));
 		}
-		args.add("--headless=new");
+		args.add("--headless=chrome");
 		try {
 			options.addExtensions(getExtensionFileFromResource());
 		} catch (IOException e) {
