@@ -51,6 +51,22 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		app.addStreamListener(this);
 	}
 
+	public Result sendCommand(String streamId, String command) {
+		if (!getDrivers().containsKey(streamId)) {
+			logger.warn("Driver is not exists for stream id: {}", streamId);
+			return new Result(false, "Driver is not exists for stream id: " + streamId);
+		}
+		try {
+			WebDriver driver = getDrivers().get(streamId);
+			JavascriptExecutor js = (JavascriptExecutor) driver;
+			js.executeScript(command);
+			return new Result(true, streamId, "Command executed");
+		} catch (Exception e) {
+			logger.error("Command cannot be executed: " + e.getMessage());
+			return new Result(false, "Command cannot be executed.");
+		}
+	}
+
 	public Result startWebpageRecording(String streamId, String websocketUrl, Endpoint request) {
 		String url = request.getUrl();
 		if (streamId == null || streamId.isEmpty()) {

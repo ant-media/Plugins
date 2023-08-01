@@ -64,6 +64,31 @@ public class RestService {
 		WebpageRecordingPlugin app = getPluginApp();
 		return app.stopWebpageRecording(id);
 	}
+
+	/*
+	 * Send command to a webpage with given stream id
+	 *
+	 * @PathParam streamId: webpage recording stream id
+	 * @BodyParam jsCommand: jsCommand to be sent to the webpage
+	 */
+	@POST
+	@Path("/send-command")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Result webpageRecordingSendCommand(@RequestBody Endpoint request, @QueryParam("streamId") String streamId) {
+
+		WebpageRecordingPlugin app = getPluginApp();
+
+		if (streamId == null || streamId.isEmpty()) {
+			return new Result(false, "streamId query parameter is mandatory.");
+		}
+
+		if (request.getJsCommand() == null || request.getJsCommand().isEmpty()) {
+			return new Result(false, "jsCommand is mandatory.");
+		}
+
+		return app.sendCommand(streamId, request.getJsCommand());
+	}
 	
 	private WebpageRecordingPlugin getPluginApp() {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);

@@ -8,13 +8,24 @@ public class Endpoint {
 
     private int height;
 
+    private String jsCommand;
+
     public Endpoint() {
     }
 
-    public Endpoint(String URL, int width, int height) {
+    public Endpoint(String URL, int width, int height, String jsCommand) {
         this.URL = URL;
         this.width = width;
         this.height = height;
+        this.jsCommand = jsCommand;
+    }
+
+    public String getJsCommand() {
+        return jsCommand;
+    }
+
+    public void setJsCommand(String jsCommand) {
+        this.jsCommand = jsCommand;
     }
 
 	public String getUrl() {
