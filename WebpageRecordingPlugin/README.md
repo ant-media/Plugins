@@ -1,4 +1,4 @@
-# WebpageRecordingPlugin
+# Webpage Recording Plugin
 
 Webpage Recording Plugin can stream everything on the given web page with video and audio in realtime.
 
