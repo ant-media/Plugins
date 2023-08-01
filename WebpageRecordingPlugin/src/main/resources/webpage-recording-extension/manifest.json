@@ -1,9 +1,9 @@
 {
+	"manifest_version": 3,
 	"name": "Ant Media Webpage Recorder Extension",
-	"version": "1.0.0",
-	"manifest_version": 2,
+	"version": "1.1.0",
 	"background": {
-    "page": "background.html"
+		"service_worker": "background.js", "type": "module"
 	},
 	"content_scripts": [
 		{
@@ -17,12 +17,21 @@
 		}
 	],
 	"permissions": [
-		"desktopCapture",
-		"<all_urls>",
-		"downloads",
-		"tabCapture",
 		"activeTab",
-		"tabs"
+		"tabs",
+		"offscreen"
 	],
-  "content_security_policy":"script-src 'self' https://apis.google.com; object-src 'self'"
+	"action": {
+		"default_popup": "popup.html"
+	},
+	"web_accessible_resources": [
+		{
+			"resources": [
+				"background.js"
+			],
+			"matches": [
+				"<all_urls>"
+			]
+		}
+	]
 }

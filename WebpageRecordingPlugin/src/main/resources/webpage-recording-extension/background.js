@@ -13,16 +13,31 @@ function getVideoAudioStream(video, audio) {
         });
     });
 }
+
 chrome.runtime.onConnect.addListener(port => {
     let webRTCAdaptor;
 
-    let mediaConstraints = {
-        video : true,
-        audio : true
-    };
+    let mediaConstraints;
 
     port.onMessage.addListener(async (message) => {
         console.log('GOT MESSAGE', message);
+
+        mediaConstraints = {
+            video : true,
+            audio : true,
+            videoConstraints : {
+                mandatory : {
+                    chromeMediaSource : 'tab',
+                    minFrameRate: 4,
+                    maxFrameRate: 30,
+                    maxWidth : message.width,
+                    maxHeight : message.height,
+                    minWidth : message.width,
+                    minHeight : message.height
+                }
+            }
+        };
+        
         if (message.command === 'WR_START_BROADCASTING') {
             const stream = await getVideoAudioStream(mediaConstraints.video, mediaConstraints.audio);
 
@@ -60,3 +75,47 @@ chrome.runtime.onConnect.addListener(port => {
     });
 });
 
+
+
+/*
+{
+	"manifest_version": 3,
+	"name": "Ant Media Webpage Recorder Extension",
+	"version": "1.1.0",
+	"background": {
+		"service_worker": "background.js"
+	},
+	"content_scripts": [
+		{
+			"matches": [
+				"<all_urls>"
+			],
+			"js": [
+				"content_script.js"
+			],
+			"run_at": "document_start"
+		}
+	],
+	"host_permissions": [
+		"downloads",
+		"tabCapture"
+	],
+	"permissions": [
+		"activeTab",
+		"tabs"
+	],
+	"action": {
+		"default_popup": "popup.html"
+	},
+	"web_accessible_resources": [
+		{
+			"resources": [
+				"background.js"
+			],
+			"matches": [
+				"<all_urls>"
+			]
+		}
+	]
+}
+*/
