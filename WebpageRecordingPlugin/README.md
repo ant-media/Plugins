@@ -14,7 +14,7 @@ You can record the broadcast if needed. But you need to start the recording manu
 
 ## How to Install 
 
-### Install Google Chrome 112
+### Install Google Chrome 108
 
 1. Remove your existing Google Chrome installation
   ```
