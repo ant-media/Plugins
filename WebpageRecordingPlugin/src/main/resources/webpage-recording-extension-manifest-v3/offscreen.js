@@ -1,4 +1,4 @@
-import {WebRTCAdaptor} from "../webpage-recording-extension-manifest-v2/js/webrtc_adaptor";
+import {WebRTCAdaptor} from "./js/webrtc_adaptor.js";
 
 chrome.runtime.onMessage.addListener(async (message) => {
     if (message.target === 'offscreen') {
@@ -19,7 +19,7 @@ let webRTCAdaptor;
 let data = [];
 
 async function startBroadcasting(message) {
-    if (typeof webRTCAdaptor === 'undefined' ) {
+    if (typeof webRTCAdaptor !== 'undefined' ) {
         throw new Error('Called startBroadcasting while recording is in progress.');
     }
 
@@ -83,6 +83,7 @@ async function startBroadcasting(message) {
 
 async function stopBroadcasting(streamId) {
     webRTCAdaptor.stop(streamId);
+    webRTCAdaptor.mediaManager.localStream.getTracks().forEach(track => track.stop());
     webRTCAdaptor = undefined;
 
     // Update current state in URL
