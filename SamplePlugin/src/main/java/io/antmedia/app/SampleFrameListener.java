@@ -1,11 +1,16 @@
 package io.antmedia.app;
 
 import org.bytedeco.ffmpeg.avutil.AVFrame;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import io.antmedia.plugin.SamplePlugin;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
 
 public class SampleFrameListener implements IFrameListener{
+	
+	protected static Logger logger = LoggerFactory.getLogger(SampleFrameListener.class);
 
 	private int audioFrameCount = 0;
 	private int videoFrameCount = 0;
@@ -24,22 +29,22 @@ public class SampleFrameListener implements IFrameListener{
 
 	@Override
 	public void writeTrailer(String streamId) {
-		System.out.println("SampleFrameListener.writeTrailer()");
+		logger.info("SampleFrameListener.writeTrailer() for streamId:{}", streamId);
 	}
 
 	@Override
 	public void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
-		System.out.println("SampleFrameListener.setVideoStreamInfo()");		
+		logger.info("SampleFrameListener.setVideoStreamInfo() for streamId:{}", streamId);		
 	}
 
 	@Override
 	public void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
-		System.out.println("SampleFrameListener.setAudioStreamInfo()");		
+		logger.info("SampleFrameListener.setAudioStreamInfo() for streamId:{}", streamId);		
 	}
 
 	@Override
 	public void start() {
-		System.out.println("SampleFrameListener.start()");		
+		logger.info("SampleFrameListener.start()");		
 	}
 
 	public String getStats() {
