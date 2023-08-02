@@ -167,7 +167,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 	private File getExtensionFileFromResource() throws IOException {
 
 		ClassLoader classLoader = getClass().getClassLoader();
-		InputStream inputStream = classLoader.getResourceAsStream("webpage-recording-extension.crx");
+		InputStream inputStream = classLoader.getResourceAsStream("webpage-recording-extension-manifest-v2.crx");
 		if (inputStream == null) {
 			throw new IllegalArgumentException("webpage-recording-extension not found!");
 		} else {
