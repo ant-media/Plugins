@@ -50,8 +50,6 @@ async function startBroadcasting(message) {
         }
     });
 
-    const stream = await getVideoAudioStream(mediaConstraints);
-
     let pc_config = {
         'iceServers' : [ {
             'urls' : 'stun:stun1.l.google.com:19302'
@@ -78,7 +76,7 @@ async function startBroadcasting(message) {
         },
         callbackError : function(error, message) {}
     });
-    webRTCAdaptor.setLocalStream(stream);
+    webRTCAdaptor.setLocalStream(media);
 
     window.location.hash = 'broadcasting';
 }
