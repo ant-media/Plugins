@@ -90,14 +90,19 @@ public class TimecodeExtractor implements IPacketListener{
 				if (buffer[index.payloadStartOffset+1] == 5) {
 					//this is unregistered user data
 					int length = buffer[index.payloadStartOffset+2];
-					byte[] data = new byte[length];
-					
-					System.arraycopy(buffer, index.payloadStartOffset+3, data, 0, data.length);
-					
-					//Frames - Seconds - Minutes - Hours - Days in Ascii format
-					//there are spaces(0x20) between before and after "-" (0x2D)
-					//By default it's length is 22
-					list.add(new String(data, 0, data.length));
+					if (length > 0) {
+						byte[] data = new byte[length];
+						
+						System.arraycopy(buffer, index.payloadStartOffset+3, data, 0, data.length);
+						
+						//Frames - Seconds - Minutes - Hours - Days in Ascii format
+						//there are spaces(0x20) between before and after "-" (0x2D)
+						//By default it's length is 22
+						list.add(new String(data, 0, data.length));
+					}
+					else {
+						logger.warn("Negative SEI nal size found, discarding for stream:{}", streamId);
+					}
 				}
 			}
  		}
