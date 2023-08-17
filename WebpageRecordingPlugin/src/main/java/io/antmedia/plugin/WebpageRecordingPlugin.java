@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import io.antmedia.rest.Endpoint;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.openqa.selenium.JavascriptExecutor;
@@ -32,7 +33,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 
 	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(WebpageRecordingPlugin.class);
-	private final String EXTENSION_ID = "anoaibdoojapjdknicdngigmlijaanik";
+	private final String EXTENSION_ID = "ajkfaolgdnokklgejfjobgbbihegbllg";
 
 	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
 
@@ -50,7 +51,24 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		app.addStreamListener(this);
 	}
 
-	public Result startWebpageRecording(String streamId, String websocketUrl, String url) {
+	public Result sendCommand(String streamId, String command) {
+		if (!getDrivers().containsKey(streamId)) {
+			logger.warn("Driver is not exists for stream id: {}", streamId);
+			return new Result(false, "Driver is not exists for stream id: " + streamId);
+		}
+		try {
+			WebDriver driver = getDrivers().get(streamId);
+			JavascriptExecutor js = (JavascriptExecutor) driver;
+			js.executeScript(command);
+			return new Result(true, streamId, "Command executed");
+		} catch (Exception e) {
+			logger.error("Command cannot be executed: " + e.getMessage());
+			return new Result(false, "Command cannot be executed.");
+		}
+	}
+
+	public Result startWebpageRecording(String streamId, String websocketUrl, Endpoint request) {
+		String url = request.getUrl();
 		if (streamId == null || streamId.isEmpty()) {
 			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
@@ -61,7 +79,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 			return new Result(false, "Driver already exists for stream id: " + streamId);
 		}
 
-		WebDriver driver = createDriver();
+		WebDriver driver = createDriver(request);
 		if (driver == null) {
 			logger.error("Driver cannot created");
 			return new Result(false, "Driver cannot created");
@@ -81,12 +99,14 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 			timeout--;
 			if (timeout == 0) {
 				logger.error("Timeout while loading the page");
+				driver.quit();
+				drivers.remove(streamId);
 				return new Result(false, streamId, "Timeout while loading the page");
 			}
 		}
 		customModification(driver);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
-		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s' }, '*')", streamId, websocketUrl));
+		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
 		return new Result(true, streamId, "Webpage recording started");
 	}
 
@@ -114,7 +134,10 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		return new Result(true, "Webpage recording stopped");
 	}
 
-	public WebDriver createDriver() {
+	public WebDriver createDriver(Endpoint request) {
+		System.setProperty("webdriver.chrome.logfile", "/usr/local/antmedia/log/chromedriver.log");
+		System.setProperty("webdriver.chrome.verboseLogging", "true");
+
 		WebDriverManager.chromedriver().setup();
 		ChromeOptions options = new ChromeOptions();
 		List<String> args = new ArrayList<>();
@@ -126,7 +149,10 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		args.add("--enable-tab-capture");
 		args.add("--no-sandbox");
 		args.add(String.format("--allowlisted-extension-id=%s", EXTENSION_ID));
-		args.add("--headless=new");
+		if (request.getHeight() > 0 && request.getWidth() > 0) {
+			args.add(String.format("--window-size=%s,%s", request.getWidth(), request.getHeight()));
+		}
+		args.add("--headless=chrome");
 		try {
 			options.addExtensions(getExtensionFileFromResource());
 		} catch (IOException e) {
@@ -141,7 +167,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 	private File getExtensionFileFromResource() throws IOException {
 
 		ClassLoader classLoader = getClass().getClassLoader();
-		InputStream inputStream = classLoader.getResourceAsStream("webpage-recording-extension.crx");
+		InputStream inputStream = classLoader.getResourceAsStream("webpage-recording-extension-manifest-v2.crx");
 		if (inputStream == null) {
 			throw new IllegalArgumentException("webpage-recording-extension not found!");
 		} else {

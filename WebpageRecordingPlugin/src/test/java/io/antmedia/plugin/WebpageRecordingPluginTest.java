@@ -1,5 +1,6 @@
 package io.antmedia.plugin;
 
+import io.antmedia.rest.Endpoint;
 import io.antmedia.rest.model.Result;
 import junit.framework.TestCase;
 import org.junit.Test;
@@ -17,18 +18,19 @@ public class WebpageRecordingPluginTest extends TestCase {
     @Test
     public void testStartWebpageRecording() throws URISyntaxException, InterruptedException {
         WebpageRecordingPlugin plugin = Mockito.spy(new WebpageRecordingPlugin());
+        Endpoint endpoint = Mockito.spy(new Endpoint());
         HashMap<String, WebDriver> drivers = Mockito.mock(HashMap.class);
         WebDriver driver = Mockito.spy(WebDriver.class);
         when(plugin.getDrivers()).thenReturn(drivers);
         Result result;
 
         when(drivers.containsKey(anyString())).thenReturn(true);
-        result = plugin.startWebpageRecording("streamId", "websocketUrl", "url");
+        result = plugin.startWebpageRecording("streamId", "websocketUrl", endpoint);
         assertFalse(result.isSuccess());
 
         when(drivers.containsKey(anyString())).thenReturn(false);
-        when(plugin.createDriver()).thenReturn(null);
-        result = plugin.startWebpageRecording("streamId", "websocketUrl", "url");
+        when(plugin.createDriver(endpoint)).thenReturn(null);
+        result = plugin.startWebpageRecording("streamId", "websocketUrl", endpoint);
         assertFalse(result.isSuccess());
         driver.quit();
     }
