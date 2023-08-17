@@ -29,7 +29,7 @@ Python Wrapper Plugin have REST API to control the plugin.
 
 Call the REST Method below to let Ant Media Server send broadcast into Python script. You should pass streamId as query parameter you wanted to use as a parameter.
    ```
-   curl -i -X POST -H "Accept: Application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/python-wrapper-plugin/start"
+   curl -i -X POST -H "Accept: Application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/python-wrapper-plugin/start/{streamId}"
    ```
 
 * Stop the Python Script
