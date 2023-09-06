@@ -47,6 +47,17 @@ You can record the broadcast if needed. But you need to start the recording manu
   sudo service antmedia restart
   ```
 
+### Optional: How to add Media Push Page 
+
+1. Download the media_push.html file
+  ```
+  wget https://github.com/ant-media/Plugins/raw/master/WebpageRecordingPlugin/build/media_push.html
+  ```
+2. Copy the media_push.html file into directory under /usr/local/antmedia/webapps/<your-webapp-name>/
+  ```
+  sudo cp media_push.html /usr/local/antmedia/webapps/<your-webapp-name>/media_push.html
+  ```
+
 ## How to Use
 
 Webpage Recording Plugin have REST API to control the plugin. 
