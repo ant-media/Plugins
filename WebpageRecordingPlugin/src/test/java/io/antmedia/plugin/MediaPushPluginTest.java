@@ -13,11 +13,11 @@ import java.util.HashMap;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.*;
 
-public class WebpageRecordingPluginTest extends TestCase {
+public class MediaPushPluginTest extends TestCase {
 
     @Test
-    public void testStartWebpageRecording() throws URISyntaxException, InterruptedException {
-        WebpageRecordingPlugin plugin = Mockito.spy(new WebpageRecordingPlugin());
+    public void testStartMediaPush() throws URISyntaxException, InterruptedException {
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         Endpoint endpoint = Mockito.spy(new Endpoint());
         HashMap<String, WebDriver> drivers = Mockito.mock(HashMap.class);
         WebDriver driver = Mockito.spy(WebDriver.class);
@@ -25,24 +25,24 @@ public class WebpageRecordingPluginTest extends TestCase {
         Result result;
 
         when(drivers.containsKey(anyString())).thenReturn(true);
-        result = plugin.startWebpageRecording("streamId", "websocketUrl", endpoint);
+        result = plugin.startMediaPush("streamId", "websocketUrl", endpoint);
         assertFalse(result.isSuccess());
 
         when(drivers.containsKey(anyString())).thenReturn(false);
         when(plugin.createDriver(endpoint)).thenReturn(null);
-        result = plugin.startWebpageRecording("streamId", "websocketUrl", endpoint);
+        result = plugin.startMediaPush("streamId", "websocketUrl", endpoint);
         assertFalse(result.isSuccess());
         driver.quit();
     }
 
     @Test
-    public void testStopWebpageRecording() throws InterruptedException {
-        WebpageRecordingPlugin plugin = Mockito.spy(new WebpageRecordingPlugin());
+    public void testStopMediaPush() throws InterruptedException {
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         HashMap<String, WebDriver> drivers = Mockito.mock(HashMap.class);
         when(plugin.getDrivers()).thenReturn(drivers);
 
         when(drivers.containsKey(anyString())).thenReturn(false);
-        Result result = plugin.stopWebpageRecording("streamId");
+        Result result = plugin.stopMediaPush("streamId");
         assertFalse(result.isSuccess());
     }
 }

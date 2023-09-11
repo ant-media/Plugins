@@ -28,11 +28,11 @@ import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
 
-@Component(value="plugin.webpageRecordingPlugin")
-public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamListener{
+@Component(value="plugin.mediaPushPlugin")
+public class MediaPushPlugin implements ApplicationContextAware, IStreamListener{
 
 	public static final String BEAN_NAME = "web.handler";
-	protected static Logger logger = LoggerFactory.getLogger(WebpageRecordingPlugin.class);
+	protected static Logger logger = LoggerFactory.getLogger(MediaPushPlugin.class);
 	private final String EXTENSION_ID = "ajkfaolgdnokklgejfjobgbbihegbllg";
 
 	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
@@ -67,7 +67,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		}
 	}
 
-	public Result startWebpageRecording(String streamId, String websocketUrl, Endpoint request) {
+	public Result startMediaPush(String streamId, String websocketUrl, Endpoint request) {
 		String url = request.getUrl();
 		if (streamId == null || streamId.isEmpty()) {
 			//generate a stream id
@@ -120,7 +120,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 		 */
 	}
 
-	public Result stopWebpageRecording(String streamId) {
+	public Result stopMediaPush(String streamId) {
 		if (!drivers.containsKey(streamId)) {
 			logger.warn("Driver does not exist for stream id: {}", streamId);
 			return new Result(false, "Driver does not exist for stream id: " + streamId, 404);
@@ -167,7 +167,7 @@ public class WebpageRecordingPlugin implements ApplicationContextAware, IStreamL
 	private File getExtensionFileFromResource() throws IOException {
 
 		ClassLoader classLoader = getClass().getClassLoader();
-		InputStream inputStream = classLoader.getResourceAsStream("webpage-recording-extension-manifest-v2.crx");
+		InputStream inputStream = classLoader.getResourceAsStream("media-push-extension-manifest-v2.crx");
 		if (inputStream == null) {
 			throw new IllegalArgumentException("webpage-recording-extension not found!");
 		} else {

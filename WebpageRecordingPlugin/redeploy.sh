@@ -7,8 +7,8 @@ if [ $OUT -ne 0 ]; then
     exit $OUT
 fi
 
-rm -r $AMS_DIR/plugins/webpage-recording-plugin*
-cp target/webpage-recording-plugin.jar $AMS_DIR/plugins/
+rm -r $AMS_DIR/plugins/media-push-plugin*
+cp target/media-push-plugin.jar $AMS_DIR/plugins/
 
 OUT=$?
 
