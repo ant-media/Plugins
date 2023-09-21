@@ -49,7 +49,22 @@ chrome.runtime.onConnect.addListener(port => {
 
 
         if (message.command === 'WR_START_BROADCASTING') {
-            const stream = await getVideoAudioStream(mediaConstraints);
+            var stream = await getVideoAudioStream(mediaConstraints);
+
+            if (stream === null || typeof stream === "undefined") {
+                mediaConstraints = {
+                video : true,
+                audio : true,
+                videoConstraints : {
+                    mandatory : {
+                        chromeMediaSource : 'tab',
+                        minFrameRate: 4,
+                        maxFrameRate: 20
+                    }
+                }
+              };
+              stream = await getVideoAudioStream(mediaConstraints);  
+          }
 
             let pc_config = {
                 'iceServers' : [ {
