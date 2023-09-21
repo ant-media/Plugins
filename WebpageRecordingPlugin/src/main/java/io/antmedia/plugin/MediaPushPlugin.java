@@ -107,7 +107,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		customModification(driver);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
 		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
-		return new Result(true, streamId, "Webpage recording started");
+		return new Result(true, streamId, "Media Push started");
 	}
 
 	public void customModification(WebDriver driver) {
@@ -131,7 +131,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		js.executeScript(String.format("window.postMessage({ command:  'STOP', streamId: '%s' }, '*')", streamId));
 		driver.quit();
 		drivers.remove(streamId);
-		return new Result(true, "Webpage recording stopped");
+		return new Result(true, "Media Push stopped");
 	}
 
 	public WebDriver createDriver(Endpoint request) {
