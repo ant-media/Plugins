@@ -38,8 +38,8 @@ chrome.action.onClicked.addListener(async (tab) => {
         type: 'start-broadcasting',
         target: 'offscreen',
         data: streamId,
-        websocketURL: 'wss://ovh36.antmedia.io:5443/WebRTCAppEE/websocket',
-        streamId: 'stream1',
+        websocketURL: tab.websocketURL,
+        streamId: tab.streamId,
     });
 
     chrome.action.setIcon({ path: '/icons/broadcasting.png' });

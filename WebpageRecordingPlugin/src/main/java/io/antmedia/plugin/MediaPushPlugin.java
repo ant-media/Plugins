@@ -167,9 +167,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	private File getExtensionFileFromResource() throws IOException {
 
 		ClassLoader classLoader = getClass().getClassLoader();
-		InputStream inputStream = classLoader.getResourceAsStream("media-push-extension-manifest-v2.crx");
+		InputStream inputStream = classLoader.getResourceAsStream("media-push-extension.crx");
 		if (inputStream == null) {
-			throw new IllegalArgumentException("webpage-recording-extension not found!");
+			throw new IllegalArgumentException("media-push-extension not found!");
 		} else {
 			File targetFile = new File("src/main/resources/targetFile.tmp");
 			FileUtils.copyInputStreamToFile(inputStream, targetFile);
