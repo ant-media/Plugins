@@ -66,7 +66,7 @@ Media Push Plugin have REST API to control the plugin.
 
 Call the REST Method below to let Ant Media Server broadcast the web page. You should pass the url of the web page and can pass streamId as query parameter you wanted to use as a parameter.
    ```
-   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/media-push/start" -d '{"url": "http://example.com"}'
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/media-push/start" -d '{"url": "http://example.com", "width": 1280, "height": 720}'
    ```
 
 * Stop the broadcast
