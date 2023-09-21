@@ -1,0 +1,13 @@
+{
+	"name": "Ant Media Media Push Extension Manifest v3",
+	"version": "1.0.0",
+	"manifest_version": 3,
+	"minimum_chrome_version": "116",
+	"action": {
+		"default_icon": "icons/not-broadcasting.png"
+	},
+	"background": {
+		"service_worker": "service-worker.js"
+	},
+	"permissions": ["tabCapture", "offscreen"]
+}

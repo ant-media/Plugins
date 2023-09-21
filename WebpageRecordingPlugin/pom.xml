@@ -7,7 +7,7 @@
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.antmedia.plugin</groupId>
-	<artifactId>webpage-recording</artifactId>
+	<artifactId>media-push</artifactId>
 	<packaging>jar</packaging>
 	<name>Plugin Maven Webapp</name>
 	<url>http://maven.apache.org</url>
@@ -340,7 +340,7 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
-	<description>Webpage Recording Plugin for Ant Media Server</description>
+	<description>Media Push Plugin for Ant Media Server</description>
 	<organization>
 		<name>Ant Media</name>
 		<url>https://antmedia.io</url>
