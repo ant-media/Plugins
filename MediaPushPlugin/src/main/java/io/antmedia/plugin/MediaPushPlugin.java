@@ -148,6 +148,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		args.add("--disable-infobars");
 		args.add("--enable-tab-capture");
 		args.add("--no-sandbox");
+		args.add("--autoplay-policy=no-user-gesture-required");
 		args.add(String.format("--allowlisted-extension-id=%s", EXTENSION_ID));
 		if (request.getHeight() > 0 && request.getWidth() > 0) {
 			args.add(String.format("--window-size=%s,%s", request.getWidth(), request.getHeight()));
