@@ -40,7 +40,7 @@ You can record the broadcast if needed. But you need to start the recording manu
   ```
 5. Copy the `webpage-recording-plugin.jar` file to `plugins` directory under `/usr/local/antmedia`
   ```
-  sudo cp webpage-recording-plugin.jar /usr/local/antmedia/plugins
+  sudo cp media-push-plugin.jar /usr/local/antmedia/plugins
   ```
 6. Restart the service
   ```
