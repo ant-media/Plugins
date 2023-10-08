@@ -61,6 +61,12 @@ async function startBroadcasting(message) {
         OfferToReceiveVideo : false
     };
 
+    let token = message.token;
+
+    if (token == null || token == undefined) {
+        token = "";
+    }
+
     webRTCAdaptor = new WebRTCAdaptor({
         websocket_url : message.websocketURL,
         mediaConstraints : mediaConstraints,
@@ -70,7 +76,7 @@ async function startBroadcasting(message) {
         localVideoId : "localVideo",
         callback : (info, obj) => {
             if (info == "initialized") {
-                webRTCAdaptor.publish(message.streamId, "", "", "", "", "");
+                webRTCAdaptor.publish(message.streamId, token, "", "", "", "");
             }
             console.log(info);
         },

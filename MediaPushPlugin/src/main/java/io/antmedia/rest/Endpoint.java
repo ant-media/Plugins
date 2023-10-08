@@ -10,14 +10,17 @@ public class Endpoint {
 
     private String jsCommand;
 
+    private String token;
+
     public Endpoint() {
     }
 
-    public Endpoint(String URL, int width, int height, String jsCommand) {
+    public Endpoint(String URL, int width, int height, String jsCommand, String token) {
         this.URL = URL;
         this.width = width;
         this.height = height;
         this.jsCommand = jsCommand;
+        this.token = token;
     }
 
     public String getJsCommand() {
@@ -27,14 +30,6 @@ public class Endpoint {
     public void setJsCommand(String jsCommand) {
         this.jsCommand = jsCommand;
     }
-
-	public String getUrl() {
-		return URL;
-	}
-
-	public void setUrl(String URL) {
-		this.URL = URL;
-	}
 
 	public int getWidth() {
         return width;
@@ -52,4 +47,19 @@ public class Endpoint {
         this.height = height;
     }
 
+    public String getURL() {
+        return URL;
+    }
+
+    public void setURL(String URL) {
+        this.URL = URL;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
+    }
 }
