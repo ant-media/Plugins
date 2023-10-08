@@ -16,6 +16,8 @@ import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.logging.LogEntries;
+import org.openqa.selenium.logging.LogEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -107,7 +109,31 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		customModification(driver);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
 		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
-		return new Result(true, streamId, "Media Push started");
+
+		// wait until stream is started
+		timeout = 20;
+		while (true) {
+			LogEntries logEntries = driver.manage().logs().get("browser");
+			for (LogEntry entry : logEntries) {
+				if (entry.getMessage().contains("publish_started")) {
+					return new Result(true, streamId, "Media Push started");
+				}
+			}
+			try {
+				TimeUnit.SECONDS.sleep(1);
+			} catch (InterruptedException e) {
+				logger.error(e.getMessage());
+			}
+
+			// if stream is not started in 20 seconds, return error to prevent infinite loop
+			timeout--;
+			if (timeout == 0) {
+				logger.error("Timeout while starting the stream");
+				driver.quit();
+				drivers.remove(streamId);
+				return new Result(false, streamId, "Timeout while starting the stream");
+			}
+		}
 	}
 
 	public void customModification(WebDriver driver) {
