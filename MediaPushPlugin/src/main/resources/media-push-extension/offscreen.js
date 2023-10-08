@@ -23,18 +23,6 @@ async function startBroadcasting(message) {
         throw new Error('Called startBroadcasting while recording is in progress.');
     }
 
-    let mediaConstraints = {
-        video : true,
-        audio : true,
-        videoConstraints : {
-            mandatory : {
-                chromeMediaSource : 'tab',
-                minFrameRate: 4,
-                maxFrameRate: 20
-            }
-        }
-    };
-
     const media = await navigator.mediaDevices.getUserMedia({
         audio: {
             mandatory: {
@@ -45,7 +33,11 @@ async function startBroadcasting(message) {
         video: {
             mandatory: {
                 chromeMediaSource: 'tab',
-                chromeMediaSourceId: message.data
+                chromeMediaSourceId: message.data,
+                maxWidth: 1920,
+                maxHeight: 1280,
+                minWidth: 640,
+                minHeight: 480
             }
         }
     });
@@ -61,22 +53,32 @@ async function startBroadcasting(message) {
         OfferToReceiveVideo : false
     };
 
+    const track = media.getVideoTracks()[0];
+
+    const constra = {
+        width: { min: 640, ideal: 1280 },
+        height: { min: 480, ideal: 720 },
+        advanced: [{ width: 1920, height: 1280 }, { aspectRatio: 1.333 }],
+        resizeMode: 'crop-and-scale'
+      };
+
+    track.applyConstraints(constra);
+
     webRTCAdaptor = new WebRTCAdaptor({
         websocket_url : message.websocketURL,
-        mediaConstraints : mediaConstraints,
         peerconnection_config : pc_config,
         sdp_constraints : sdpConstraints,
-        isPlayMode : true,
-        localVideoId : "localVideo",
+        localStream: media,
         callback : (info, obj) => {
             if (info == "initialized") {
                 webRTCAdaptor.publish(message.streamId, "", "", "", "", "");
             }
             console.log(info);
         },
-        callbackError : function(error, message) {}
+        callbackError : function(error, message) {
+            console.log("error callback: " + error + " message: " + message);
+        }
     });
-    webRTCAdaptor.setLocalStream(media);
 
     window.location.hash = 'broadcasting';
 }
