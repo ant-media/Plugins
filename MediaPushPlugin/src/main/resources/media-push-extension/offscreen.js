@@ -23,6 +23,12 @@ async function startBroadcasting(message) {
         throw new Error('Called startBroadcasting while recording is in progress.');
     }
 
+    let token = "";
+
+    if(message.token != undefined) {
+        token = message.token;
+    }
+
     let mediaConstraints = {
         video : true,
         audio : true,
@@ -34,6 +40,24 @@ async function startBroadcasting(message) {
             }
         }
     };
+
+    if (message.width != undefined && message.height != undefined && message.width > 0 && message.height > 0) {
+        mediaConstraints = {
+            video : true,
+            audio : true,
+            videoConstraints : {
+                mandatory : {
+                    chromeMediaSource : 'tab',
+                    minFrameRate: 4,
+                    maxFrameRate: 20,
+                    maxWidth : message.width,
+                    maxHeight : message.height,
+                    minWidth : message.width,
+                    minHeight : message.height
+                }
+            }
+        };
+    }
 
     const media = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -56,27 +80,19 @@ async function startBroadcasting(message) {
         } ]
     };
 
-    let sdpConstraints = {
-        OfferToReceiveAudio : false,
-        OfferToReceiveVideo : false
-    };
-
     webRTCAdaptor = new WebRTCAdaptor({
         websocket_url : message.websocketURL,
         mediaConstraints : mediaConstraints,
         peerconnection_config : pc_config,
-        sdp_constraints : sdpConstraints,
-        isPlayMode : true,
-        localVideoId : "localVideo",
+        localStream : media,
         callback : (info, obj) => {
             if (info == "initialized") {
-                webRTCAdaptor.publish(message.streamId, "", "", "", "", "");
+                webRTCAdaptor.publish(message.streamId, token, "", "", "", "");
             }
             console.log(info);
         },
         callbackError : function(error, message) {}
     });
-    webRTCAdaptor.setLocalStream(media);
 
     window.location.hash = 'broadcasting';
 }
