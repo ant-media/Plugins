@@ -53,6 +53,11 @@ async function startBroadcasting(message) {
         OfferToReceiveVideo : false
     };
 
+    let token = message.token;
+
+    if (token == null || token == undefined) {
+        token = "";
+    }
     const track = media.getVideoTracks()[0];
 
     const constra = {
@@ -71,7 +76,7 @@ async function startBroadcasting(message) {
         localStream: media,
         callback : (info, obj) => {
             if (info == "initialized") {
-                webRTCAdaptor.publish(message.streamId, "", "", "", "", "");
+                webRTCAdaptor.publish(message.streamId, token, "", "", "", "");
             }
             console.log(info);
         },
