@@ -47,17 +47,6 @@ You can record the broadcast if needed. But you need to start the recording manu
   sudo service antmedia restart
   ```
 
-### Optional: How to add Media Push Page 
-
-1. Download the media_push.html file
-  ```
-  wget https://github.com/ant-media/Plugins/raw/master/MediaPushPlugin/build/media_push.html
-  ```
-2. Copy the media_push.html file into directory under /usr/local/antmedia/webapps/<your-webapp-name>/
-  ```
-  sudo cp media_push.html /usr/local/antmedia/webapps/<your-webapp-name>/media_push.html
-  ```
-
 ## How to Use
 
 Media Push Plugin have REST API to control the plugin. 
@@ -66,23 +55,56 @@ Media Push Plugin have REST API to control the plugin.
 
 Call the REST Method below to let Ant Media Server broadcast the web page. You should pass the url of the web page and can pass streamId as query parameter you wanted to use as a parameter.
    ```
-   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/media-push/start" -d '{"url": "http://example.com", "width": 1280, "height": 720}'
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/start" -d '{"url": "http://example.com", "width": 1280, "height": 720}'
    ```
 
 * Stop the broadcast
 
 Call the REST Method below to let Ant Media Server with the stream id you specified in the start method.
    ```
-   curl -i -X POST -H "Accept: Application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/media-push/stop/{streamId}"
+   curl -i -X POST -H "Accept: Application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/stop/{streamId}"
    ```
 
 * Send javascript command to a webpage with given stream id
 
 Call the REST Method below to let Ant Media Server with the stream id you specified in the start method. You should pass the javascript command in the body.
    ```
-   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "http://localhost:5080/WebRTCAppEE/rest/v1/media-push/send-command?streamId={streamId}"  -d '{"jsCommand": "{javascript_command_which_is_executed}"}'
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/send-command?streamId={streamId}"  -d '{"jsCommand": "{javascript_command_which_is_executed}"}'
    ```
 
+### Optional: How to add Composite Layout 
+
+1. Download the composite_layout.html file
+  ```
+  wget https://github.com/ant-media/Plugins/raw/master/MediaPushPlugin/build/composite_layout.html
+  ```
+2. Copy the composite_layout.html file into directory under /usr/local/antmedia/webapps/<your-webapp-name>/
+  ```
+  sudo cp media_push.html /usr/local/antmedia/webapps/<your-webapp-name>/composite_layout.html
+  ```
+
+### How to use Composite Layout
+
+* Start the Composite Layout
+
+Call the REST Method below to let Ant Media Server with the stream id you specified in the start method. You should pass the url, width and height in the body.
+   ```
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/start"  -d '{"url": "https://<ant-media-server-domain>/<your-webapp-name>/composite_layout.html?roomId=<room-name>&publisherId=<composite-layout-publisher-id>", "width": 1280, "height": 720}'
+   ```
+
+* Stop the Composite Layout
+
+Call the REST Method below to let Ant Media Server with the stream id you specified in the stop method.
+   ```
+   curl -i -X POST -H "Accept: Application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/stop/{composite-layout-publisher-id}"
+   ```
+
+* Update the Composite Layout UI
+
+Call the REST Method below to update the layout on the fly.
+   ```
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v2/broadcasts/<composite-layout-publisher-id>/data"  -d '{"streamId":"streamId1","layoutOptions": {"canvas": {"width": 640,"height": 640},"layout": [{"streamId": "<room-participant-id>","region": {"xPos": 20,"yPos": 0,"zIndex": 1,"width": 200,"height": 200},"fillMode": "fill","placeholderImageUrl": "https://cdn-icons-png.flaticon.com/512/149/149071.png"}]}}' 
+   ```
 
    
 ## How to Build from Source Code
