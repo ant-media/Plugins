@@ -120,7 +120,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		while (true) {
 			LogEntries logEntries = driver.manage().logs().get("browser");
 			for (LogEntry entry : logEntries) {
-				if (entry.getMessage().contains("publish_started")) {
+				if (entry.getMessage().contains("mediapush_publish_started")) {
 					return new Result(true, streamId, "Media Push started");
 				}
 			}
