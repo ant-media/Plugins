@@ -108,6 +108,8 @@ async function startBroadcasting(message) {
         callback : (info, obj) => {
             if (info == "initialized") {
                 webRTCAdaptor.publish(message.streamId, token, "", "", "", "");
+            } else if (info == "publish_started") {
+                console.log("mediapush_publish_started");
             }
             console.log(info);
         },
