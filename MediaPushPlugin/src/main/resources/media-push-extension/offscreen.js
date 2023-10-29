@@ -69,7 +69,11 @@ async function startBroadcasting(message) {
         video: {
             mandatory: {
                 chromeMediaSource: 'tab',
-                chromeMediaSourceId: message.data
+                chromeMediaSourceId: message.data,
+                maxWidth: 1920,
+                maxHeight: 1280,
+                minWidth: 640,
+                minHeight: 480
             }
         }
     });
@@ -80,18 +84,36 @@ async function startBroadcasting(message) {
         } ]
     };
 
+    let sdpConstraints = {
+        OfferToReceiveAudio : false,
+        OfferToReceiveVideo : false
+    };
+
+    const track = media.getVideoTracks()[0];
+
+    const constra = {
+        width: { min: 640, ideal: 1280 },
+        height: { min: 480, ideal: 720 },
+        advanced: [{ width: 1920, height: 1280 }, { aspectRatio: 1.333 }],
+        resizeMode: 'crop-and-scale'
+      };
+
+    track.applyConstraints(constra);
+
     webRTCAdaptor = new WebRTCAdaptor({
         websocket_url : message.websocketURL,
-        mediaConstraints : mediaConstraints,
         peerconnection_config : pc_config,
-        localStream : media,
+        sdp_constraints : sdpConstraints,
+        localStream: media,
         callback : (info, obj) => {
             if (info == "initialized") {
                 webRTCAdaptor.publish(message.streamId, token, "", "", "", "");
             }
             console.log(info);
         },
-        callbackError : function(error, message) {}
+        callbackError : function(error, message) {
+            console.log("error callback: " + error + " message: " + message);
+        }
     });
 
     window.location.hash = 'broadcasting';

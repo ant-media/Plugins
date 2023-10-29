@@ -35,7 +35,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(MediaPushPlugin.class);
-	private final String EXTENSION_ID = "ajkfaolgdnokklgejfjobgbbihegbllg";
+	private final String EXTENSION_ID = "naehlhafjhmndibenfljmfigloaocmbp";
 
 	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
 
@@ -70,7 +70,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	}
 
 	public Result startMediaPush(String streamId, String websocketUrl, Endpoint request) {
-		String url = request.getUrl();
+		String url = request.getURL();
 		if (streamId == null || streamId.isEmpty()) {
 			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
@@ -108,7 +108,12 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 		customModification(driver);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
-		js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
+
+    if (request.getToken() == null && request.getToken().isEmpty()) {
+			js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
+		} else {
+			js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s', token: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight(), request.getToken()));
+		}
 
 		// wait until stream is started
 		timeout = 20;
