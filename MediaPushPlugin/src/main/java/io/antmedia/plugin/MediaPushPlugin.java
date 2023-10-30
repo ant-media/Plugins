@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -73,7 +74,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
 		}
-		
+
 		if (getDrivers().containsKey(streamId)) {
 			logger.warn("Driver already exists for stream id: {}", streamId);
 			return new Result(false, "Driver already exists for stream id: " + streamId);
@@ -152,19 +153,35 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		args.add("--disable-infobars");
 		args.add("--enable-tab-capture");
 		args.add("--no-sandbox");
-		args.add("--autoplay-policy=no-user-gesture-required");
+		args.add("--autoplay-policy=no-user-gesture-required");//For video autoplay.
 		args.add(String.format("--allowlisted-extension-id=%s", EXTENSION_ID));
 		if (request.getHeight() > 0 && request.getWidth() > 0) {
 			args.add(String.format("--window-size=%s,%s", request.getWidth(), request.getHeight()));
 		}
 		args.add("--headless=chrome");
+
+
+        args.add("--start-fullscreen");;//For fullscreen mode
+        args.add("--disable-gpu");//For reduce memory consumption
+        options.setExperimentalOption("useAutomationExtension", false); //Disable automation for info bar. That need for fullscreen.
+        options.setExperimentalOption("excludeSwitches", Arrays.asList("enable-automation"));
+
+		/**
+		    1280 x 720 resolution sample
+
+		    --start-fullscreen --> when add that argument , chrome inner height value up to 675px
+		    useAutomationExtension and excludeSwitches --> when add that experimental option , chrome inner  height up to 720 px.
+
+		**/
 		try {
 			options.addExtensions(getExtensionFileFromResource());
 		} catch (IOException e) {
 			logger.error(e.getMessage());
 			return null;
 		}
+
 		options.addArguments(args);
+
 
 		return new ChromeDriver(options);
 	}
@@ -182,7 +199,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 
 	}
-	
+
 	public AntMediaApplicationAdapter getApplication() {
 		return (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 	}
