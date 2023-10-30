@@ -158,7 +158,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		if (request.getHeight() > 0 && request.getWidth() > 0) {
 			args.add(String.format("--window-size=%s,%s", request.getWidth(), request.getHeight()));
 		}
-		args.add("--headless=chrome");
+		args.add("--headless=chrome");//Chrome window will not open. Like a background job
 
 
         args.add("--start-fullscreen");;//For fullscreen mode
