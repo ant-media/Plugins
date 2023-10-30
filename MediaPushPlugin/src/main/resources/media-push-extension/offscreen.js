@@ -22,7 +22,8 @@ async function startBroadcasting(message) {
     if (typeof webRTCAdaptor !== 'undefined' ) {
         throw new Error('Called startBroadcasting while recording is in progress.');
     }
-
+    let width = message.width;//comes from backend jsCommand
+    let height = message.height;//comes from backend jsCommand
     const media = await navigator.mediaDevices.getUserMedia({
         audio: {
             mandatory: {
@@ -32,10 +33,11 @@ async function startBroadcasting(message) {
         },
         video: {
             mandatory: {
-                chromeMediaSource: 'tab',
-                chromeMediaSourceId: message.data,
-                maxWidth: 1920,
-                maxHeight: 1280,
+                chromeMediaSource : 'tab',
+                minFrameRate: 10,
+                maxFrameRate: 60,//Can be parametric
+                maxWidth: width,
+                maxHeight: height,
                 minWidth: 640,
                 minHeight: 480
             }
@@ -53,7 +55,7 @@ async function startBroadcasting(message) {
         OfferToReceiveVideo : false
     };
 
-    let token = message.token;
+    let token = message.token;//comes from backend jsCommand
 
     if (token == null || token == undefined) {
         token = "";
@@ -61,11 +63,11 @@ async function startBroadcasting(message) {
     const track = media.getVideoTracks()[0];
 
     const constra = {
-        width: { min: 640, ideal: 1280 },
-        height: { min: 480, ideal: 720 },
-        advanced: [{ width: 1920, height: 1280 }, { aspectRatio: 1.333 }],
+        width: { min: 640, ideal: width },
+        height: { min: 480, ideal: height },
+        advanced: [{ width: width, height: height }, { aspectRatio: 1.777778 }],
         resizeMode: 'crop-and-scale'
-      };
+    };
 
     track.applyConstraints(constra);
 
