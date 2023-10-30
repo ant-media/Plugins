@@ -34,7 +34,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(MediaPushPlugin.class);
-	private final String EXTENSION_ID = "naehlhafjhmndibenfljmfigloaocmbp";
+	private final String EXTENSION_ID = "jiooknkknafeeamjinimkeobfgjelcdp";
 
 	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
 
