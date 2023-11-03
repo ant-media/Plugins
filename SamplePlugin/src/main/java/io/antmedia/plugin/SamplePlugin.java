@@ -1,5 +1,6 @@
 package io.antmedia.plugin;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -44,15 +45,7 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 
 		if(application != null)
 		{
-			List<MuxAdaptor> muxAdaptors = application.getMuxAdaptors();
-			for (MuxAdaptor muxAdaptor : muxAdaptors) 
-			{
-				if (streamId.equals(muxAdaptor.getStreamId())) 
-				{
-					selectedMuxAdaptor = muxAdaptor;
-					break;
-				}
-			}
+			selectedMuxAdaptor = application.getMuxAdaptor(streamId);
 		}
 
 		return selectedMuxAdaptor;
