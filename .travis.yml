@@ -48,7 +48,6 @@ script:
   - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
   - cd ../TensorflowPlugin
   - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
-  - echo $?
   
     
 after_script:
