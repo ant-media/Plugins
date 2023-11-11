@@ -6,26 +6,24 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
+import io.antmedia.filter.utils.Filter;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
+import org.bytedeco.ffmpeg.avfilter.AVFilterContext;
 import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.ffmpeg.global.avutil;
+import org.bytedeco.javacpp.PointerPointer;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -47,7 +45,7 @@ import io.antmedia.rest.model.Result;
 import io.vertx.core.Vertx;
 
 public class FilterAdaptorUnitTest {
-	
+
 	@Rule
 	public TestRule watcher = new TestWatcher() {
 		protected void starting(Description description) {
@@ -62,7 +60,7 @@ public class FilterAdaptorUnitTest {
 			System.out.println("Finishing test: " + description.getMethodName());
 		};
 	};
-	
+
 	private static Vertx vertx;
 
 	@AfterClass
@@ -75,7 +73,7 @@ public class FilterAdaptorUnitTest {
 		vertx = Vertx.vertx();
 	}
 
-	
+
 	@Test
 	public void testFilterGraphVideoFeed() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
@@ -87,10 +85,10 @@ public class FilterAdaptorUnitTest {
 
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		when(app.getVertx()).thenReturn(vertx);
-		
+
 		filterAdaptor.createOrUpdateFilter(filterConf, app);
 
-		
+
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
 		AVFrame frame = new AVFrame();
 		FilterGraph filterGraph = mock(FilterGraph.class);
@@ -114,12 +112,12 @@ public class FilterAdaptorUnitTest {
 		vsi.setCodecParameters(mock(AVCodecParameters.class));
 		vsi.setTimeBase(Utils.TIME_BASE_FOR_MS);
 		filterAdaptor.setVideoStreamInfo(streamId, vsi);
-		
+
 		filterAdaptor.onVideoFrame(streamId, frame);
 		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any(), Mockito.anyBoolean());
 	}
-	
-	
+
+
 	@Test
 	public void testFilterGraphAudioFeed() {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
@@ -130,10 +128,10 @@ public class FilterAdaptorUnitTest {
 
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		when(app.getVertx()).thenReturn(vertx);
-		
+
 		filterAdaptor.createOrUpdateFilter(filterConf, app);
 
-		
+
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
 		AVFrame frame = new AVFrame();
 		FilterGraph filterGraph = mock(FilterGraph.class);
@@ -156,29 +154,29 @@ public class FilterAdaptorUnitTest {
 		filterAdaptor.onAudioFrame(streamId, frame);
 		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any(), anyBoolean());
 	}
-	
+
 	@Test
 	public void testVideoAudioFiltering() {
 		testFiltering(true, "[in0][in1][in2]vstack=inputs=3[out0]", true, "[in0][in1][in2]amix=inputs=3[out0]");
 	}
-	
+
 	//use some of the inputs in the filter
-	@Test 
+	@Test
 	public void testPartialVideoAudioFiltering() {
 		testFiltering(true, "[in0][in2]vstack=inputs=2[out0]", true, "[in0][in2]amix=inputs=2[out0]");
 	}
-	
+
 	@Test
 	public void testVideoOnlyFiltering() {
 		testFiltering(true, "[in0][in1][in2]vstack=inputs=3[out0]", false, "dummy");
 	}
-	
+
 	@Test
 	public void testAudioOnlyFiltering() {
 		testFiltering(false, "dummy", true, "[in0][in1][in2]amix=inputs=3[out0]");
 	}
-	
-	
+
+
 	public void testFiltering(boolean videoEnabled, String videoFilter, boolean audioEnabled, String audioFilter) {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
@@ -187,7 +185,7 @@ public class FilterAdaptorUnitTest {
 		String stream1 = "inStream1";
 		String stream2 = "inStream2";
 		String stream3 = "inStream3";
-		
+
 		String output1 = "outStream1";
 
 
@@ -199,16 +197,16 @@ public class FilterAdaptorUnitTest {
 		StreamParametersInfo asi2 = getStreamInfo();
 		StreamParametersInfo asi3 = getStreamInfo();
 
-		
+
 		filterAdaptor.setVideoStreamInfo(stream1, vsi1);
 		filterAdaptor.setAudioStreamInfo(stream1, asi1);
-		
+
 		filterAdaptor.setVideoStreamInfo(stream2, vsi2);
 		filterAdaptor.setAudioStreamInfo(stream2, asi2);
-		
+
 		filterAdaptor.setVideoStreamInfo(stream3, vsi3);
 		filterAdaptor.setAudioStreamInfo(stream3, asi3);
-		
+
 		FilterConfiguration conf = new FilterConfiguration();
 		conf.setVideoEnabled(videoEnabled);
 		conf.setAudioEnabled(audioEnabled);
@@ -216,14 +214,14 @@ public class FilterAdaptorUnitTest {
 		conf.setAudioFilter(audioFilter);
 		conf.setInputStreams(Arrays.asList(stream1, stream2, stream3));
 		conf.setOutputStreams(Arrays.asList(output1));
-		
+
 		assertTrue(filterAdaptor.createOrUpdateFilter(conf, app).isSuccess());
-		
+
 		filterAdaptor.close(app);
-		
+
 		//increase coverage and checking not throwing exception
 		filterAdaptor.close(app);
-		
+
 	}
 
 	public StreamParametersInfo getStreamInfo() {
@@ -231,7 +229,7 @@ public class FilterAdaptorUnitTest {
 		AVCodecParameters codecParams = mock(AVCodecParameters.class);
 		when(codecParams.height()).thenReturn(360);
 		when(codecParams.width()).thenReturn(640);
-		
+
 		AVChannelLayout channelLayout = new AVChannelLayout();
 		avutil.av_channel_layout_default(channelLayout, 2);
 		when(codecParams.ch_layout()).thenReturn(channelLayout);
@@ -242,16 +240,16 @@ public class FilterAdaptorUnitTest {
 		when(tb.num()).thenReturn(1);
 		when(tb.den()).thenReturn(1000);
 
-		
+
 		si.setEnabled(true);
 		si.setCodecParameters(codecParams);
-		
-		
+
+
 		si.setTimeBase(tb);
 
 		return si;
 	}
-	
+
 	/*
 	 * In synchronous mode output frame pts should be the same with input,
 	 * because we apply filter on going original stream without creating a new stream.
@@ -310,5 +308,38 @@ public class FilterAdaptorUnitTest {
 			assertNotEquals(filteredFrame, frame);
 			assertEquals(filteredFrame.pts(), frame.pts());
 		}
+	}
+
+	@Test
+	public void testOnFilteredAudioFrame() {
+		onFilteredAudioFrameTest(true);
+		onFilteredAudioFrameTest(false);
+	}
+
+	public void onFilteredAudioFrameTest(boolean videoEnabled) {
+
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
+		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
+		IFrameListener frameListener = mock(IFrameListener.class);
+		filterAdaptor.getCurrentOutStreams().put(streamId, frameListener);
+		AVFrame frame = mock(AVFrame.class);
+		when(frame.pts(anyLong())).thenReturn(frame);
+
+		FilterConfiguration filterConfiguration = new FilterConfiguration();
+		filterConfiguration.setAudioEnabled(true);
+		filterConfiguration.setVideoEnabled(videoEnabled);
+		filterAdaptor.setFilterConfiguration(filterConfiguration);
+
+		Map<String, Filter> videoSinkFiltersMap = new HashMap<>();
+		Filter filter = mock(Filter.class);
+		doReturn(Utils.TIME_BASE_FOR_MS).when(filterAdaptor).getFilterTimebase(videoSinkFiltersMap, streamId);
+		videoSinkFiltersMap.put(streamId, filter);
+		for (int i = 0; i < 20; i++) {
+			if(i==10) {
+				filterAdaptor.onFilteredVideoFrame(videoSinkFiltersMap, streamId, frame);
+			}
+			filterAdaptor.onFilteredAudioFrame(streamId, frame);
+		}
+		verify(frameListener, times(videoEnabled?10:20)).onAudioFrame(streamId, frame);
 	}
 }
