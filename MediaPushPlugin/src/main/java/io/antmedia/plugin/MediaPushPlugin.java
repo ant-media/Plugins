@@ -16,8 +16,6 @@ import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.logging.LogEntries;
-import org.openqa.selenium.logging.LogEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -35,7 +33,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(MediaPushPlugin.class);
-	private final String EXTENSION_ID = "naehlhafjhmndibenfljmfigloaocmbp";
+	private final String EXTENSION_ID = "fpklfkhgihhhlabdhcbgihfchgkdhpkd";
 
 	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
 
@@ -44,6 +42,16 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	public Map<String, WebDriver> getDrivers() {
 		return drivers;
 	}
+
+	private static final String antMediaStateReady = "ready";
+
+	private static final String antMediaStateWaiting = "waiting";
+
+	private static final String antMediaStateStarted = "started";
+
+	private static final String antMediaStateFinished = "finished";
+
+	private static final String antMediaStateError = "error";
 
 	@Override
 	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
@@ -106,24 +114,33 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 				return new Result(false, streamId, "Timeout while loading the page");
 			}
 		}
-		customModification(driver);
 		JavascriptExecutor js = (JavascriptExecutor) driver;
 
-    if (request.getToken() == null && request.getToken().isEmpty()) {
+    	if (request.getToken() == null || request.getToken().isEmpty()) {
 			js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
 		} else {
 			js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s', token: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight(), request.getToken()));
 		}
 
 		// wait until stream is started
-		timeout = 20;
+		timeout = 10;
 		while (true) {
-			LogEntries logEntries = driver.manage().logs().get("browser");
-			for (LogEntry entry : logEntries) {
-				if (entry.getMessage().contains("mediapush_publish_started")) {
+			js.executeScript("chrome.runtime.sendMessage('"+EXTENSION_ID+"', {'streamId': '"+streamId+"'},null,(response)=>{localStorage.setItem('webRTCAdaptorState', response.webRTCAdaptorState);localStorage.setItem('webRTCAdaptorError', response.webRTCAdaptorError)})");
+			//js.executeScript("chrome.runtime.sendMessage('"+EXTENSION_ID+"', {'streamId': '"+streamId+"'},null,(response)=>{localStorage.setItem(response.streamId+'webRTCAdaptorState', response.webRTCAdaptorState);localStorage.setItem(response.streamId+'webRTCAdaptorError', response.webRTCAdaptorError)})");
+			String webRTCAdaptorState = (String) js.executeScript("return localStorage.getItem('webRTCAdaptorState')");
+
+			if (webRTCAdaptorState == null || webRTCAdaptorState.isEmpty()) {
+				logger.error("WebRTC Adaptor state is null or empty");
+			} else if (webRTCAdaptorState.equals(antMediaStateStarted)) {
 					return new Result(true, streamId, "Media Push started");
-				}
+			} else if(webRTCAdaptorState.equals(antMediaStateError)) {
+				String errorMessage = (String) js.executeScript("return localStorage.getItem('webRTCAdaptorError')");
+				logger.error("Error while starting the stream");
+				driver.quit();
+				drivers.remove(streamId);
+				return new Result(false, streamId, "Error while starting the stream. Error: " + errorMessage);
 			}
+
 			try {
 				TimeUnit.SECONDS.sleep(1);
 			} catch (InterruptedException e) {
@@ -139,16 +156,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 				return new Result(false, streamId, "Timeout while starting the stream");
 			}
 		}
-	}
-
-	public void customModification(WebDriver driver) {
-		// you add related selenium code here to play the video on a custom page or login to a page
-
-		/* example code to start YouTube video
-		new Actions(driver)
-				.sendKeys("k")
-				.perform();
-		 */
 	}
 
 	public Result stopMediaPush(String streamId) {
@@ -196,7 +203,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return new ChromeDriver(options);
 	}
 
-	private File getExtensionFileFromResource() throws IOException {
+	File getExtensionFileFromResource() throws IOException {
 
 		ClassLoader classLoader = getClass().getClassLoader();
 		InputStream inputStream = classLoader.getResourceAsStream("media-push-extension.crx");
