@@ -111,7 +111,7 @@ public class FilterAdaptorUnitTest {
 		when(filterGraph.getListener()).thenReturn(mock(IFilteredFrameListener.class));
 
 		StreamParametersInfo vsi = new StreamParametersInfo();
-		vsi.setCodecParameters(mock(AVCodecParameters.class));
+		vsi.setCodecParameters(new AVCodecParameters());
 		vsi.setTimeBase(Utils.TIME_BASE_FOR_MS);
 		filterAdaptor.setVideoStreamInfo(streamId, vsi);
 		
