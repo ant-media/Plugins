@@ -50,39 +50,17 @@ async function startBroadcasting(message) {
     localStorage.setItem(key, antMediaState.WAITING);
 
     let token = "";
+    let width = 1280;
+    let height = 720;
 
     if(message.token !== undefined) {
         token = message.token;
     }
-
-    let mediaConstraints = {
-        video : true,
-        audio : true,
-        videoConstraints : {
-            mandatory : {
-                chromeMediaSource : 'tab',
-                minFrameRate: 4,
-                maxFrameRate: 20
-            }
-        }
-    };
-
-    if (message.width !== undefined && message.height !== undefined && message.width > 0 && message.height > 0) {
-        mediaConstraints = {
-            video : true,
-            audio : true,
-            videoConstraints : {
-                mandatory : {
-                    chromeMediaSource : 'tab',
-                    minFrameRate: 4,
-                    maxFrameRate: 20,
-                    maxWidth : message.width,
-                    maxHeight : message.height,
-                    minWidth : message.width,
-                    minHeight : message.height
-                }
-            }
-        };
+    if (message.width !== undefined && message.width > 0) {
+        width = message.width;
+    }
+    if (message.height !== undefined && message.height > 0) {
+        height = message.height;
     }
 
     const media = await navigator.mediaDevices.getUserMedia({
@@ -96,8 +74,10 @@ async function startBroadcasting(message) {
             mandatory: {
                 chromeMediaSource: 'tab',
                 chromeMediaSourceId: message.data,
-                maxWidth: 1920,
-                maxHeight: 1280,
+                minFrameRate: 10,
+                maxFrameRate: 60,
+                maxWidth: width,
+                maxHeight: height,
                 minWidth: 640,
                 minHeight: 480
             }
@@ -118,9 +98,9 @@ async function startBroadcasting(message) {
     const track = media.getVideoTracks()[0];
 
     const constra = {
-        width: { min: 640, ideal: 1280 },
-        height: { min: 480, ideal: 720 },
-        advanced: [{ width: 1920, height: 1280 }, { aspectRatio: 1.333 }],
+        width: { min: 640, ideal: width },
+        height: { min: 480, ideal: height },
+        advanced: [{ width: width, height: height }, { aspectRatio: 1.777778 }],
         resizeMode: 'crop-and-scale'
       };
 

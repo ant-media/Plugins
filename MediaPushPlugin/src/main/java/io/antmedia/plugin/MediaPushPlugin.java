@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,7 +34,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(MediaPushPlugin.class);
-	private final String EXTENSION_ID = "fpklfkhgihhhlabdhcbgihfchgkdhpkd";
+	private final String EXTENSION_ID = "ifmdhcknfpdipiofpdlgoolabigdfjnh";
 
 	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
 
@@ -191,12 +192,16 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			args.add(String.format("--window-size=%s,%s", request.getWidth(), request.getHeight()));
 		}
 		args.add("--headless=chrome");
+		args.add("--start-fullscreen");
+		args.add("--disable-gpu");
 		try {
 			options.addExtensions(getExtensionFileFromResource());
 		} catch (IOException e) {
 			logger.error(e.getMessage());
 			return null;
 		}
+		options.setExperimentalOption("useAutomationExtension", false);
+		options.setExperimentalOption("excludeSwitches", List.of("enable-automation"));
 		options.addArguments(args);
 
 		return new ChromeDriver(options);
