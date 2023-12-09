@@ -126,7 +126,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		timeout = 10;
 		while (true) {
 			js.executeScript("chrome.runtime.sendMessage('"+EXTENSION_ID+"', {'streamId': '"+streamId+"'},null,(response)=>{localStorage.setItem('webRTCAdaptorState', response.webRTCAdaptorState);localStorage.setItem('webRTCAdaptorError', response.webRTCAdaptorError)})");
-			//js.executeScript("chrome.runtime.sendMessage('"+EXTENSION_ID+"', {'streamId': '"+streamId+"'},null,(response)=>{localStorage.setItem(response.streamId+'webRTCAdaptorState', response.webRTCAdaptorState);localStorage.setItem(response.streamId+'webRTCAdaptorError', response.webRTCAdaptorError)})");
 			String webRTCAdaptorState = (String) js.executeScript("return localStorage.getItem('webRTCAdaptorState')");
 
 			if (webRTCAdaptorState == null || webRTCAdaptorState.isEmpty()) {
@@ -228,7 +227,11 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	@Override
 	public void streamFinished(String streamId) {
-		//No need to implement
+		WebDriver driver = drivers.get(streamId);
+		if (driver != null) {
+			driver.quit();
+			drivers.remove(streamId);
+		}
 	}
 
 	@Override
