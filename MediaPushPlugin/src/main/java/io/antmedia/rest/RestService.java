@@ -2,6 +2,7 @@ package io.antmedia.rest;
 
 import jakarta.servlet.ServletContext;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -20,11 +21,25 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.context.WebApplicationContext;
 
 @Component
-@Path("/v1/media-push")
+@Path("/v2/media-push")
 public class RestService {
 
 	@Context
 	protected ServletContext servletContext;
+
+	/*
+	 * This endpoint is used to validate Media Push API is installed
+	 */
+	@GET
+	@Path("/check")
+	@Produces(MediaType.APPLICATION_JSON)
+	public Result checkMediaPush(@Context UriInfo uriInfo) {
+		if (uriInfo == null) {
+			return new Result(false, "Bad request");
+		}
+
+		return new Result(true, "Media Push API is installed.");
+	}
 
 	/*
 	 * Start recording of a webpage with given id
