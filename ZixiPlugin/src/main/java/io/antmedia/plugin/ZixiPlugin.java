@@ -7,7 +7,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
@@ -71,15 +71,7 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 
 		if(application != null)
 		{
-			List<MuxAdaptor> muxAdaptors = application.getMuxAdaptors();
-			for (MuxAdaptor muxAdaptor : muxAdaptors) 
-			{
-				if (streamId.equals(muxAdaptor.getStreamId())) 
-				{
-					selectedMuxAdaptor = muxAdaptor;
-					break;
-				}
-			}
+			selectedMuxAdaptor = application.getMuxAdaptor(streamId);
 		}
 
 		return selectedMuxAdaptor;

@@ -1,7 +1,5 @@
 package io.antmedia.plugin;
 
-import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -12,6 +10,7 @@ import org.springframework.stereotype.Component;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.app.SampleFrameListener;
 import io.antmedia.app.SamplePacketListener;
+import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.IStreamListener;
@@ -33,43 +32,35 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 		this.applicationContext = applicationContext;
 		vertx = (Vertx) applicationContext.getBean("vertxCore");
 		
-		AntMediaApplicationAdapter app = getApplication();
+		IAntMediaStreamHandler app = getApplication();
 		app.addStreamListener(this);
 	}
 		
 	public MuxAdaptor getMuxAdaptor(String streamId) 
 	{
-		AntMediaApplicationAdapter application = getApplication();
+		IAntMediaStreamHandler application = getApplication();
 		MuxAdaptor selectedMuxAdaptor = null;
 
 		if(application != null)
 		{
-			List<MuxAdaptor> muxAdaptors = application.getMuxAdaptors();
-			for (MuxAdaptor muxAdaptor : muxAdaptors) 
-			{
-				if (streamId.equals(muxAdaptor.getStreamId())) 
-				{
-					selectedMuxAdaptor = muxAdaptor;
-					break;
-				}
-			}
+			selectedMuxAdaptor = application.getMuxAdaptor(streamId);
 		}
 
 		return selectedMuxAdaptor;
 	}
 	
 	public void register(String streamId) {
-		AntMediaApplicationAdapter app = getApplication();
+		IAntMediaStreamHandler app = getApplication();
 		app.addFrameListener(streamId, frameListener);		
 		app.addPacketListener(streamId, packetListener);
 	}
 	
-	public AntMediaApplicationAdapter getApplication() {
-		return (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
+	public IAntMediaStreamHandler getApplication() {
+		return (IAntMediaStreamHandler) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 	}
 	
 	public IFrameListener createCustomBroadcast(String streamId) {
-		AntMediaApplicationAdapter app = getApplication();
+		IAntMediaStreamHandler app = getApplication();
 		return app.createCustomBroadcast(streamId);
 	}
 

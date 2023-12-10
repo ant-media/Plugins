@@ -1,7 +1,7 @@
-dist: bionic
+dist: jammy
 language: java
 jdk:
-  - openjdk11
+  - openjdk17
 
 git:
   depth: false
@@ -48,7 +48,6 @@ script:
   - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
   - cd ../TensorflowPlugin
   - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
-  - echo $?
   
     
 after_script:

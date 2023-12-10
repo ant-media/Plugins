@@ -3,7 +3,7 @@ package io.antmedia.test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import javax.servlet.ServletContext;
+import jakarta.servlet.ServletContext;
 
 import org.junit.Test;
 import org.mockito.Mockito;
