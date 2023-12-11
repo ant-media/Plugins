@@ -55,21 +55,21 @@ Media Push Plugin have REST API to control the plugin.
 
 Call the REST Method below to let Ant Media Server broadcast the web page. You should pass the url of the web page and can pass streamId as query parameter you wanted to use as a parameter.
    ```
-   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v2/media-push/start" -d '{"url": "http://example.com", "width": 1280, "height": 720}'
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/start" -d '{"url": "http://example.com", "width": 1280, "height": 720}'
    ```
 
 * Stop the broadcast
 
 Call the REST Method below to let Ant Media Server with the stream id you specified in the start method.
    ```
-   curl -i -X POST -H "Accept: Application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v2/media-push/stop/{streamId}"
+   curl -i -X POST -H "Accept: Application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/stop/{streamId}"
    ```
 
 * Send javascript command to a webpage with given stream id
 
 Call the REST Method below to let Ant Media Server with the stream id you specified in the start method. You should pass the javascript command in the body.
    ```
-   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v2/media-push/send-command?streamId={streamId}"  -d '{"jsCommand": "{javascript_command_which_is_executed}"}'
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/send-command?streamId={streamId}"  -d '{"jsCommand": "{javascript_command_which_is_executed}"}'
    ```
 
 ### Optional: How to add Composite Layout 
@@ -89,14 +89,14 @@ Call the REST Method below to let Ant Media Server with the stream id you specif
 
 Call the REST Method below to let Ant Media Server with the stream id you specified in the start method. You should pass the url, width and height in the body.
    ```
-   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v2/media-push/start"  -d '{"url": "https://<ant-media-server-domain>/<your-webapp-name>/composite_layout.html?roomId=<room-name>&publisherId=<composite-layout-publisher-id>", "width": 1280, "height": 720}'
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/start"  -d '{"url": "https://<ant-media-server-domain>/<your-webapp-name>/composite_layout.html?roomId=<room-name>&publisherId=<composite-layout-publisher-id>", "width": 1280, "height": 720}'
    ```
 
 * Stop the Composite Layout
 
 Call the REST Method below to let Ant Media Server with the stream id you specified in the stop method.
    ```
-   curl -i -X POST -H "Accept: Application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v2/media-push/stop/{composite-layout-publisher-id}"
+   curl -i -X POST -H "Accept: Application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/stop/{composite-layout-publisher-id}"
    ```
 
 * Update the Composite Layout UI
