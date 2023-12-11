@@ -9,5 +9,8 @@
 	"background": {
 		"service_worker": "service-worker.js"
 	},
-	"permissions": ["tabCapture", "offscreen"]
+	"externally_connectable": {
+		"matches": ["<all_urls>"]
+	  },
+	"permissions": ["tabCapture", "offscreen", "activeTab", "tabs", "scripting", "contextMenus", "storage"]
 }
