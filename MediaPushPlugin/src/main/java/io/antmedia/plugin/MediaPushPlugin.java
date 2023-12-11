@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,15 +43,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return drivers;
 	}
 
-	private static final String antMediaStateReady = "ready";
+	private static final String ANT_MEDIA_STATE_STARTED = "started";
 
-	private static final String antMediaStateWaiting = "waiting";
-
-	private static final String antMediaStateStarted = "started";
-
-	private static final String antMediaStateFinished = "finished";
-
-	private static final String antMediaStateError = "error";
+	private static final String ANT_MEDIA_STATE_ERROR = "error";
 
 	@Override
 	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
@@ -131,9 +124,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 			if (webRTCAdaptorState == null || webRTCAdaptorState.isEmpty()) {
 				logger.error("WebRTC Adaptor state is null or empty");
-			} else if (webRTCAdaptorState.equals(antMediaStateStarted)) {
+			} else if (webRTCAdaptorState.equals(ANT_MEDIA_STATE_STARTED)) {
 					return new Result(true, streamId, "Media Push started");
-			} else if(webRTCAdaptorState.equals(antMediaStateError)) {
+			} else if(webRTCAdaptorState.equals(ANT_MEDIA_STATE_ERROR)) {
 				String errorMessage = (String) js.executeScript("return localStorage.getItem('webRTCAdaptorError')");
 				logger.error("Error while starting the stream");
 				driver.quit();
