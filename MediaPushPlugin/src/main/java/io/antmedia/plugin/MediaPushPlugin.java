@@ -119,7 +119,23 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		// wait until stream is started
 		timeout = 10;
 		while (true) {
-			js.executeScript("chrome.runtime.sendMessage('"+EXTENSION_ID+"', {'streamId': '"+streamId+"'},null,(response)=>{localStorage.setItem('webRTCAdaptorState', response.webRTCAdaptorState);localStorage.setItem('webRTCAdaptorError', response.webRTCAdaptorError)})");
+			/* For more information about chrome.runtime.sendMessage => https://developer.chrome.com/docs/extensions/reference/api/runtime#method-sendMessage
+			 * chrome.runtime.sendMessage(
+				  extensionId?: string,
+				  message: any,
+				  options?: object,
+				  callback?: function,
+				)
+			 */
+			js.executeScript(String.format("chrome.runtime.sendMessage(" +
+					"'%s'," +
+					"{'streamId': '%s'}," +
+					"null," +
+					"(response)=>{" +
+						"localStorage.setItem('webRTCAdaptorState', response.webRTCAdaptorState);" +
+						"localStorage.setItem('webRTCAdaptorError', response.webRTCAdaptorError)" +
+					"})", EXTENSION_ID, streamId));
+
 			String webRTCAdaptorState = (String) js.executeScript("return localStorage.getItem('webRTCAdaptorState')");
 
 			if (webRTCAdaptorState == null || webRTCAdaptorState.isEmpty()) {
