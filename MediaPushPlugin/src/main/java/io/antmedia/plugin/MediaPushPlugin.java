@@ -111,9 +111,22 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		JavascriptExecutor js = (JavascriptExecutor) driver;
 
     	if (request.getToken() == null || request.getToken().isEmpty()) {
-			js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
+			js.executeScript(String.format("window.postMessage(" +
+					"{ command:  'WR_START_BROADCASTING'," +
+						"streamId: '%s'," +
+						"websocketURL: '%s'," +
+						"width: '%s'," +
+						"height: '%s'" +
+					"}, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
 		} else {
-			js.executeScript(String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s', token: '%s' }, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight(), request.getToken()));
+			js.executeScript(String.format("window.postMessage(" +
+					"{ command:  'WR_START_BROADCASTING'," +
+						"streamId: '%s'," +
+						"websocketURL: '%s'," +
+						"width: '%s'," +
+						"height: '%s'," +
+						"token: '%s'" +
+					"}, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight(), request.getToken()));
 		}
 
 		// wait until stream is started
