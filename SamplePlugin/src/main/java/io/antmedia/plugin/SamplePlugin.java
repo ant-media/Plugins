@@ -59,11 +59,6 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 		return (IAntMediaStreamHandler) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 	}
 	
-	public IFrameListener createCustomBroadcast(String streamId) {
-		IAntMediaStreamHandler app = getApplication();
-		return app.createCustomBroadcast(streamId);
-	}
-
 	public String getStats() {
 		return frameListener.getStats() + "\t" + packetListener.getStats();
 	}
