@@ -1,4 +1,4 @@
-package io.antmedia.rest;
+package io.antmedia.Model;
 
 public class Endpoint {
 

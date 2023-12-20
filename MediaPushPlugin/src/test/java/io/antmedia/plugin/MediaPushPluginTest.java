@@ -1,6 +1,6 @@
 package io.antmedia.plugin;
 
-import io.antmedia.rest.Endpoint;
+import io.antmedia.Model.Endpoint;
 import io.antmedia.rest.model.Result;
 import junit.framework.TestCase;
 import org.junit.Test;
