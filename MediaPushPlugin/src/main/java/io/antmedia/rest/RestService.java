@@ -1,5 +1,6 @@
 package io.antmedia.rest;
 
+import io.antmedia.Model.Endpoint;
 import jakarta.servlet.ServletContext;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;

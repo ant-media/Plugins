@@ -9,7 +9,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-import io.antmedia.rest.Endpoint;
+import io.antmedia.Model.ChromeExtensionInfo;
+import io.antmedia.Model.Endpoint;
+import io.antmedia.recorder.FrameRecorder;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.openqa.selenium.JavascriptExecutor;
@@ -27,13 +29,13 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Component(value="plugin.mediaPushPlugin")
 public class MediaPushPlugin implements ApplicationContextAware, IStreamListener{
 
 	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(MediaPushPlugin.class);
-	private final String EXTENSION_ID = "ifmdhcknfpdipiofpdlgoolabigdfjnh";
 
 	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
 
@@ -46,6 +48,10 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	private static final String ANT_MEDIA_STATE_STARTED = "started";
 
 	private static final String ANT_MEDIA_STATE_ERROR = "error";
+
+	private static ChromeExtensionInfo extensionInfo;
+
+	ObjectMapper mapper = new ObjectMapper();
 
 	@Override
 	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
@@ -147,7 +153,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 					"(response)=>{" +
 						"localStorage.setItem('webRTCAdaptorState', response.webRTCAdaptorState);" +
 						"localStorage.setItem('webRTCAdaptorError', response.webRTCAdaptorError)" +
-					"})", EXTENSION_ID, streamId));
+					"})", extensionInfo.getId(), streamId));
 
 			String webRTCAdaptorState = (String) js.executeScript("return localStorage.getItem('webRTCAdaptorState')");
 
@@ -209,7 +215,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		args.add("--enable-tab-capture");
 		args.add("--no-sandbox");
 		args.add("--autoplay-policy=no-user-gesture-required");
-		args.add(String.format("--allowlisted-extension-id=%s", EXTENSION_ID));
+		args.add(String.format("--allowlisted-extension-id=%s", extensionInfo.getId()));
 		if (request.getHeight() > 0 && request.getWidth() > 0) {
 			args.add(String.format("--window-size=%s,%s", request.getWidth(), request.getHeight()));
 		}
@@ -218,6 +224,16 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		args.add("--disable-gpu");
 		try {
 			options.addExtensions(getExtensionFileFromResource());
+		} catch (IOException e) {
+			logger.error(e.getMessage());
+			return null;
+		}
+		try {
+			extensionInfo = getChromeExtensionInfoFromResources();
+			if (extensionInfo == null) {
+				logger.error("Extension info is null");
+				return null;
+			}
 		} catch (IOException e) {
 			logger.error(e.getMessage());
 			return null;
@@ -241,6 +257,12 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			return targetFile;
 		}
 
+	}
+
+	ChromeExtensionInfo getChromeExtensionInfoFromResources() throws IOException {
+		ClassLoader classLoader = getClass().getClassLoader();
+		InputStream inputStream = classLoader.getResourceAsStream("extension-info.json");
+		return mapper.readValue(inputStream, ChromeExtensionInfo.class);
 	}
 	
 	public AntMediaApplicationAdapter getApplication() {
