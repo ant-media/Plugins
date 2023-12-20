@@ -1,5 +1,7 @@
 package io.antmedia.plugin;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.antmedia.Model.ChromeExtensionInfo;
 import io.antmedia.Model.Endpoint;
 import io.antmedia.rest.model.Result;
 import junit.framework.TestCase;
@@ -7,8 +9,11 @@ import org.junit.Test;
 import org.mockito.Mockito;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.util.HashMap;
 
 import static org.mockito.Matchers.anyString;
@@ -457,4 +462,63 @@ public class MediaPushPluginTest extends TestCase {
         assertFalse(result.isSuccess());
         assertEquals(expectedResult.getMessage(), result.getMessage());
     }
+
+    @Test
+    public void getChromeExtensionInfoFromResources_ShouldReturnCorrectInfo() throws IOException {
+        // Arrange
+        MediaPushPlugin plugin = new MediaPushPlugin();
+        ChromeExtensionInfo expectedInfo = new ChromeExtensionInfo();
+        expectedInfo.setId("expectedId");
+        expectedInfo.setVersion("expectedVersion");
+
+        ObjectMapper mapper = Mockito.mock(ObjectMapper.class);
+        InputStream inputStream = new ByteArrayInputStream("{\"id\":\"expectedId\",\"version\":\"expectedVersion\"}".getBytes());
+        ClassLoader classLoader = Mockito.mock(ClassLoader.class);
+
+        Mockito.when(classLoader.getResourceAsStream("extension-info.json")).thenReturn(inputStream);
+        Mockito.when(mapper.readValue(inputStream, ChromeExtensionInfo.class)).thenReturn(expectedInfo);
+        ReflectionTestUtils.setField(plugin, "mapper", mapper);
+        ReflectionTestUtils.setField(plugin, "classLoader", classLoader);
+
+        // Act
+        ChromeExtensionInfo actualInfo = plugin.getChromeExtensionInfoFromResources();
+
+        // Assert
+        assertEquals(expectedInfo.getId(), actualInfo.getId());
+        assertEquals(expectedInfo.getVersion(), actualInfo.getVersion());
+    }
+
+    @Test(expected = IOException.class)
+    public void getChromeExtensionInfoFromResources_WhenIOExceptionOccurs_ShouldThrowException() throws IOException {
+        // Arrange
+        MediaPushPlugin plugin = new MediaPushPlugin();
+        ObjectMapper mapper = Mockito.mock(ObjectMapper.class);
+        InputStream inputStream = Mockito.mock(InputStream.class);
+        ClassLoader classLoader = Mockito.mock(ClassLoader.class);
+
+        Mockito.when(classLoader.getResourceAsStream("extension-info.json")).thenReturn(inputStream);
+        Mockito.when(mapper.readValue(inputStream, ChromeExtensionInfo.class)).thenThrow(new IOException());
+        ReflectionTestUtils.setField(plugin, "mapper", mapper);
+        ReflectionTestUtils.setField(plugin, "classLoader", classLoader);
+
+        // Act
+        plugin.getChromeExtensionInfoFromResources();
+    }
+
+    @Test
+    public void getChromeExtensionInfoFromResources_WhenResourceNotFound_ShouldReturnNull() throws IOException {
+        // Arrange
+        MediaPushPlugin plugin = new MediaPushPlugin();
+        ClassLoader classLoader = Mockito.mock(ClassLoader.class);
+
+        Mockito.when(classLoader.getResourceAsStream("extension-info.json")).thenReturn(null);
+        ReflectionTestUtils.setField(plugin, "classLoader", classLoader);
+
+        // Act
+        ChromeExtensionInfo actualInfo = plugin.getChromeExtensionInfoFromResources();
+
+        // Assert
+        assertNull(actualInfo);
+    }
+
 }
