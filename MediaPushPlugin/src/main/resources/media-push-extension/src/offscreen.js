@@ -1,4 +1,4 @@
-import {WebRTCAdaptor} from "./js/webrtc_adaptor.js";
+import { WebRTCAdaptor } from '@antmedia/webrtc_adaptor';
 
 let webRTCAdaptor;
 let antMediaState = {
