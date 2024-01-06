@@ -3,21 +3,28 @@ package io.antmedia.plugin;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-import io.antmedia.Model.ChromeExtensionInfo;
-import io.antmedia.Model.Endpoint;
-import io.antmedia.recorder.FrameRecorder;
-import org.apache.commons.io.FileUtils;
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.remote.RemoteWebDriver;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -25,33 +32,34 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 
+import com.google.gson.Gson;
+
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.Model.ChromeExtensionInfo;
+import io.antmedia.Model.Endpoint;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Component(value="plugin.mediaPushPlugin")
 public class MediaPushPlugin implements ApplicationContextAware, IStreamListener{
 
+
+
 	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(MediaPushPlugin.class);
 
-	private Map<String, WebDriver> drivers = new ConcurrentHashMap<>();
+	private Map<String, RemoteWebDriver> drivers = new ConcurrentHashMap<>();
 
 	private ApplicationContext applicationContext;
 
-	public Map<String, WebDriver> getDrivers() {
+	public Map<String, RemoteWebDriver> getDrivers() {
 		return drivers;
 	}
 
-	private static final String ANT_MEDIA_STATE_STARTED = "started";
 
-	private static final String ANT_MEDIA_STATE_ERROR = "error";
+	public static final int TIMEOUT_IN_SECONDS = 30;
 
-	private static ChromeExtensionInfo extensionInfo;
-
-	ObjectMapper mapper = new ObjectMapper();
 
 	@Override
 	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
@@ -59,6 +67,12 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 		AntMediaApplicationAdapter app = getApplication();
 		app.addStreamListener(this);
+
+		//Setup driver gently 
+		app.getVertx().executeBlocking(()-> {
+			WebDriverManager.chromedriver().setup();
+			return null;
+		});
 	}
 
 	public Result sendCommand(String streamId, String command) {
@@ -72,139 +86,141 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			js.executeScript(command);
 			return new Result(true, streamId, "Command executed");
 		} catch (Exception e) {
-			logger.error("Command cannot be executed: " + e.getMessage());
+			logger.error("Command cannot be executed: {} " , e.getMessage());
 			return new Result(false, "Command cannot be executed.");
 		}
 	}
 
-	public Result startMediaPush(String streamId, String websocketUrl, Endpoint request) {
+	public Result startMediaPush(String streamId, String websocketUrl, String publisherJSUrl, Endpoint request)  
+	{	
+		Result result = new Result(false);
+
+		if (StringUtils.isNotBlank(streamId) && getDrivers().containsKey(streamId)) {
+			logger.warn("Session with the same streamId: {} already exists. Pleaseo stop it first", streamId);
+			result.setMessage("Session with the same streamId: "+ streamId +" already exists. Please stop it first");
+			return result;
+		}
+
 		String url = request.getURL();
-		if (streamId == null || streamId.isEmpty()) {
+		if (StringUtils.isBlank(streamId)) {
 			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
 		}
-		
-		if (getDrivers().containsKey(streamId)) {
-			logger.warn("Driver already exists for stream id: {}", streamId);
-			return new Result(false, "Driver already exists for stream id: " + streamId);
-		}
 
-		WebDriver driver = createDriver(request);
-		if (driver == null) {
-			logger.error("Driver cannot created");
-			return new Result(false, "Driver cannot created");
-		}
-		drivers.put(streamId, driver);
-		driver.get(url);
-		int timeout = 20;
-		// wait until page is loaded
-		while (driver.getTitle() == null || driver.getTitle().isEmpty()) {
-			try {
-				TimeUnit.SECONDS.sleep(1);
-			} catch (InterruptedException e) {
-				logger.error(e.getMessage());
-			}
+		RemoteWebDriver driver = null;
+		try {
+			driver = createDriver(request.getWidth(), request.getHeight(), streamId);
+			driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+			driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 
-			// if page is not loaded in 20 seconds, return error to prevent infinite loop
-			timeout--;
-			if (timeout == 0) {
-				logger.error("Timeout while loading the page");
+			drivers.put(streamId, driver);
+			driver.get(url);
+
+			driver.executeScript(
+					"var s=window.document.createElement('script');"
+							+ "s.src='"+publisherJSUrl+"';"
+
+				+ "s.async=false;"
+
+				+ "s.type='module';"
+
+				+ "window.document.head.appendChild(s);"
+
+					);
+
+
+			WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+
+			//there are three methods in javascript side
+			//window.startBroadcasting = startBroadcasting -> gets message json parameter
+			//window.stopBroadcasting = stopBroadcasting -> gets message json parameter
+			//window.isConnected = isConnected; -> gets streamId 
+			wait.until(ExpectedConditions.jsReturnsValue("return (typeof window.startBroadcasting != 'undefined')"));
+
+
+			driver.executeScript("window.startBroadcasting({"
+						+ "websocketURL:'"+websocketUrl +"',"
+						+ "streamId:'" + streamId + "',"
+						+ "width:" + request.getWidth() + ","
+						+ "height:" + request.getHeight() + ","
+						+ "token:'" + (StringUtils.isNotBlank(request.getToken()) ? request.getToken() : "") + "'," 
+					+ "});");
+
+			
+			// wait until stream is started
+			wait.until(ExpectedConditions.jsReturnsValue("return window.isConnected('"+streamId+"')"));
+
+
+			result.setDataId(streamId);
+			result.setSuccess(true);
+			
+		}
+		catch (IOException e) 
+		{
+			//This exception is fired by createDriver
+			result.setMessage("IOException occured in creating the chrome session. Error is " + e.getMessage());
+			logger.error(ExceptionUtils.getStackTrace(e));
+		}
+		catch (TimeoutException e) {
+			result.setMessage("Timeoutexception occured in creating the chrome session for url: " + request.getURL() + " error message is " + e.getMessage());
+			logger.error(ExceptionUtils.getStackTrace(e));
+			if (driver != null) {
 				driver.quit();
-				drivers.remove(streamId);
-				return new Result(false, streamId, "Timeout while loading the page");
 			}
-		}
-		JavascriptExecutor js = (JavascriptExecutor) driver;
-
-    	if (request.getToken() == null || request.getToken().isEmpty()) {
-			js.executeScript(String.format("window.postMessage(" +
-					"{ command:  'WR_START_BROADCASTING'," +
-						"streamId: '%s'," +
-						"websocketURL: '%s'," +
-						"width: '%s'," +
-						"height: '%s'" +
-					"}, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight()));
-		} else {
-			js.executeScript(String.format("window.postMessage(" +
-					"{ command:  'WR_START_BROADCASTING'," +
-						"streamId: '%s'," +
-						"websocketURL: '%s'," +
-						"width: '%s'," +
-						"height: '%s'," +
-						"token: '%s'" +
-					"}, '*')", streamId, websocketUrl, request.getWidth(), request.getHeight(), request.getToken()));
+			drivers.remove(streamId);
 		}
 
-		// wait until stream is started
-		timeout = 10;
-		while (true) {
-			/* For more information about chrome.runtime.sendMessage => https://developer.chrome.com/docs/extensions/reference/api/runtime#method-sendMessage
-			 * chrome.runtime.sendMessage(
-				  extensionId?: string,
-				  message: any,
-				  options?: object,
-				  callback?: function,
-				)
-			 */
-			js.executeScript(String.format("chrome.runtime.sendMessage(" +
-					"'%s'," +
-					"{'streamId': '%s'}," +
-					"null," +
-					"(response)=>{" +
-						"localStorage.setItem('webRTCAdaptorState', response.webRTCAdaptorState);" +
-						"localStorage.setItem('webRTCAdaptorError', response.webRTCAdaptorError)" +
-					"})", extensionInfo.getId(), streamId));
-
-			String webRTCAdaptorState = (String) js.executeScript("return localStorage.getItem('webRTCAdaptorState')");
-
-			if (webRTCAdaptorState == null || webRTCAdaptorState.isEmpty()) {
-				logger.error("WebRTC Adaptor state is null or empty");
-			} else if (webRTCAdaptorState.equals(ANT_MEDIA_STATE_STARTED)) {
-					return new Result(true, streamId, "Media Push started");
-			} else if(webRTCAdaptorState.equals(ANT_MEDIA_STATE_ERROR)) {
-				String errorMessage = (String) js.executeScript("return localStorage.getItem('webRTCAdaptorError')");
-				logger.error("Error while starting the stream");
-				driver.quit();
-				drivers.remove(streamId);
-				return new Result(false, streamId, "Error while starting the stream. Error: " + errorMessage);
-			}
-
-			try {
-				TimeUnit.SECONDS.sleep(1);
-			} catch (InterruptedException e) {
-				logger.error(e.getMessage());
-			}
-
-			// if stream is not started in 20 seconds, return error to prevent infinite loop
-			timeout--;
-			if (timeout == 0) {
-				logger.error("Timeout while starting the stream");
-				driver.quit();
-				drivers.remove(streamId);
-				return new Result(false, streamId, "Timeout while starting the stream");
-			}
-		}
+		return result;
 	}
 
 	public Result stopMediaPush(String streamId) {
-		if (!drivers.containsKey(streamId)) {
+		Result result = new Result(false);
+		if (!drivers.containsKey(streamId)) 
+		{
 			logger.warn("Driver does not exist for stream id: {}", streamId);
-			return new Result(false, "Driver does not exist for stream id: " + streamId, 404);
+			result.setMessage("Driver does not exist for stream id: " + streamId);
+			return result;
 		}
 
-		WebDriver driver = drivers.get(streamId);
-		JavascriptExecutor js = (JavascriptExecutor) driver;
-		js.executeScript(String.format("window.postMessage({ command:  'STOP', streamId: '%s' }, '*')", streamId));
-		driver.quit();
-		drivers.remove(streamId);
-		return new Result(true, "Media Push stopped");
+		RemoteWebDriver driver = drivers.get(streamId);
+		
+		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+		
+		try 
+		{
+			driver.executeScript("window.stopBroadcasting({"
+					+ "streamId:'" + streamId + "',"
+				+ "});");
+			
+			wait.until(ExpectedConditions.jsReturnsValue("return !window.isConnected('"+streamId+"')"));
+			result.setSuccess(true);
+			
+		}
+		catch(TimeoutException e) {
+			result.setMessage("Timeoutexception occured in stopping the stream. Fortunately, it'll quit the session to stop completely. Error message is " + e.getMessage());
+			
+		}
+		finally {
+
+			driver.quit();
+			drivers.remove(streamId);
+		}
+		return result;
 	}
 
-	public WebDriver createDriver(Endpoint request) {
-		System.setProperty("webdriver.chrome.logfile", "/usr/local/antmedia/log/chromedriver.log");
+	public RemoteWebDriver createDriver(int width, int height, String streamId) throws IOException 
+	{
+		logger.info("Creating chrome session for streamId:{} and windows wxh:{}x{}", streamId, width, height);
+		File logFolder = new File("log");
+
+		if (logFolder.exists() || logFolder.mkdir()) 
+		{
+			//if this file does not exist, chrome fails to start
+			System.setProperty("webdriver.chrome.logfile", "log/chromedriver.log");
+		}
 		System.setProperty("webdriver.chrome.verboseLogging", "true");
 
-		WebDriverManager.chromedriver().setup();
+
 		ChromeOptions options = new ChromeOptions();
 		List<String> args = new ArrayList<>();
 
@@ -212,32 +228,21 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		args.add("--enable-usermedia-screen-capturing");
 		args.add("--allow-http-screen-capture");
 		args.add("--disable-infobars");
-		args.add("--enable-tab-capture");
+		args.add("--hide-scrollbars");
+		args.add("--auto-accept-this-tab-capture");
 		args.add("--no-sandbox");
 		args.add("--autoplay-policy=no-user-gesture-required");
-		args.add(String.format("--allowlisted-extension-id=%s", extensionInfo.getId()));
-		if (request.getHeight() > 0 && request.getWidth() > 0) {
-			args.add(String.format("--window-size=%s,%s", request.getWidth(), request.getHeight()));
+		if (height > 0 && width > 0) {
+			args.add(String.format("--window-size=%s,%s", width, height));
 		}
-		args.add("--headless=chrome");
-		args.add("--start-fullscreen");
+		else {
+			logger.info("creating the driver with default width and height for streamId:{}", streamId);
+		}
+		args.add("--headless=new");
+		//args.add("--start-fullscreen");
+		//args.add("--kiosk");
 		args.add("--disable-gpu");
-		try {
-			options.addExtensions(getExtensionFileFromResource());
-		} catch (IOException e) {
-			logger.error(e.getMessage());
-			return null;
-		}
-		try {
-			extensionInfo = getChromeExtensionInfoFromResources();
-			if (extensionInfo == null) {
-				logger.error("Extension info is null");
-				return null;
-			}
-		} catch (IOException e) {
-			logger.error(e.getMessage());
-			return null;
-		}
+
 		options.setExperimentalOption("useAutomationExtension", false);
 		options.setExperimentalOption("excludeSwitches", List.of("enable-automation"));
 		options.addArguments(args);
@@ -245,26 +250,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return new ChromeDriver(options);
 	}
 
-	File getExtensionFileFromResource() throws IOException {
 
-		ClassLoader classLoader = getClass().getClassLoader();
-		InputStream inputStream = classLoader.getResourceAsStream("media-push-extension.crx");
-		if (inputStream == null) {
-			throw new IllegalArgumentException("media-push-extension not found!");
-		} else {
-			File targetFile = new File("src/main/resources/targetFile.tmp");
-			FileUtils.copyInputStreamToFile(inputStream, targetFile);
-			return targetFile;
-		}
 
-	}
-
-	ChromeExtensionInfo getChromeExtensionInfoFromResources() throws IOException {
-		ClassLoader classLoader = getClass().getClassLoader();
-		InputStream inputStream = classLoader.getResourceAsStream("extension-info.json");
-		return mapper.readValue(inputStream, ChromeExtensionInfo.class);
-	}
-	
 	public AntMediaApplicationAdapter getApplication() {
 		return (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
 	}

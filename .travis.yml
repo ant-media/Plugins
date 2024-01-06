@@ -48,6 +48,13 @@ script:
   - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
   - cd ../TensorflowPlugin
   - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+  - cd ../MediaPushPlugin
+  - rm  src/main/resources/*
+  - cd src/main/js
+  - npm install 
+  - npm run build
+  - cd ../../..
+  - mvn clean deploy -Dmaven.test.skip=true
   
     
 after_script:
