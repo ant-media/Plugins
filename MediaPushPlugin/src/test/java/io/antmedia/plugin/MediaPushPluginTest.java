@@ -51,7 +51,8 @@ public class MediaPushPluginTest  {
 	};
 
 	@BeforeClass
-	public static void beforeClass() {
+	public static void beforeClass() 
+	{
 		WebDriverManager.chromedriver().setup();
 	}
 	
