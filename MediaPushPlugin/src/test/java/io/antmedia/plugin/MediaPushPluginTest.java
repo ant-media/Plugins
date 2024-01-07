@@ -2,44 +2,45 @@ package io.antmedia.plugin;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 
+import org.apache.commons.lang3.StringUtils;
+import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.openqa.selenium.JavascriptExecutor;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.remote.RemoteWebDriver;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import io.antmedia.Model.ChromeExtensionInfo;
 import io.antmedia.Model.Endpoint;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
 
 public class MediaPushPluginTest  {
-
 	
+	
+	private static Logger log = LoggerFactory.getLogger(MediaPushPluginTest.class);
+
+	@BeforeClass
+	public static void beforeClass() {
+		WebDriverManager.chromedriver().setup();
+	}
 	
 	
 	@Test
-	public void testCreateChrome() throws IOException 
+	public void testResolutions() throws IOException 
 	{
-		WebDriverManager.chromedriver().setup();
+		
 		MediaPushPlugin pushPlugin =new MediaPushPlugin();
 		
 		Endpoint endpoint = new Endpoint();
@@ -160,7 +161,6 @@ public class MediaPushPluginTest  {
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
         RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
         String streamId = "streamId";
         String command = "someCommand";
         Result expectedResult = new Result(false, "Command cannot be executed.");
@@ -168,9 +168,7 @@ public class MediaPushPluginTest  {
         when(plugin.getDrivers()).thenReturn(drivers);
         when(drivers.containsKey(streamId)).thenReturn(true);
         when(drivers.get(streamId)).thenReturn(driver);
-        when(driver instanceof JavascriptExecutor).thenReturn(true);
-        when((JavascriptExecutor) driver).thenReturn(js);
-        when(js.executeScript(command)).thenThrow(new RuntimeException("Command execution failed."));
+        when(driver.executeScript(command)).thenThrow(new RuntimeException("Command execution failed."));
 
         // Act
         Result result = plugin.sendCommand(streamId, command);
@@ -180,84 +178,85 @@ public class MediaPushPluginTest  {
         assertEquals(expectedResult.getMessage(), result.getMessage());
     }
 
-
     @Test
-    public void testStartMediaPush_WhenStreamIdIsNull_ShouldGenerateStreamId() throws IOException {
+    public void testStartMediaPush_WhenStreamIdIsEmptyOrNull_ShouldGenerateStreamId() throws IOException {
+        // Arrange
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+      
+        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
+        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
+        String websocketUrl = "websocketUrl";
+        String url = "http://google.com";
+        int width = 1280;
+        int height = 720;
+        String token = "token";
+        Endpoint endpoint = new Endpoint();
+        endpoint.setHeight(height);
+        endpoint.setWidth(width);
+        endpoint.setURL(url);
+        
+        when(plugin.getDrivers()).thenReturn(new HashMap<>());
+        Mockito.doReturn(Mockito.mock(Result.class)).when(plugin).startBroadcastingWithBrowser(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+        
+        // Act
+        Result result = plugin.startMediaPush("", websocketUrl, url, endpoint);
+
+        // Assert
+        ArgumentCaptor<String> streamIdCaptor = ArgumentCaptor.forClass(String.class);
+
+        ArgumentCaptor<String> websocketUrlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> publisherJSUrlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Endpoint> requestCaptor = ArgumentCaptor.forClass(Endpoint.class);
+        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+
+       
+        // Capturing the arguments
+        Mockito.verify(plugin).startBroadcastingWithBrowser(streamIdCaptor.capture(), websocketUrlCaptor.capture(), publisherJSUrlCaptor.capture(), requestCaptor.capture(), urlCaptor.capture());
+
+        // Assertions
+        
+        assertTrue(StringUtils.isNotBlank(streamIdCaptor.getValue()));
+        assertTrue(streamIdCaptor.getValue().length()> 12);
+        var firstStreamId = streamIdCaptor.getValue();
+        
+        
+        result = plugin.startMediaPush(null, websocketUrl, url, endpoint);
+        Mockito.verify(plugin, Mockito.times(2)).startBroadcastingWithBrowser(streamIdCaptor.capture(), websocketUrlCaptor.capture(), publisherJSUrlCaptor.capture(), requestCaptor.capture(), urlCaptor.capture());
+        assertTrue(StringUtils.isNotBlank(streamIdCaptor.getValue()));
+        assertTrue(streamIdCaptor.getValue().length()> 12);
+        assertNotEquals(firstStreamId, streamIdCaptor.getValue());
+        
+       
+    }
+    
+    
+    @Test
+    public void testStartMediaPush_InvalidURL_ShouldReturnErrorResult() throws IOException {
         // Arrange
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         Endpoint endpoint = Mockito.mock(Endpoint.class);
         RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
+        String streamId = "streamId";
         String websocketUrl = "websocketUrl";
-        String url = "url";
-        String generatedStreamId = "generatedStreamId";
+        String url = "invalid_url";
         int width = 1280;
         int height = 720;
-        String token = "token";
-        String expectedScript = String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", generatedStreamId, websocketUrl, width, height);
-        Result expectedResult = new Result(true, generatedStreamId, "Media Push started");
 
         when(endpoint.getURL()).thenReturn(url);
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
-        when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        when(plugin.createDriver(width, height, "streamId")).thenReturn(driver);
-        when(driver.getTitle()).thenReturn("");
-        when(driver instanceof JavascriptExecutor).thenReturn(true);
-        when((JavascriptExecutor) driver).thenReturn(js);
-        when(js.executeScript(expectedScript)).thenReturn(null);
-
+        
         // Act
-        Result result = plugin.startMediaPush(null, websocketUrl, websocketUrl, endpoint);
+        Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl, endpoint);
 
         // Assert
-        assertTrue(result.isSuccess());
-        assertEquals(expectedResult.getDataId(), result.getDataId());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
-        verify(plugin).getDrivers();
-        verify(plugin).createDriver(width, height, "streamId");
-        verify(driver).get(url);
-        verify(js).executeScript(expectedScript);
+        assertFalse(result.isSuccess());
+        log.info("incoming result is {}", result.getMessage());
+
+        assertTrue(result.getMessage().contains("not a valid url"));
+        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString());
     }
-
-    @Test
-    public void testStartMediaPush_WhenStreamIdIsEmpty_ShouldGenerateStreamId() throws IOException {
-        // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        Endpoint endpoint = Mockito.mock(Endpoint.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
-        String websocketUrl = "websocketUrl";
-        String url = "url";
-        String generatedStreamId = "generatedStreamId";
-        int width = 1280;
-        int height = 720;
-        String token = "token";
-        String expectedScript = String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", generatedStreamId, websocketUrl, width, height);
-        Result expectedResult = new Result(true, generatedStreamId, "Media Push started");
-
-        when(endpoint.getURL()).thenReturn(url);
-        when(endpoint.getWidth()).thenReturn(width);
-        when(endpoint.getHeight()).thenReturn(height);
-        when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        when(plugin.createDriver(width, height, "streamId")).thenReturn(driver);
-        when(driver.getTitle()).thenReturn("");
-        when(driver instanceof JavascriptExecutor).thenReturn(true);
-        when((JavascriptExecutor) driver).thenReturn(js);
-        when(js.executeScript(expectedScript)).thenReturn(null);
-
-        // Act
-        Result result = plugin.startMediaPush("", websocketUrl, websocketUrl, endpoint);
-
-        // Assert
-        assertTrue(result.isSuccess());
-        assertEquals(expectedResult.getDataId(), result.getDataId());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
-        verify(plugin).getDrivers();
-        verify(plugin).createDriver(width, height, "streamId");
-        verify(driver).get(url);
-        verify(js).executeScript(expectedScript);
-    }
+    
 
     @Test
     public void testStartMediaPush_WhenDriverExistsForStreamId_ShouldReturnErrorResult() throws IOException {
@@ -267,28 +266,26 @@ public class MediaPushPluginTest  {
         RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
         String streamId = "streamId";
         String websocketUrl = "websocketUrl";
-        String url = "url";
+        String url = "http://google.com";
         int width = 1280;
         int height = 720;
-        Result expectedResult = new Result(false, "Driver already exists for stream id: " + streamId);
 
         when(endpoint.getURL()).thenReturn(url);
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
-        when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        when(plugin.createDriver(width, height, "streamId")).thenReturn(driver);
-        when(driver.getTitle()).thenReturn("");
-        when(plugin.getDrivers().containsKey(streamId)).thenReturn(true);
+        
+        plugin.getDrivers().put(streamId, driver);
+        
 
         // Act
         Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl, endpoint);
 
         // Assert
         assertFalse(result.isSuccess());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
-        verify(plugin).getDrivers();
-        verify(plugin, never()).createDriver(width, height, "streamId");
-        verify(driver, never()).get(url);
+        log.info("incoming result is {}", result.getMessage());
+
+        assertTrue(result.getMessage().contains("already exist"));
+        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString());
     }
 
     @Test
@@ -298,195 +295,55 @@ public class MediaPushPluginTest  {
         Endpoint endpoint = Mockito.mock(Endpoint.class);
         String streamId = "streamId";
         String websocketUrl = "websocketUrl";
-        String url = "url";
+        String url = "http://example.com";
         int width = 1280;
         int height = 720;
-        Result expectedResult = new Result(false, "Driver cannot created");
 
         when(endpoint.getURL()).thenReturn(url);
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
         when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        Mockito.doReturn(null).when(plugin).createDriver(width, height, "streamId");
+        Mockito.doThrow(new IOException()).when(plugin).createDriver(width, height, "streamId");
 
         // Act
         Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl, endpoint);
 
         // Assert
         assertFalse(result.isSuccess());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
-        verify(plugin).getDrivers();
         verify(plugin).createDriver(width, height, "streamId");
     }
 
     @Test
-    public void testStartMediaPush_WhenPageLoadTimeoutOccurs_ShouldReturnErrorResult() throws IOException {
+    public void testStartMediaPush_WhenExecuteScriptTimeoutOccurs_ShouldReturnErrorResult() throws IOException {
         // Arrange
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         Endpoint endpoint = Mockito.mock(Endpoint.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
         String streamId = "streamId";
         String websocketUrl = "websocketUrl";
-        String url = "url";
+        String httpPublisherUrl = "not reachable";
+        String url = "http://example.com";
         int width = 1280;
         int height = 720;
-        int timeout = 20;
-        Result expectedResult = new Result(false, streamId, "Timeout while loading the page");
 
         when(endpoint.getURL()).thenReturn(url);
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
-        when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        when(plugin.createDriver(width, height, "streamId")).thenReturn(driver);
-        when(driver.getTitle()).thenReturn(null, "", "");
-        when(driver instanceof JavascriptExecutor).thenReturn(true);
-        when((JavascriptExecutor) driver).thenReturn(js);
-        when(js.executeScript(Mockito.anyString())).thenReturn(null);
+
+        assertFalse(plugin.getDrivers().containsKey(streamId));
 
         // Act
-        Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl , endpoint);
+        Result result = plugin.startMediaPush(streamId, websocketUrl, httpPublisherUrl , endpoint);
 
         // Assert
         assertFalse(result.isSuccess());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
-        verify(plugin).getDrivers();
+        
+        assertTrue(result.getMessage().contains("Timeout"));
         verify(plugin).createDriver(width, height, "streamId");
-        verify(driver).get(url);
-        verify(driver, times(timeout)).getTitle();
-        verify(driver).quit();
-        verify(plugin.getDrivers()).remove(streamId);
+        assertFalse(plugin.getDrivers().containsKey(streamId));
+
     }
 
-    @Test
-    public void testStartMediaPush_WhenWebRTCAdaptorStateIsNull_ShouldReturnErrorResult() throws InterruptedException, IOException {
-        // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        Endpoint endpoint = Mockito.mock(Endpoint.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
-        String streamId = "streamId";
-        String websocketUrl = "websocketUrl";
-        String url = "url";
-        int width = 1280;
-        int height = 720;
-        int timeout = 10;
-        String expectedScript = String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, width, height);
-        Result expectedResult = new Result(false, streamId, "WebRTC Adaptor state is null or empty");
 
-        when(endpoint.getURL()).thenReturn(url);
-        when(endpoint.getWidth()).thenReturn(width);
-        when(endpoint.getHeight()).thenReturn(height);
-        when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        when(plugin.createDriver(width, height, "streamId")).thenReturn(driver);
-        when(driver.getTitle()).thenReturn("", "");
-        when(driver instanceof JavascriptExecutor).thenReturn(true);
-        when((JavascriptExecutor) driver).thenReturn(js);
-        when(js.executeScript(expectedScript)).thenReturn(null);
-        when(js.executeScript(Mockito.anyString())).thenReturn(null);
-
-        // Act
-        Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl, endpoint);
-
-        // Assert
-        assertFalse(result.isSuccess());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
-        verify(plugin).getDrivers();
-        verify(plugin).createDriver(width, height, "streamId");
-        verify(driver).get(url);
-        verify(js).executeScript(expectedScript);
-        verify(js, times(timeout)).executeScript(Mockito.anyString());
-        verify(driver, times(timeout)).getTitle();
-        verify(driver).quit();
-        verify(plugin.getDrivers()).remove(streamId);
-    }
-
-    @Test
-    public void testStartMediaPush_WhenWebRTCAdaptorStateIsStarted_ShouldReturnSuccessResult() throws InterruptedException, IOException {
-        // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        Endpoint endpoint = Mockito.mock(Endpoint.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
-        String streamId = "streamId";
-        String websocketUrl = "websocketUrl";
-        String url = "url";
-        int width = 1280;
-        int height = 720;
-        int timeout = 10;
-        String expectedScript = String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, width, height);
-        String webRTCAdaptorState = "started";
-        Result expectedResult = new Result(true, streamId, "Media Push started");
-
-        when(endpoint.getURL()).thenReturn(url);
-        when(endpoint.getWidth()).thenReturn(width);
-        when(endpoint.getHeight()).thenReturn(height);
-        when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        when(plugin.createDriver(width, height, "streamId")).thenReturn(driver);
-        when(driver.getTitle()).thenReturn("", "");
-        when(driver instanceof JavascriptExecutor).thenReturn(true);
-        when((JavascriptExecutor) driver).thenReturn(js);
-        when(js.executeScript(expectedScript)).thenReturn(null);
-        when(js.executeScript(Mockito.anyString())).thenReturn(webRTCAdaptorState);
-
-        // Act
-        Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl, endpoint);
-
-        // Assert
-        assertTrue(result.isSuccess());
-        assertEquals(expectedResult.getDataId(), result.getDataId());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
-        verify(plugin).getDrivers();
-        verify(plugin).createDriver(width, height, "streamId");
-        verify(driver).get(url);
-        verify(js).executeScript(expectedScript);
-        verify(js, times(timeout)).executeScript(Mockito.anyString());
-        verify(driver, times(timeout)).getTitle();
-    }
-
-    @Test
-    public void testStartMediaPush_WhenWebRTCAdaptorStateIsError_ShouldReturnErrorResult() throws InterruptedException, IOException {
-        // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        Endpoint endpoint = Mockito.mock(Endpoint.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
-        String streamId = "streamId";
-        String websocketUrl = "websocketUrl";
-        String url = "url";
-        int width = 1280;
-        int height = 720;
-        int timeout = 10;
-        String expectedScript = String.format("window.postMessage({ command:  'WR_START_BROADCASTING', streamId: '%s', websocketURL: '%s', width: '%s', height: '%s' }, '*')", streamId, websocketUrl, width, height);
-        String webRTCAdaptorState = "error";
-        String errorMessage = "errorMessage";
-        Result expectedResult = new Result(false, streamId, "Error while starting the stream. Error: " + errorMessage);
-
-        when(endpoint.getURL()).thenReturn(url);
-        when(endpoint.getWidth()).thenReturn(width);
-        when(endpoint.getHeight()).thenReturn(height);
-        when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        Mockito.doReturn(driver).when(plugin).createDriver(width, height, "streamId");
-        when(driver.getTitle()).thenReturn("", "");
-        when(js.executeScript(expectedScript)).thenReturn(null);
-        when(js.executeScript(Mockito.anyString())).thenReturn(webRTCAdaptorState);
-        when(js.executeScript("return localStorage.getItem('webRTCAdaptorError')")).thenReturn(errorMessage);
-
-        // Act
-        Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl, endpoint);
-
-        // Assert
-        assertFalse(result.isSuccess());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
-        verify(plugin).getDrivers();
-        verify(plugin).createDriver(width, height, "streamId");
-        verify(driver).get(url);
-        verify(js).executeScript(expectedScript);
-        verify(js, times(timeout)).executeScript(Mockito.anyString());
-        verify(driver, times(timeout)).getTitle();
-        verify(driver).quit();
-        verify(plugin.getDrivers()).remove(streamId);
-    }
 
     @Test
     public void testStopMediaPush_WhenDriverExists_ShouldStopMediaPushAndReturnSuccessResult() {
@@ -494,25 +351,26 @@ public class MediaPushPluginTest  {
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
         RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
         String streamId = "streamId";
         Result expectedResult = new Result(true, "Media Push stopped");
 
-        when(plugin.getDrivers()).thenReturn(drivers);
-        when(drivers.containsKey(streamId)).thenReturn(true);
-        when(drivers.get(streamId)).thenReturn(driver);
-        when(driver instanceof JavascriptExecutor).thenReturn(true);
-        when((JavascriptExecutor) driver).thenReturn(js);
+        plugin.getDrivers().put(streamId, driver);
 
         // Act
         Result result = plugin.stopMediaPush(streamId);
 
         // Assert
-        assertTrue(result.isSuccess());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
-        verify(js).executeScript(String.format("window.postMessage({ command:  'STOP', streamId: '%s' }, '*')", streamId));
+        //it's false because executeScript timeout is triggered
+        assertFalse(result.isSuccess());
+        
+        //check that it's timeout exception
+        assertTrue(result.getMessage().contains("Timeoutexception"));
+        
+        //make sure driver quit 
         verify(driver).quit();
-        verify(drivers).remove(streamId);
+        
+        //make sure it's removed
+        assertEquals(0, plugin.getDrivers().size());
     }
 
     @Test

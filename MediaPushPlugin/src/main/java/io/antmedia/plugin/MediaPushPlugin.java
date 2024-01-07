@@ -2,21 +2,18 @@ package io.antmedia.plugin;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.codec.binary.Base64;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.openqa.selenium.By;
+import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
@@ -32,10 +29,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 
-import com.google.gson.Gson;
-
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.Model.ChromeExtensionInfo;
 import io.antmedia.Model.Endpoint;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
@@ -91,22 +85,48 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 	}
 
+	 public static boolean isValidURL(String urlString) {
+	        try {
+	            new URL(urlString);
+	            return true;
+	        } catch (MalformedURLException e) {
+	            return false;
+	        }
+	    }
+	 
 	public Result startMediaPush(String streamId, String websocketUrl, String publisherJSUrl, Endpoint request)  
 	{	
 		Result result = new Result(false);
 
+		String url = request.getURL();
+		if (!isValidURL(url)) 
+		{
+			result.setMessage("Incoming url: "+ url +" is not a valid url");
+			logger.info("Incoming url: {} is not a valid url", url);
+			return result;
+		}
+		
 		if (StringUtils.isNotBlank(streamId) && getDrivers().containsKey(streamId)) {
 			logger.warn("Session with the same streamId: {} already exists. Pleaseo stop it first", streamId);
 			result.setMessage("Session with the same streamId: "+ streamId +" already exists. Please stop it first");
 			return result;
 		}
 
-		String url = request.getURL();
+		
 		if (StringUtils.isBlank(streamId)) {
 			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
 		}
+		
+		
 
+		return startBroadcastingWithBrowser(streamId, websocketUrl, publisherJSUrl, request, url);
+
+	}
+
+	public Result startBroadcastingWithBrowser(String streamId, String websocketUrl, String publisherJSUrl,
+			Endpoint request, String url) {
+		Result result = new Result(false);
 		RemoteWebDriver driver = null;
 		try {
 			driver = createDriver(request.getWidth(), request.getHeight(), streamId);
@@ -135,6 +155,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			//window.startBroadcasting = startBroadcasting -> gets message json parameter
 			//window.stopBroadcasting = stopBroadcasting -> gets message json parameter
 			//window.isConnected = isConnected; -> gets streamId 
+			
 			wait.until(ExpectedConditions.jsReturnsValue("return (typeof window.startBroadcasting != 'undefined')"));
 
 
@@ -169,7 +190,14 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			}
 			drivers.remove(streamId);
 		}
-
+		catch(InvalidArgumentException e) {
+			result.setMessage("Invalidargument exception. Error message is " + e.getMessage());
+			logger.error(ExceptionUtils.getStackTrace(e));
+			if (driver != null) {
+				driver.quit();
+			}
+			drivers.remove(streamId);
+		}
 		return result;
 	}
 
@@ -197,6 +225,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			
 		}
 		catch(TimeoutException e) {
+			logger.error(ExceptionUtils.getStackTrace(e));
 			result.setMessage("Timeoutexception occured in stopping the stream. Fortunately, it'll quit the session to stop completely. Error message is " + e.getMessage());
 			
 		}
