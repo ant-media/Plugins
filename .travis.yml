@@ -39,7 +39,7 @@ script:
 - npm install
 - npm run build
 - cd ../../..
-- mvn clean deploy -DskipTests=false --settings ../mvn-settings.xml
+- mvn clean deploy -DskipTests=false --settings ../mvn-settings.xml --quiet
 
 - cd ../FilterPlugin
 - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report
