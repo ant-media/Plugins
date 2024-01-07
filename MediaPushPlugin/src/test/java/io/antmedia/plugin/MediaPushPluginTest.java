@@ -14,7 +14,11 @@ import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.openqa.selenium.JavascriptExecutor;
@@ -30,6 +34,21 @@ public class MediaPushPluginTest  {
 	
 	
 	private static Logger log = LoggerFactory.getLogger(MediaPushPluginTest.class);
+	
+	@Rule
+	public TestRule watcher = new TestWatcher() {
+		protected void starting(Description description) {
+			System.out.println("Starting test: " + description.getMethodName());
+		}
+
+		protected void failed(Throwable e, Description description) {
+			e.printStackTrace();
+			System.out.println("Failed test: " + description.getMethodName());
+		};
+		protected void finished(Description description) {
+			System.out.println("Finishing test: " + description.getMethodName());
+		};
+	};
 
 	@BeforeClass
 	public static void beforeClass() {
