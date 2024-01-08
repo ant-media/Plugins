@@ -39,6 +39,9 @@ script:
 #install script     
 - wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh -O install_ant-media-server.sh  && chmod 755 install_ant-media-server.sh
 - sudo ./install_ant-media-server.sh -i ant-media-server-community.zip
+- sudo sed -i "/server.cpu_limit=/c\server.cpu_limit=100" /usr/local/antmedia/conf/red5.properties
+- sudo sed -i "/server.memory_limit_percentage=/c\server.memory_limit_percentage=100" /usr/local/antmedia/conf/red5.properties
+
 
 - cd SamplePlugin
 - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
@@ -63,7 +66,6 @@ script:
 - cd ../FilterPlugin
 - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report
   sonar:sonar -Dmaven.javadoc.skip=true -Dsonar.projectKey=ant-media_plugins --settings ../mvn-settings.xml --quiet
-
 
 
 - cd ../TensorflowPlugin
