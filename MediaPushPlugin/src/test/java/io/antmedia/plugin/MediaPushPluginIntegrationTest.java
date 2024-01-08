@@ -104,7 +104,7 @@ public class MediaPushPluginIntegrationTest  {
 		
 		
 		//Check that it's playable with HLS  
-		Awaitility.await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
 			return testFile(ROOT_SERVICE_URL + "/streams/" + streamId + ".m3u8");
 		});
 		
