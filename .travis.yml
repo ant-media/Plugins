@@ -40,7 +40,14 @@ script:
 - wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh -O install_ant-media-server.sh  && chmod 755 install_ant-media-server.sh
 - sudo ./install_ant-media-server.sh -i ant-media-server-community.zip
 
-- cd MediaPushPlugin
+- cd SamplePlugin
+- mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+- cp target/PluginApp.jar /usr/local/antmedia/plugins
+- ls /usr/local/antmedia/plugins
+- sudo service antmedia restart
+- sleep 20
+
+- cd ../MediaPushPlugin
 - rm  src/main/resources/*
 - cd src/main/js
 - npm install
@@ -48,6 +55,7 @@ script:
 - cd ../../..
 - mvn clean install -DskipTests -Dgpg.skip=true --quiet
 - cp target/media-push-plugin.jar /usr/local/antmedia/plugins/
+- ls /usr/local/antmedia/plugins/
 - sudo service antmedia restart
 - sleep 20
 - mvn deploy -DskipTests=false --settings ../mvn-settings.xml --quiet
@@ -56,8 +64,7 @@ script:
 - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report
   sonar:sonar -Dmaven.javadoc.skip=true -Dsonar.projectKey=ant-media_plugins --settings ../mvn-settings.xml --quiet
 
-- cd ../SamplePlugin
-- mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+
 
 - cd ../TensorflowPlugin
 - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
