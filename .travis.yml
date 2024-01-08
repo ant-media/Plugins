@@ -42,7 +42,7 @@ script:
 
 - cd SamplePlugin
 - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
-- cp target/PluginApp.jar /usr/local/antmedia/plugins
+- sudo cp target/PluginApp.jar /usr/local/antmedia/plugins
 - ls /usr/local/antmedia/plugins
 - sudo service antmedia restart
 - sleep 20
@@ -54,7 +54,7 @@ script:
 - npm run build
 - cd ../../..
 - mvn clean install -DskipTests -Dgpg.skip=true --quiet
-- cp target/media-push-plugin.jar /usr/local/antmedia/plugins/
+- sudo cp target/media-push-plugin.jar /usr/local/antmedia/plugins/
 - ls /usr/local/antmedia/plugins/
 - sudo service antmedia restart
 - sleep 20
