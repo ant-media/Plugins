@@ -42,7 +42,7 @@ script:
 - npm install
 - npm run build
 - cd ../../..
-- mvn clean install -DskipTests 
+- mvn clean install -DskipTests -Dgpg.skip=true --quiet
 - cp target/media-push-plugin.jar /usr/local/antmedia/plugins/
 - sudo service antmedia restart
 - sleep 20
