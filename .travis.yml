@@ -32,9 +32,13 @@ before_install:
 - mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
 - cd ..
 script:
-
+# get latest snapshot
+- wget -O maven-metadata.xml https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/ant-media-server/maven-metadata.xml
+- export LATEST_SNAPSHOT=$(cat maven-metadata.xml | grep "<version>" | tail -n 1 |  xargs | cut -c 10-23)
+- wget -O ant-media-server-community.zip "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.antmedia&a=ant-media-server&v=${LATEST_SNAPSHOT}&c=community&e=zip";
+#install script     
 - wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh -O install_ant-media-server.sh  && chmod 755 install_ant-media-server.sh
-- sudo ./install_ant-media-server.sh
+- sudo ./install_ant-media-server.sh -i ant-media-server-community.zip
 
 - cd MediaPushPlugin
 - rm  src/main/resources/*
@@ -63,3 +67,10 @@ after_script:
 - export FILE=hs_err_pid*.log
 - (if  test -f $FILE ; then echo "$FILE exists."; cat $FILE; else echo "$FILE not
   exists."; fi)
+
+after_failure:
+  - sudo cat /usr/local/antmedia/log/ant-media-server.log
+  - echo "----------------------------------------------"
+  - sudo cat /usr/local/antmedia/log/antmedia-error.log
+  - sudo cat /usr/local/antmedia/hs_err_pid*.log  # cat hs_err_pid file if it exists
+  - sudo cat hs_err_pid*.log  # cat hs_err_pid file if it exists
