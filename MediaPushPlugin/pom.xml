@@ -303,6 +303,20 @@
 			</exclusions>
 		</dependency>
 		
+		 <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <version>${awaitility.version}</version>
+            <scope>test</scope>
+        </dependency>
+        
+         <dependency>
+    		<groupId>org.bytedeco</groupId>
+    		<artifactId>ffmpeg-platform</artifactId>
+            <version>${javacpp.ffmpeg.version}</version>
+            <scope>test</scope>
+        </dependency>
+		
 		
 		<dependency>
 			<groupId>org.mockito</groupId>

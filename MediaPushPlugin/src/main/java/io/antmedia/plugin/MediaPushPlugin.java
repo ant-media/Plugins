@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -19,6 +20,10 @@ import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.logging.LogEntries;
+import org.openqa.selenium.logging.LogEntry;
+import org.openqa.selenium.logging.LogType;
+import org.openqa.selenium.logging.LoggingPreferences;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
@@ -30,7 +35,7 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
-import io.antmedia.Model.Endpoint;
+import io.antmedia.model.Endpoint;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
@@ -98,7 +103,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	{	
 		Result result = new Result(false);
 
-		String url = request.getURL();
+		String url = request.getUrl();
 		if (!isValidURL(url)) 
 		{
 			result.setMessage("Incoming url: "+ url +" is not a valid url");
@@ -183,12 +188,23 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			logger.error(ExceptionUtils.getStackTrace(e));
 		}
 		catch (TimeoutException e) {
-			result.setMessage("Timeoutexception occured in creating the chrome session for url: " + request.getURL() + " error message is " + e.getMessage());
+			result.setMessage("Timeoutexception occured in creating the chrome session for url: " + request.getUrl() + " error message is " + e.getMessage());
 			logger.error(ExceptionUtils.getStackTrace(e));
+			
 			if (driver != null) {
+				LogEntries entry = driver.manage().logs().get(LogType.BROWSER);
+				List<LogEntry> logs= entry.getAll();
+				for(LogEntry log: logs)
+				{
+					logger.info(log.toString());
+				}
+				
 				driver.quit();
 			}
+			
 			drivers.remove(streamId);
+			
+			
 		}
 		catch(InvalidArgumentException e) {
 			result.setMessage("Invalidargument exception. Error message is " + e.getMessage());
@@ -210,7 +226,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			return result;
 		}
 
-		RemoteWebDriver driver = drivers.get(streamId);
+		RemoteWebDriver driver = drivers.remove(streamId);
 		
 		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 		
@@ -230,9 +246,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			
 		}
 		finally {
-
 			driver.quit();
-			drivers.remove(streamId);
 		}
 		return result;
 	}
@@ -275,6 +289,12 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		options.setExperimentalOption("useAutomationExtension", false);
 		options.setExperimentalOption("excludeSwitches", List.of("enable-automation"));
 		options.addArguments(args);
+		
+		LoggingPreferences logPrefs = new LoggingPreferences();
+		//To get console log
+		logPrefs.enable(LogType.BROWSER, Level.ALL);
+		
+		options.setCapability( "goog:loggingPrefs", logPrefs);
 
 		return new ChromeDriver(options);
 	}
@@ -292,10 +312,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	@Override
 	public void streamFinished(String streamId) {
-		WebDriver driver = drivers.get(streamId);
+		WebDriver driver = drivers.remove(streamId);
 		if (driver != null) {
 			driver.quit();
-			drivers.remove(streamId);
 		}
 	}
 

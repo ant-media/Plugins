@@ -7,7 +7,7 @@ var publishStarted = false;
 
 async function startBroadcasting(message) {
 	
-	console.log("startBroadcasting is called with message:{} ", message);
+	console.log("startBroadcasting is called websocket url:" + message.websocketURL + " streamId: " + message.streamId);
     if (typeof webRTCAdaptor !== 'undefined' ) {
         throw new Error('Called startBroadcasting while recording is in progress.');
     }
@@ -26,15 +26,30 @@ async function startBroadcasting(message) {
         height = message.height;
     }
 
-	const stream = await navigator.mediaDevices.getDisplayMedia({video: {
-		width:  width,
-		height: height,
-		aspectRatio: width/height
-	}, 
-	audio:true, 
-	preferCurrentTab:true
-	})
 
+	const stream = await navigator.mediaDevices.getDisplayMedia(
+		{
+			//min is not allowed in getDisplayMedia
+			video: true, 
+			audio:true, 
+			preferCurrentTab:true
+		})
+	
+	
+ 	const track = stream.getVideoTracks()[0];
+
+	
+	const constra = {
+        width: { min: 640, ideal: width },
+        height: { min: 360, ideal: height },
+        advanced: [{ width: width, height: height }, { aspectRatio: width/height }],
+        resizeMode: 'crop-and-scale'
+      };
+
+    track.applyConstraints(constra);
+
+	//width and height may not perfectly match with the created video, there may be some improvement opportunity there
+    //@mekya 
 
     let pc_config = {
         'iceServers' : [ {
@@ -42,8 +57,7 @@ async function startBroadcasting(message) {
         } ]
     };
 
-    const track = media.getVideoTracks()[0];
-
+   
 
     webRTCAdaptor = new WebRTCAdaptor({
         websocket_url : message.websocketURL,
@@ -51,6 +65,7 @@ async function startBroadcasting(message) {
         localStream: stream,
         callback : (info, obj) => {
             if (info == "initialized") {
+	            console.log("WebRTC adaptor initialized");
                 webRTCAdaptor.publish(message.streamId, token, "", "", "", "");
             } else if (info == "publish_started") {
                 console.log("mediapush_publish_started");

@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.context.WebApplicationContext;
 
-import io.antmedia.Model.Endpoint;
+import io.antmedia.model.Endpoint;
 import io.antmedia.plugin.MediaPushPlugin;
 import io.antmedia.rest.model.Result;
 import jakarta.servlet.ServletContext;

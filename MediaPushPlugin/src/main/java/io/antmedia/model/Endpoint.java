@@ -1,8 +1,8 @@
-package io.antmedia.Model;
+package io.antmedia.model;
 
 public class Endpoint {
 
-    private String URL;
+    private String url;
 
     private int width;
 
@@ -16,7 +16,7 @@ public class Endpoint {
     }
 
     public Endpoint(String URL, int width, int height, String jsCommand, String token) {
-        this.URL = URL;
+        this.setUrl(URL);
         this.width = width;
         this.height = height;
         this.jsCommand = jsCommand;
@@ -47,14 +47,6 @@ public class Endpoint {
         this.height = height;
     }
 
-    public String getURL() {
-        return URL;
-    }
-
-    public void setURL(String URL) {
-        this.URL = URL;
-    }
-
     public String getToken() {
         return token;
     }
@@ -62,4 +54,12 @@ public class Endpoint {
     public void setToken(String token) {
         this.token = token;
     }
+
+	public String getUrl() {
+		return url;
+	}
+
+	public void setUrl(String url) {
+		this.url = url;
+	}
 }

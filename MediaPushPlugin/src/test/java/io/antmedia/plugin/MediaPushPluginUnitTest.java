@@ -26,14 +26,14 @@ import org.openqa.selenium.remote.RemoteWebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.antmedia.Model.Endpoint;
+import io.antmedia.model.Endpoint;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
 
-public class MediaPushPluginTest  {
+public class MediaPushPluginUnitTest  {
 	
 	
-	private static Logger log = LoggerFactory.getLogger(MediaPushPluginTest.class);
+	private static Logger log = LoggerFactory.getLogger(MediaPushPluginUnitTest.class);
 	
 	@Rule
 	public TestRule watcher = new TestWatcher() {
@@ -64,17 +64,17 @@ public class MediaPushPluginTest  {
 		MediaPushPlugin pushPlugin =new MediaPushPlugin();
 		
 		Endpoint endpoint = new Endpoint();
-		endpoint.setURL("https://google.com");
+		endpoint.setUrl("https://google.com");
 		endpoint.setWidth(640);
 		endpoint.setHeight(360);
 		
 		
 		//ChromeDriver driver = (ChromeDriver) pushPlugin.createDriver(endpoint.getWidth(), endpoint.getHeight(), "stream1");
 		
-		//driver.get(endpoint.getURL());
+		//driver.get(endpoint.getUrl());
 
 		 RemoteWebDriver remoteWebDriver = pushPlugin.createDriver(endpoint.getWidth(), endpoint.getHeight(), "test");
-		 remoteWebDriver.get(endpoint.getURL());
+		 remoteWebDriver.get(endpoint.getUrl());
 		 
 		 List<Long> resolution = getResolution(endpoint, remoteWebDriver);
 		 
@@ -87,11 +87,12 @@ public class MediaPushPluginTest  {
 			
 		 remoteWebDriver.quit();
 		 
-		 remoteWebDriver = pushPlugin.createDriver(endpoint.getWidth(), endpoint.getHeight(), "test");
-		 remoteWebDriver.get(endpoint.getURL());
-		 
+		
 		 endpoint.setWidth(1280);
 		 endpoint.setHeight(720);
+		 
+		 remoteWebDriver = pushPlugin.createDriver(endpoint.getWidth(), endpoint.getHeight(), "test");
+		 remoteWebDriver.get(endpoint.getUrl());
 		 
 		 resolution = getResolution(endpoint, remoteWebDriver);
 		 
@@ -100,12 +101,13 @@ public class MediaPushPluginTest  {
 		 remoteWebDriver.quit();
 		 
 		 
-		 
-		 remoteWebDriver = pushPlugin.createDriver(endpoint.getWidth(), endpoint.getHeight(), "test");
-		 remoteWebDriver.get(endpoint.getURL());
-		 
 		 endpoint.setWidth(1920);
 		 endpoint.setHeight(1080);
+		 
+		 remoteWebDriver = pushPlugin.createDriver(endpoint.getWidth(), endpoint.getHeight(), "test");
+		 remoteWebDriver.get(endpoint.getUrl());
+		 
+		 
 		 
 		 resolution = getResolution(endpoint, remoteWebDriver);
 		 
@@ -213,7 +215,7 @@ public class MediaPushPluginTest  {
         Endpoint endpoint = new Endpoint();
         endpoint.setHeight(height);
         endpoint.setWidth(width);
-        endpoint.setURL(url);
+        endpoint.setUrl(url);
         
         when(plugin.getDrivers()).thenReturn(new HashMap<>());
         Mockito.doReturn(Mockito.mock(Result.class)).when(plugin).startBroadcastingWithBrowser(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
@@ -251,7 +253,7 @@ public class MediaPushPluginTest  {
     
     
     @Test
-    public void testStartMediaPush_InvalidURL_ShouldReturnErrorResult() throws IOException {
+    public void testStartMediaPush_InvalidUrl_ShouldReturnErrorResult() throws IOException {
         // Arrange
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         Endpoint endpoint = Mockito.mock(Endpoint.class);
@@ -262,7 +264,7 @@ public class MediaPushPluginTest  {
         int width = 1280;
         int height = 720;
 
-        when(endpoint.getURL()).thenReturn(url);
+        when(endpoint.getUrl()).thenReturn(url);
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
         
@@ -290,7 +292,7 @@ public class MediaPushPluginTest  {
         int width = 1280;
         int height = 720;
 
-        when(endpoint.getURL()).thenReturn(url);
+        when(endpoint.getUrl()).thenReturn(url);
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
         
@@ -319,7 +321,7 @@ public class MediaPushPluginTest  {
         int width = 1280;
         int height = 720;
 
-        when(endpoint.getURL()).thenReturn(url);
+        when(endpoint.getUrl()).thenReturn(url);
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
         when(plugin.getDrivers()).thenReturn(new HashMap<>());
@@ -345,7 +347,7 @@ public class MediaPushPluginTest  {
         int width = 1280;
         int height = 720;
 
-        when(endpoint.getURL()).thenReturn(url);
+        when(endpoint.getUrl()).thenReturn(url);
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
 
