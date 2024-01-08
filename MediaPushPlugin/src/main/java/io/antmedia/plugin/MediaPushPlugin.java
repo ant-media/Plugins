@@ -45,7 +45,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 
 
-	public static final String BEAN_NAME = "web.handler";
 	protected static Logger logger = LoggerFactory.getLogger(MediaPushPlugin.class);
 
 	private Map<String, RemoteWebDriver> drivers = new ConcurrentHashMap<>();
@@ -68,8 +67,16 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		app.addStreamListener(this);
 
 		//Setup driver gently 
+		logger.info("MediaPushPlugin is setting up chrome driver");
 		app.getVertx().executeBlocking(()-> {
-			WebDriverManager.chromedriver().setup();
+			try {
+				WebDriverManager.chromedriver().setup();
+				logger.info("ChroemeDriver setup is completed");
+			}
+			catch (Exception e) {
+				logger.error(ExceptionUtils.getStackTrace(e));
+
+			}
 			return null;
 		});
 	}
@@ -90,15 +97,15 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 	}
 
-	 public static boolean isValidURL(String urlString) {
-	        try {
-	            new URL(urlString);
-	            return true;
-	        } catch (MalformedURLException e) {
-	            return false;
-	        }
-	    }
-	 
+	public static boolean isValidURL(String urlString) {
+		try {
+			new URL(urlString);
+			return true;
+		} catch (MalformedURLException e) {
+			return false;
+		}
+	}
+
 	public Result startMediaPush(String streamId, String websocketUrl, String publisherJSUrl, Endpoint request)  
 	{	
 		Result result = new Result(false);
@@ -110,20 +117,20 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			logger.info("Incoming url: {} is not a valid url", url);
 			return result;
 		}
-		
+
 		if (StringUtils.isNotBlank(streamId) && getDrivers().containsKey(streamId)) {
 			logger.warn("Session with the same streamId: {} already exists. Pleaseo stop it first", streamId);
 			result.setMessage("Session with the same streamId: "+ streamId +" already exists. Please stop it first");
 			return result;
 		}
 
-		
+
 		if (StringUtils.isBlank(streamId)) {
 			//generate a stream id
 			streamId = RandomStringUtils.randomAlphanumeric(12) + System.currentTimeMillis();
 		}
-		
-		
+
+
 
 		return startBroadcastingWithBrowser(streamId, websocketUrl, publisherJSUrl, request, url);
 
@@ -160,26 +167,26 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			//window.startBroadcasting = startBroadcasting -> gets message json parameter
 			//window.stopBroadcasting = stopBroadcasting -> gets message json parameter
 			//window.isConnected = isConnected; -> gets streamId 
-			
+
 			wait.until(ExpectedConditions.jsReturnsValue("return (typeof window.startBroadcasting != 'undefined')"));
 
 
 			driver.executeScript("window.startBroadcasting({"
-						+ "websocketURL:'"+websocketUrl +"',"
-						+ "streamId:'" + streamId + "',"
-						+ "width:" + request.getWidth() + ","
-						+ "height:" + request.getHeight() + ","
-						+ "token:'" + (StringUtils.isNotBlank(request.getToken()) ? request.getToken() : "") + "'," 
+					+ "websocketURL:'"+websocketUrl +"',"
+					+ "streamId:'" + streamId + "',"
+					+ "width:" + request.getWidth() + ","
+					+ "height:" + request.getHeight() + ","
+					+ "token:'" + (StringUtils.isNotBlank(request.getToken()) ? request.getToken() : "") + "'," 
 					+ "});");
 
-			
+
 			// wait until stream is started
 			wait.until(ExpectedConditions.jsReturnsValue("return window.isConnected('"+streamId+"')"));
 
 
 			result.setDataId(streamId);
 			result.setSuccess(true);
-			
+
 		}
 		catch (IOException e) 
 		{
@@ -190,7 +197,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		catch (TimeoutException e) {
 			result.setMessage("Timeoutexception occured in creating the chrome session for url: " + request.getUrl() + " error message is " + e.getMessage());
 			logger.error(ExceptionUtils.getStackTrace(e));
-			
+
 			if (driver != null) {
 				LogEntries entry = driver.manage().logs().get(LogType.BROWSER);
 				List<LogEntry> logs= entry.getAll();
@@ -198,13 +205,13 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 				{
 					logger.info(log.toString());
 				}
-				
+
 				driver.quit();
 			}
-			
+
 			drivers.remove(streamId);
-			
-			
+
+
 		}
 		catch(InvalidArgumentException e) {
 			result.setMessage("Invalidargument exception. Error message is " + e.getMessage());
@@ -227,23 +234,23 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 
 		RemoteWebDriver driver = drivers.remove(streamId);
-		
+
 		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
-		
+
 		try 
 		{
 			driver.executeScript("window.stopBroadcasting({"
 					+ "streamId:'" + streamId + "',"
-				+ "});");
-			
+					+ "});");
+
 			wait.until(ExpectedConditions.jsReturnsValue("return !window.isConnected('"+streamId+"')"));
 			result.setSuccess(true);
-			
+
 		}
 		catch(TimeoutException e) {
 			logger.error(ExceptionUtils.getStackTrace(e));
 			result.setMessage("Timeoutexception occured in stopping the stream. Fortunately, it'll quit the session to stop completely. Error message is " + e.getMessage());
-			
+
 		}
 		finally {
 			driver.quit();
@@ -289,11 +296,11 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		options.setExperimentalOption("useAutomationExtension", false);
 		options.setExperimentalOption("excludeSwitches", List.of("enable-automation"));
 		options.addArguments(args);
-		
+
 		LoggingPreferences logPrefs = new LoggingPreferences();
 		//To get console log
 		logPrefs.enable(LogType.BROWSER, Level.ALL);
-		
+
 		options.setCapability( "goog:loggingPrefs", logPrefs);
 
 		return new ChromeDriver(options);
