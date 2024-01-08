@@ -51,33 +51,32 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	private ApplicationContext applicationContext;
 
+
+
 	public Map<String, RemoteWebDriver> getDrivers() {
 		return drivers;
 	}
 
 
 	public static final int TIMEOUT_IN_SECONDS = 30;
-	
-	public MediaPushPlugin() {
-		logger.info("MediaPushPlugin is created");
-	}
 
 
 	@Override
 	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-		logger.info("MediaPushPlugin is setting up chrome driver");
-		
+
 		this.applicationContext = applicationContext;
 
 		AntMediaApplicationAdapter app = getApplication();
+		logger.info("MediaPushPlugin is setting up chrome driver for {}", app.getName());
+
 		app.addStreamListener(this);
 
 		//Setup driver gently 
-		
+
 		app.getVertx().executeBlocking(()-> {
 			try {
 				WebDriverManager.chromedriver().setup();
-				logger.info("ChroemeDriver setup is completed");
+				logger.info("Chrome Driver setup is completed for {}", app.getName());
 			}
 			catch (Exception e) {
 				logger.error(ExceptionUtils.getStackTrace(e));

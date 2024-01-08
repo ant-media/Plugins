@@ -29,7 +29,6 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 
 	@Override
 	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-		logger.info("SamplePlugin is being initialized" );
 		this.applicationContext = applicationContext;
 		vertx = (Vertx) applicationContext.getBean("vertxCore");
 		
