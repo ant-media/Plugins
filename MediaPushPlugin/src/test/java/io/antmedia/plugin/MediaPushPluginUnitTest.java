@@ -9,8 +9,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.BeforeClass;
@@ -124,55 +128,23 @@ public class MediaPushPluginUnitTest  {
         assertFalse(result.isSuccess());
         assertEquals(expectedResult.getMessage(), result.getMessage());
     }
-
+    
     @Test
     public void testStartMediaPush_WhenStreamIdIsEmptyOrNull_ShouldGenerateStreamId() throws IOException {
         // Arrange
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
       
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
-        String websocketUrl = "websocketUrl";
-        String url = "http://google.com";
-        int width = 1280;
-        int height = 720;
-        String token = "token";
-        Endpoint endpoint = new Endpoint();
-        endpoint.setHeight(height);
-        endpoint.setWidth(width);
-        endpoint.setUrl(url);
+        String streamId = plugin.checkAndGetStreamId("");
         
-        when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        Mockito.doReturn(Mockito.mock(Result.class)).when(plugin).startBroadcastingWithBrowser(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+        assertTrue(StringUtils.isNotBlank(streamId));
         
-        // Act
-        Result result = plugin.startMediaPush("", websocketUrl, url, endpoint);
-
-        // Assert
-        ArgumentCaptor<String> streamIdCaptor = ArgumentCaptor.forClass(String.class);
-
-        ArgumentCaptor<String> websocketUrlCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> publisherJSUrlCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Endpoint> requestCaptor = ArgumentCaptor.forClass(Endpoint.class);
-        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
-
-       
-        // Capturing the arguments
-        Mockito.verify(plugin).startBroadcastingWithBrowser(streamIdCaptor.capture(), websocketUrlCaptor.capture(), publisherJSUrlCaptor.capture(), requestCaptor.capture(), urlCaptor.capture());
-
-        // Assertions
+        streamId = plugin.checkAndGetStreamId(null);
         
-        assertTrue(StringUtils.isNotBlank(streamIdCaptor.getValue()));
-        assertTrue(streamIdCaptor.getValue().length()> 12);
-        var firstStreamId = streamIdCaptor.getValue();
+        assertTrue(StringUtils.isNotBlank(streamId));
         
+        String streamId2 = plugin.checkAndGetStreamId(streamId);
         
-        result = plugin.startMediaPush(null, websocketUrl, url, endpoint);
-        Mockito.verify(plugin, Mockito.times(2)).startBroadcastingWithBrowser(streamIdCaptor.capture(), websocketUrlCaptor.capture(), publisherJSUrlCaptor.capture(), requestCaptor.capture(), urlCaptor.capture());
-        assertTrue(StringUtils.isNotBlank(streamIdCaptor.getValue()));
-        assertTrue(streamIdCaptor.getValue().length()> 12);
-        assertNotEquals(firstStreamId, streamIdCaptor.getValue());
-        
+        assertEquals(streamId, streamId2);
        
     }
     
@@ -194,7 +166,7 @@ public class MediaPushPluginUnitTest  {
         when(endpoint.getHeight()).thenReturn(height);
         
         // Act
-        Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl, endpoint);
+        Result result = plugin.startMediaPush(streamId, websocketUrl, endpoint.getWidth(), endpoint.getHeight(), endpoint.getUrl(), endpoint.getToken(), null);
 
         // Assert
         assertFalse(result.isSuccess());
@@ -225,7 +197,7 @@ public class MediaPushPluginUnitTest  {
         
 
         // Act
-        Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl, endpoint);
+        Result result = plugin.startMediaPush(streamId, websocketUrl, endpoint.getWidth(), endpoint.getHeight(), endpoint.getUrl(), endpoint.getToken(), null);
 
         // Assert
         assertFalse(result.isSuccess());
@@ -241,7 +213,7 @@ public class MediaPushPluginUnitTest  {
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         Endpoint endpoint = Mockito.mock(Endpoint.class);
         String streamId = "streamId";
-        String websocketUrl = "websocketUrl";
+        String websocketUrl = "ws://test.antmedia.io";
         String url = "http://example.com";
         int width = 1280;
         int height = 720;
@@ -253,7 +225,7 @@ public class MediaPushPluginUnitTest  {
         Mockito.doThrow(new IOException()).when(plugin).createDriver(width, height, "streamId");
 
         // Act
-        Result result = plugin.startMediaPush(streamId, websocketUrl, websocketUrl, endpoint);
+        Result result = plugin.startMediaPush(streamId, websocketUrl,endpoint.getWidth(), endpoint.getHeight(), endpoint.getUrl(), endpoint.getToken(), null);
 
         // Assert
         assertFalse(result.isSuccess());
@@ -266,8 +238,7 @@ public class MediaPushPluginUnitTest  {
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         Endpoint endpoint = Mockito.mock(Endpoint.class);
         String streamId = "streamId";
-        String websocketUrl = "websocketUrl";
-        String httpPublisherUrl = "not reachable";
+        String websocketUrl = "ws://example.antmedia.io";
         String url = "http://example.com";
         int width = 1280;
         int height = 720;
@@ -279,12 +250,12 @@ public class MediaPushPluginUnitTest  {
         assertFalse(plugin.getDrivers().containsKey(streamId));
 
         // Act
-        Result result = plugin.startMediaPush(streamId, websocketUrl, httpPublisherUrl , endpoint);
+        Result result = plugin.startMediaPush(streamId, websocketUrl ,endpoint.getWidth(), endpoint.getHeight(), endpoint.getUrl(), endpoint.getToken(), null);
 
         // Assert
         assertFalse(result.isSuccess());
-        
-        assertTrue(result.getMessage().contains("Timeout"));
+        log.info("Message is: {}",result.getMessage());
+        assertTrue(result.getMessage().contains("waiting for js return (typeof window.startBroadcasting != 'undefined'"));
         verify(plugin).createDriver(width, height, "streamId");
         assertFalse(plugin.getDrivers().containsKey(streamId));
 

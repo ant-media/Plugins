@@ -12,6 +12,9 @@ public class Endpoint {
 
     private String token;
 
+    //it can be mp4 or webm
+    private String recordType;
+    
     public Endpoint() {
     }
 
@@ -61,5 +64,13 @@ public class Endpoint {
 
 	public void setUrl(String url) {
 		this.url = url;
+	}
+
+	public String getRecordType() {
+		return recordType;
+	}
+
+	public void setRecordType(String recordType) {
+		this.recordType = recordType;
 	}
 }

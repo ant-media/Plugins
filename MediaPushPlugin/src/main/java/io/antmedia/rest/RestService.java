@@ -57,28 +57,10 @@ public class RestService {
 		String applicationName = uriInfo.getBaseUri().getPath().split("/")[1];
 
 		String websocketUrl = websocketScheme + "://" + uriInfo.getBaseUri().getHost() + ((uriInfo.getBaseUri().getPort() != -1 ) ? ":" + uriInfo.getBaseUri().getPort() + "/" : "/") + applicationName + "/websocket";
-		String publisherUrl = uriInfo.getBaseUri() + uriInfo.getPath().substring(0, uriInfo.getPath().lastIndexOf('/'))  + "/publisher.js";
 
 		MediaPushPlugin app = getPluginApp();
 
-		return app.startMediaPush(streamId, websocketUrl, publisherUrl, request);
-	}
-
-	@GET
-	@Path("publisher.js")
-	@Produces("text/javascript")
-	public Response getJSFile() {
-
-		ClassLoader classLoader = getClass().getClassLoader();
-		try (InputStream inputStream = classLoader.getResourceAsStream("publisher.js")) {
-
-
-			return Response.status(Status.OK).type("text/javascript").entity(new String(inputStream.readAllBytes())).build();
-		}
-		catch (IOException e) {
-			log.error(ExceptionUtils.getStackTrace(e));
-			return Response.status(Status.INTERNAL_SERVER_ERROR).entity("Cannot read the publisher.js").build();
-		}
+		return app.startMediaPush(streamId, websocketUrl, request.getWidth(), request.getHeight(), request.getUrl(),request.getToken(), request.getRecordType());
 	}
 
 	/*

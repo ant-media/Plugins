@@ -1,9 +1,9 @@
 const path = require('path');
 
 module.exports = {
-  entry: './src/publisher.js',
+  entry: './src/media-push-publisher.js',
   output: {
-    filename: 'publisher.js',
+    filename: 'media-push-publisher.js',
     path: path.resolve('../resources/'),
   }
 };
