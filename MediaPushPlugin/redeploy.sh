@@ -2,7 +2,7 @@
 AMS_DIR=/usr/local/antmedia/
 AMS_DIR=~/softwares/ant-media-server/
 
-rm  src/main/resources/*
+rm  src/main/resources/*.js
 
 cd src/main/js
 npm run build

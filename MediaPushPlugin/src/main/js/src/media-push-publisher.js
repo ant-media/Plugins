@@ -1,14 +1,16 @@
 
 import {WebRTCAdaptor} from "@antmedia/webrtc_adaptor";
 
-var webRTCAdaptor;
+var webRTCAdaptorMediaPush;
 
 var publishStarted = false;
 
 async function startBroadcasting(message) {
 	
+	setTimeout(async () => {
+	
 	console.log("startBroadcasting is called websocket url:" + message.websocketURL + " streamId: " + message.streamId);
-    if (typeof webRTCAdaptor !== 'undefined' ) {
+    if (typeof webRTCAdaptorMediaPush !== 'undefined' ) {
         throw new Error('Called startBroadcasting while recording is in progress.');
     }
 
@@ -31,9 +33,10 @@ async function startBroadcasting(message) {
 		{
 			//min is not allowed in getDisplayMedia
 			video: true, 
-			audio:true, 
+			audio: true, 
 			preferCurrentTab:true
 		})
+	
 	
 	
  	const track = stream.getVideoTracks()[0];
@@ -44,7 +47,7 @@ async function startBroadcasting(message) {
         height: { min: 360, ideal: height },
         advanced: [{ width: width, height: height }, { aspectRatio: width/height }],
         resizeMode: 'crop-and-scale'
-      };
+     };
 
     track.applyConstraints(constra);
 
@@ -59,7 +62,7 @@ async function startBroadcasting(message) {
 
    
 
-    webRTCAdaptor = new WebRTCAdaptor({
+    webRTCAdaptorMediaPush = new WebRTCAdaptor({
         websocket_url : message.websocketURL,
         peerconnection_config : pc_config,
         bandwidth: 2500,
@@ -67,7 +70,7 @@ async function startBroadcasting(message) {
         callback : (info, obj) => {
             if (info == "initialized") {
 	            console.log("WebRTC adaptor initialized");
-                webRTCAdaptor.publish(message.streamId, token, "", "", "", "");
+                webRTCAdaptorMediaPush.publish(message.streamId, token, "", "", "", "");
             } else if (info == "publish_started") {
                 console.log("mediapush_publish_started");
                 publishStarted = true;
@@ -124,7 +127,8 @@ async function startBroadcasting(message) {
         }
     });
 
-    window.webRTCAdaptor = webRTCAdaptor;
+    window.webRTCAdaptorMediaPush = webRTCAdaptorMediaPush;
+    }, 5000);
 
 }
 
@@ -132,10 +136,10 @@ function isConnected(streamId) {
 	
 	var connected = false;
 	if (publishStarted) {
-		var state = webRTCAdaptor.signallingState(streamId);
+		var state = webRTCAdaptorMediaPush.signallingState(streamId);
 		if (state != null && state != "closed") 
 		{
-			var iceState = webRTCAdaptor.iceConnectionState(streamId);
+			var iceState = webRTCAdaptorMediaPush.iceConnectionState(streamId);
 			if (iceState != null && iceState != "failed" && iceState != "disconnected") {
 				connected = true;		
 			}
@@ -145,8 +149,8 @@ function isConnected(streamId) {
 }
 
 function stopBroadcasting(message) {
-	webRTCAdaptor.stop(message.streamId);
-	webRTCAdaptor.closeWebSocket();
+	webRTCAdaptorMediaPush.stop(message.streamId);
+	webRTCAdaptorMediaPush.closeWebSocket();
 }
 
 
