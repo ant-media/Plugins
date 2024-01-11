@@ -51,7 +51,7 @@ script:
 - sleep 20
 
 - cd ../MediaPushPlugin
-- rm  src/main/resources/*
+- rm  src/main/resources/*.js
 - cd src/main/js
 - npm install
 - npm run build
