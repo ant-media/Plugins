@@ -7,7 +7,6 @@ var publishStarted = false;
 
 async function startBroadcasting(message) {
 	
-	setTimeout(async () => {
 	
 	console.log("startBroadcasting is called websocket url:" + message.websocketURL + " streamId: " + message.streamId);
     if (typeof webRTCAdaptorMediaPush !== 'undefined' ) {
@@ -33,7 +32,9 @@ async function startBroadcasting(message) {
 		{
 			//min is not allowed in getDisplayMedia
 			video: true, 
-			audio: true, 
+			audio: {
+				channelCount:2
+			}, 
 			preferCurrentTab:true
 		})
 	
@@ -128,8 +129,6 @@ async function startBroadcasting(message) {
     });
 
     window.webRTCAdaptorMediaPush = webRTCAdaptorMediaPush;
-    }, 5000);
-
 }
 
 function isConnected(streamId) {

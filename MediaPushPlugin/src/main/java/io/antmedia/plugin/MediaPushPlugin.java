@@ -363,7 +363,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		else {
 			logger.info("creating the driver with default width and height for streamId:{}", streamId);
 		}
-		//args.add("--headless=new");
+		args.add("--headless=new");
 		//args.add("--start-fullscreen");
 		//args.add("--kiosk");
 		args.add("--disable-gpu");
