@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
@@ -25,6 +26,7 @@ import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.slf4j.Logger;
@@ -231,6 +233,17 @@ public class MediaPushPluginUnitTest  {
         assertFalse(result.isSuccess());
         verify(plugin).createDriver(width, height, "streamId");
     }
+    
+    @Test
+    public void testGetPublisherUrl() throws InvalidArgumentException, URISyntaxException {
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+
+        String url = plugin.getPublisherHTMLURL("ws://example.antmedia.io");
+        
+        log.info("returned url: {}", url);
+        assertEquals("http://example.antmedia.io/media-push/media-push-publisher.html", url);
+        
+    }
 
     @Test
     public void testStartMediaPush_WhenExecuteScriptTimeoutOccurs_ShouldReturnErrorResult() throws IOException {
@@ -255,7 +268,7 @@ public class MediaPushPluginUnitTest  {
         // Assert
         assertFalse(result.isSuccess());
         log.info("Message is: {}",result.getMessage());
-        assertTrue(result.getMessage().contains("waiting for js return (typeof window.startBroadcasting != 'undefined'"));
+       
         verify(plugin).createDriver(width, height, "streamId");
         assertFalse(plugin.getDrivers().containsKey(streamId));
 

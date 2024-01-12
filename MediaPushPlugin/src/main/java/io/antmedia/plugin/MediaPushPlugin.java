@@ -206,7 +206,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 					break; // Stop the loop once a match is found
 				}
 			}
-
+			logger.info("publisherUrl -> {}", publisherUrl);
 			driver.get(publisherUrl);
 
 			
@@ -279,7 +279,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return "Error message is " + e.getMessage();
 	}
 
-	private String getPublisherHTMLURL(String websocketUrl) throws InvalidArgumentException, URISyntaxException 
+	public String getPublisherHTMLURL(String websocketUrl) throws InvalidArgumentException, URISyntaxException 
 	{
 
 		URI websocketURLObject = new URI(websocketUrl);
@@ -289,11 +289,20 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 
 		String publisherHtmlURL = websocketURLObject.getScheme().contains("wss") ? "https://" : "http://";
-		publisherHtmlURL += websocketURLObject.getHost() + ":" + websocketURLObject.getPort();
+		publisherHtmlURL += websocketURLObject.getHost();
+		
+		
+		publisherHtmlURL +=  websocketURLObject.getPort() != -1 ? (":" + websocketURLObject.getPort()) : "";
+		
 		String path = websocketURLObject.getPath();
 
 		//http://127.0.0.1:5080/ConferenceCall/js/media-push/publisher.js
-		publisherHtmlURL += path.substring(0, path.lastIndexOf("/")+1) + MEDIA_PUSH_FOLDER + File.separator + MEDIA_PUSH_PUBLISHER_HTML;
+		int lastSlashIndex = path.lastIndexOf("/");
+		if (lastSlashIndex != -1) {
+			publisherHtmlURL += path.substring(0, lastSlashIndex);
+		}
+		publisherHtmlURL +=  File.separator + MEDIA_PUSH_FOLDER + File.separator + MEDIA_PUSH_PUBLISHER_HTML;
+		
 		return publisherHtmlURL;
 	}
 
