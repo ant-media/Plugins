@@ -33,20 +33,27 @@ async function startBroadcasting(message) {
 			//min is not allowed in getDisplayMedia
 			video: true, 
 			audio: {
-				channelCount:2
+				channelCount:2,
 			}, 
 			preferCurrentTab:true
 		})
 	
-	
-	
  	const track = stream.getVideoTracks()[0];
 
-	
 	const constra = {
-        width: { min: 640, ideal: width },
-        height: { min: 360, ideal: height },
+        width: { 
+				 min: 640,  
+        		 ideal: width 
+        },
+        height: { 
+				min: 360, 
+				ideal: height 
+		},
         advanced: [{ width: width, height: height }, { aspectRatio: width/height }],
+        frameRate: {
+				min:15,
+				max:30,
+		},
         resizeMode: 'crop-and-scale'
      };
 
