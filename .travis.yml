@@ -1,62 +1,85 @@
 dist: jammy
 language: java
 jdk:
-  - openjdk17
-
+- openjdk17
 git:
   depth: false
-
 addons:
   sonarcloud:
-    organization: "ant-media-plugins"
-    token: $SONAR_TOKEN
-
+    organization: ant-media-plugins
+    token: "$SONAR_TOKEN"
 before_install:
-  - sudo apt-get update -qq
-  - sudo apt-get install ffmpeg -qq -y
-
-  #get parent project
-  - (if [ $(git ls-remote https://github.com/ant-media/ant-media-server-parent.git $TRAVIS_BRANCH  | wc -l) == "1" ];  
-      then 
-        echo " $TRAVIS_BRANCH branch found";  
-        git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/ant-media-server-parent.git;  
-      else
-        echo "$TRAVIS_BRANCH branch not found. Checking out master";
-        git clone --depth=1 https://github.com/ant-media/ant-media-server-parent.git;  
-    fi)
-  - cd ant-media-server-parent
-  - mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
-  - cd .. 
-  
-  #get server project
-  - (if [ $(git ls-remote https://github.com/ant-media/Ant-Media-Server.git $TRAVIS_BRANCH  | wc -l) == "1" ];  
-      then 
-        echo "$TRAVIS_BRANCH branch found in Ant-Media-Server";  
-        git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/Ant-Media-Server.git;  
-      else 
-        echo "$TRAVIS_BRANCH branch not found. Checking out master";
-        git clone --depth=1 https://github.com/ant-media/Ant-Media-Server.git;   
-    fi)
-  - cd Ant-Media-Server
-  - mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
-  - cd ..
-  
+- openssl aes-256-cbc -K $encrypted_171b1c559d7b_key -iv $encrypted_171b1c559d7b_iv
+  -in signingkey.asc.enc -out signingkey.asc -d
+- export GPG_TTY=$(tty) #-> https://github.com/keybase/keybase-issues/issues/2798
+- gpg --batch --fast-import signingkey.asc
+- sudo apt-get update -qq
+- sudo apt-get install ffmpeg -qq -y
+- (if [ $(git ls-remote https://github.com/ant-media/ant-media-server-parent.git $TRAVIS_BRANCH  |
+  wc -l) == "1" ]; then echo " $TRAVIS_BRANCH branch found"; git clone --depth=1 -b
+  $TRAVIS_BRANCH https://github.com/ant-media/ant-media-server-parent.git; else echo
+  "$TRAVIS_BRANCH branch not found. Checking out master"; git clone --depth=1 https://github.com/ant-media/ant-media-server-parent.git;
+  fi)
+- cd ant-media-server-parent
+- mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
+- cd ..
+- (if [ $(git ls-remote https://github.com/ant-media/Ant-Media-Server.git $TRAVIS_BRANCH  |
+  wc -l) == "1" ]; then echo "$TRAVIS_BRANCH branch found in Ant-Media-Server"; git
+  clone --depth=1 -b $TRAVIS_BRANCH https://github.com/ant-media/Ant-Media-Server.git;
+  else echo "$TRAVIS_BRANCH branch not found. Checking out master"; git clone --depth=1
+  https://github.com/ant-media/Ant-Media-Server.git; fi)
+- cd Ant-Media-Server
+- mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
+- cd ..
 script:
-  - cd FilterPlugin
-  - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install org.jacoco:jacoco-maven-plugin:report sonar:sonar -Dmaven.javadoc.skip=true -Dsonar.projectKey=ant-media_plugins  -Dgpg.skip=true --quiet
-  - cd ../SamplePlugin
-  - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
-  - cd ../TensorflowPlugin
-  - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
-  
-    
+# get latest snapshot
+- wget -O maven-metadata.xml https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/ant-media-server/maven-metadata.xml
+- export LATEST_SNAPSHOT=$(cat maven-metadata.xml | grep "<version>" | tail -n 1 |  xargs | cut -c 10-23)
+- wget -O ant-media-server-community.zip "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.antmedia&a=ant-media-server&v=${LATEST_SNAPSHOT}&c=community&e=zip";
+#install script     
+- wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh -O install_ant-media-server.sh  && chmod 755 install_ant-media-server.sh
+- sudo ./install_ant-media-server.sh -i ant-media-server-community.zip
+- sudo sed -i "/server.cpu_limit=/c\server.cpu_limit=100" /usr/local/antmedia/conf/red5.properties
+- sudo sed -i "/server.memory_limit_percentage=/c\server.memory_limit_percentage=100" /usr/local/antmedia/conf/red5.properties
+
+
+- cd SamplePlugin
+- mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+- sudo cp target/PluginApp.jar /usr/local/antmedia/plugins
+- ls /usr/local/antmedia/plugins
+- sudo service antmedia restart
+- sleep 20
+
+- cd ../MediaPushPlugin
+- rm  src/main/resources/*.js
+- cd src/main/js
+- npm install
+- npm run build
+- cd ../../..
+- mvn clean install -DskipTests -Dgpg.skip=true --quiet
+- sudo cp target/media-push-plugin.jar /usr/local/antmedia/plugins/
+- ls /usr/local/antmedia/plugins/
+- sudo service antmedia restart
+- sleep 20
+- mvn deploy -DskipTests=false --settings ../mvn-settings.xml --quiet
+
+- cd ../FilterPlugin
+- mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report
+  sonar:sonar -Dmaven.javadoc.skip=true -Dsonar.projectKey=ant-media_plugins --settings ../mvn-settings.xml --quiet
+
+
+- cd ../TensorflowPlugin
+- mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+
 after_script:
-  - ls
-  - export FILE=hs_err_pid*.log 
-  # cat hs_err_pid file if it exists
-  - (if  test -f $FILE ; then
-       echo "$FILE exists.";
-       cat $FILE;
-     else
-       echo "$FILE not exists.";  
-    fi)
+- ls
+- export FILE=hs_err_pid*.log
+- (if  test -f $FILE ; then echo "$FILE exists."; cat $FILE; else echo "$FILE not
+  exists."; fi)
+
+after_failure:
+  - sudo cat /usr/local/antmedia/log/ant-media-server.log
+  - echo "----------------------------------------------"
+  - sudo cat /usr/local/antmedia/log/antmedia-error.log
+  - sudo cat /usr/local/antmedia/hs_err_pid*.log  # cat hs_err_pid file if it exists
+  - sudo cat hs_err_pid*.log  # cat hs_err_pid file if it exists

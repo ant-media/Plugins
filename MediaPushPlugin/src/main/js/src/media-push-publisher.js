@@ -1,53 +1,17 @@
-import { WebRTCAdaptor } from '@antmedia/webrtc_adaptor';
 
-let webRTCAdaptor;
-let antMediaState = {
-    READY: "ready",
-    WAITING: "waiting",
-    STARTED: "started",
-    FINISHED: "finished",
-    ERROR: "error"
-};
+import {WebRTCAdaptor} from "@antmedia/webrtc_adaptor";
 
-chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
-    console.log('GOT EXTERNAL MESSAGE', message);
+var webRTCAdaptorMediaPush;
 
-    let key = "webRTCAdaptorState";
-    let errorMessageKey = "webRTCAdaptorError";
-
-    let webRTCAdaptorStateCurrent = localStorage.getItem(key);
-    if (webRTCAdaptorStateCurrent == null) {
-        webRTCAdaptorStateCurrent = antMediaState.READY;
-    }
-    let webRTCAdaptorErrorCurrent = localStorage.getItem(errorMessageKey);
-    if (webRTCAdaptorErrorCurrent == null) {
-        webRTCAdaptorErrorCurrent = "";
-    }
-
-    sendResponse({"streamId": message.streamId, "webRTCAdaptorState": webRTCAdaptorStateCurrent, "webRTCAdaptorError": webRTCAdaptorErrorCurrent});
-});
-
-chrome.runtime.onMessage.addListener(async (message) => {
-    if (message.target === 'offscreen') {
-        switch (message.type) {
-            case 'start-broadcasting':
-                startBroadcasting(message);
-                break;
-            case 'stop-broadcasting':
-                stopBroadcasting(message.streamId);
-                break;
-            default:
-                throw new Error('Unrecognized message:', message.type);
-        }
-    }
-});
+var publishStarted = false;
 
 async function startBroadcasting(message) {
-    if (typeof webRTCAdaptor !== 'undefined' ) {
+	
+	
+	console.log("startBroadcasting is called websocket url:" + message.websocketURL + " streamId: " + message.streamId);
+    if (typeof webRTCAdaptorMediaPush !== 'undefined' ) {
         throw new Error('Called startBroadcasting while recording is in progress.');
     }
-    let key = "webRTCAdaptorState";
-    localStorage.setItem(key, antMediaState.WAITING);
 
     let token = "";
     let width = 1280;
@@ -63,26 +27,40 @@ async function startBroadcasting(message) {
         height = message.height;
     }
 
-    const media = await navigator.mediaDevices.getUserMedia({
-        audio: {
-            mandatory: {
-                chromeMediaSource: 'tab',
-                chromeMediaSourceId: message.data
-            }
+
+	const stream = await navigator.mediaDevices.getDisplayMedia(
+		{
+			//min is not allowed in getDisplayMedia
+			video: true, 
+			audio: {
+				channelCount:2,
+			}, 
+			preferCurrentTab:true
+		})
+	
+ 	const track = stream.getVideoTracks()[0];
+
+	const constra = {
+        width: { 
+				 min: 640,  
+        		 ideal: width 
         },
-        video: {
-            mandatory: {
-                chromeMediaSource: 'tab',
-                chromeMediaSourceId: message.data,
-                minFrameRate: 10,
-                maxFrameRate: 60,
-                maxWidth: width,
-                maxHeight: height,
-                minWidth: 640,
-                minHeight: 480
-            }
-        }
-    });
+        height: { 
+				min: 360, 
+				ideal: height 
+		},
+        advanced: [{ width: width, height: height }, { aspectRatio: width/height }],
+        frameRate: {
+				min:15,
+				max:30,
+		},
+        resizeMode: 'crop-and-scale'
+     };
+
+    track.applyConstraints(constra);
+
+	//width and height may not perfectly match with the created video, there may be some improvement opportunity there
+    //@mekya 
 
     let pc_config = {
         'iceServers' : [ {
@@ -90,34 +68,24 @@ async function startBroadcasting(message) {
         } ]
     };
 
-    let sdpConstraints = {
-        OfferToReceiveAudio : false,
-        OfferToReceiveVideo : false
-    };
+   
 
-    const track = media.getVideoTracks()[0];
-
-    const constra = {
-        width: { min: 640, ideal: width },
-        height: { min: 480, ideal: height },
-        advanced: [{ width: width, height: height }, { aspectRatio: 1.777778 }],
-        resizeMode: 'crop-and-scale'
-      };
-
-    track.applyConstraints(constra);
-
-    webRTCAdaptor = new WebRTCAdaptor({
+    webRTCAdaptorMediaPush = new WebRTCAdaptor({
         websocket_url : message.websocketURL,
         peerconnection_config : pc_config,
-        sdp_constraints : sdpConstraints,
-        localStream: media,
+        bandwidth: 2500,
+        localStream: stream,
         callback : (info, obj) => {
             if (info == "initialized") {
-                webRTCAdaptor.publish(message.streamId, token, "", "", "", "");
+	            console.log("WebRTC adaptor initialized");
+                webRTCAdaptorMediaPush.publish(message.streamId, token, "", "", "", "");
             } else if (info == "publish_started") {
                 console.log("mediapush_publish_started");
-                localStorage.setItem(key, antMediaState.STARTED);
+                publishStarted = true;
             }
+            else if (info == "publish_finished") {
+				publishStarted = false;
+			}
             console.log(info);
         },
         callbackError : function(error, message) {
@@ -164,23 +132,35 @@ async function startBroadcasting(message) {
                 console.log("error callback: " + error + " message: " + errorMessage);
             }
 
-            let errorMessageKey = "webRTCAdaptorError";
-            localStorage.setItem(errorMessageKey, errorMessage);
-            localStorage.setItem(key, antMediaState.ERROR);
         }
     });
 
-    window.location.hash = 'broadcasting';
+    window.webRTCAdaptorMediaPush = webRTCAdaptorMediaPush;
 }
 
-async function stopBroadcasting(streamId) {
-    webRTCAdaptor.stop(streamId);
-    webRTCAdaptor.mediaManager.localStream.getTracks().forEach(track => track.stop());
-    webRTCAdaptor = undefined;
-
-    let key = "webRTCAdaptorState";
-    localStorage.setItem(key, antMediaState.FINISHED);
-
-    // Update current state in URL
-    window.location.hash = '';
+function isConnected(streamId) {
+	
+	var connected = false;
+	if (publishStarted) {
+		var state = webRTCAdaptorMediaPush.signallingState(streamId);
+		if (state != null && state != "closed") 
+		{
+			var iceState = webRTCAdaptorMediaPush.iceConnectionState(streamId);
+			if (iceState != null && iceState != "failed" && iceState != "disconnected") {
+				connected = true;		
+			}
+		}
+	}			
+	return connected;
 }
+
+function stopBroadcasting(message) {
+	webRTCAdaptorMediaPush.stop(message.streamId);
+	webRTCAdaptorMediaPush.closeWebSocket();
+}
+
+
+
+window.startBroadcasting = startBroadcasting
+window.stopBroadcasting = stopBroadcasting
+window.isConnected = isConnected

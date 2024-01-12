@@ -1,0 +1,17 @@
+{
+  "name": "media-push-script",
+  "version": "0.1.0",
+  "description": "Ant Media Server Media Push",
+  "private": true,
+  "scripts": {
+    "watch": "webpack --mode=development --watch --config config/webpack.config.js",
+    "build": "webpack --mode=production --config config/webpack.config.js"
+  },
+  "dependencies": {
+    "@antmedia/webrtc_adaptor": "^2.8.0-SNAPSHOT-2023-Dec-20-10-46"
+  },
+  "devDependencies": {
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  }
+}
