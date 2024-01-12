@@ -14,35 +14,17 @@ You can record the broadcast if needed. But you need to start the recording manu
 
 ## How to Install 
 
-### Install Google Chrome 108
+1. Connect your Ant Media Server Instance via terminal
 
-1. Remove your existing Google Chrome installation
+2. Get the installation script 
   ```
-  sudo apt-get purge google-chrome-stable
+  wget -O install_media-push-plugin.sh https://raw.githubusercontent.com/ant-media/Plugins/master/MediaPushPlugin/src/main/script/install_media-push-plugin.sh && chmod 755 install_media-push-plugin.sh
   ```
-2. Media Push Plugin uses Google Chrome 108 to broadcast the web page. So you need to install Google Chrome 108 to your server. You can install it on Ubuntu with the following commands.
+3. Run the installation script
   ```
-  wget --no-verbose -O /tmp/chrome.deb http://trusty-packages.scrutinizer-ci.com/google/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_108.0.5359.71-1_amd64.deb
+  sudo ./install_media-push-plugin.sh
   ```
-  ```
-  sudo apt install -y /tmp/chrome.deb
-  ```
-  ```
-  rm /tmp/chrome.deb
-  ```
-3. Disable Google Chrome auto update
-  ```
-  sudo apt-mark hold google-chrome-stable
-  ```
-4. Download the pre-built `media-push-plugin.jar` file
-  ```
-  wget https://github.com/ant-media/Plugins/raw/master/MediaPushPlugin/build/media-push-plugin.jar
-  ```
-5. Copy the `webpage-recording-plugin.jar` file to `plugins` directory under `/usr/local/antmedia`
-  ```
-  sudo cp media-push-plugin.jar /usr/local/antmedia/plugins
-  ```
-6. Restart the service
+3. Restart the service
   ```
   sudo service antmedia restart
   ```
@@ -109,27 +91,6 @@ Call the REST Method below to update the layout on the fly.
    
 ## How to Build from Source Code
 
-- Media Push Plugin uses Google Chrome 108 to broadcast the web page. So you need to install Google Chrome 108 to your server. You can install it on Ubuntu with the following commands.
-
-  ```
-  sudo apt-get purge google-chrome-stable
-  ```
-
-  ```
-  wget --no-verbose -O /tmp/chrome.deb http://trusty-packages.scrutinizer-ci.com/google/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_108.0.5359.71-1_amd64.deb
-  ```
-
-  ```
-  sudo apt install -y /tmp/chrome.deb
-  ```
-
-  ```
-  rm /tmp/chrome.deb
-  ```
-
-  ```
-  sudo apt-mark hold google-chrome-stable
-  ```
 
 - Clone the repository
 
