@@ -5,6 +5,7 @@ AMS_DIR=~/softwares/ant-media-server/
 rm  src/main/resources/*.js
 
 cd src/main/js
+npm install
 npm run build
 cd ../../..
 
