@@ -48,7 +48,7 @@ snapshotUrl="https://oss.sonatype.org/service/local/repositories/snapshots/conte
 
 REDIRECT="releases"
 # Attempt to download from the release URL
-wget -O maven-metadata.xml $releaseUrl
+wget -O maven-metadata.xml $releaseUrl -q
 
 # Check if wget failed (e.g., 404 error)
 if [ $? -ne 0 ]; then
@@ -61,13 +61,14 @@ export LATEST_VERSION=$(cat maven-metadata.xml | grep "<version>" | tail -n 1 | 
 
 
 
-wget -O media-push.jar https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar
+wget -O media-push.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar" -q
 
 sudo cp media-push.jar /usr/local/antmedia/plugins/
 
 # Check if the copy command was successful
 if [ $? -eq 0 ]; then
-    echo "Media Push Plugin is installed. Just restart the service with 'sudo service antmedia restart'"
+    echo "Media Push Plugin is installed successfully. Restart the service to make it effective" 
+    echo "sudo service antmedia restart"
 else
     echo "Media Push Plugin cannot be installed. Check the error above."
 fi
