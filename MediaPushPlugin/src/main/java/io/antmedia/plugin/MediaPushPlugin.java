@@ -80,7 +80,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	 * Extra
 	 * https://peter.sh/experiments/chromium-command-line-switches/
 	 */
-	public static final List<String> CHROME_DEFAULT_SWITHES = 
+	private static final List<String> CHROME_DEFAULT_SWITHES = 
 			Arrays.asList(
 					"--remote-allow-origins=*",
 					"--enable-usermedia-screen-capturing",
@@ -219,7 +219,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		if (!isValidURL(url)) 
 		{
 			result.setMessage("Incoming url: "+ url +" is not a valid url");
-			logger.info("Incoming url: {} is not a valid url", url);
+			if (logger.isInfoEnabled()) {
+				logger.info("Incoming url: {} is not a valid url", url.replaceAll("[\n\r]", "_"));
+			}
 			return result;
 		}
 
@@ -255,8 +257,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			driver.get(publisherUrl);
 
 
+			
 			driver.executeScript(
-					"document.getElementById('media-push-iframe').src='" + url + "'"
+					String.format("document.getElementById('media-push-iframe').src='%s'", url)
 					);
 
 
@@ -270,13 +273,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			wait.until(ExpectedConditions.jsReturnsValue("return (typeof window.startBroadcasting != 'undefined')"));
 
 
-			driver.executeScript("window.startBroadcasting({"
-					+ "websocketURL:'"+websocketUrl +"',"
-					+ "streamId:'" + streamId + "',"
-					+ "width:" + width + ","
-					+ "height:" + height + ","
-					+ "token:'" + (StringUtils.isNotBlank(token) ? token : "") + "'," 
-					+ "});");
+			String startBroadcastingCommand = String.format("window.startBroadcasting({websocketURL:'%s',streamId:'%s',width:%d,height:%d,token:'%s'});", 
+					websocketUrl, streamId, width, height, StringUtils.isNotBlank(token) ? token : "");
+			driver.executeScript(startBroadcastingCommand);
 
 
 			// wait until stream is started
@@ -386,9 +385,13 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 		return result;
 	}
-
+	
+	
+	@SuppressWarnings("java:S1130")
 	public RemoteWebDriver createDriver(int width, int height, String streamId, List<String> extraChromeSwitchList) throws IOException 
 	{
+		streamId = streamId.replaceAll("[\n\r]", "_");
+
 		logger.info("Creating chrome session for streamId:{} and windows wxh:{}x{}", streamId, width, height);
 		File logFolder = new File("log");
 
@@ -412,7 +415,12 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 		
 		if (extraChromeSwitchList != null) {
-			args.addAll(extraChromeSwitchList);
+			for (String extraChromeSwitch : extraChromeSwitchList) {
+				if (StringUtils.isBlank(extraChromeSwitch)) {
+					continue;
+				}
+				args.add(extraChromeSwitch);
+			}
 		}
 
 		options.setExperimentalOption("useAutomationExtension", false);
