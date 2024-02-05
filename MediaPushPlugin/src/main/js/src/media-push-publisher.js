@@ -31,14 +31,27 @@ async function startBroadcasting(message) {
 	const stream = await navigator.mediaDevices.getDisplayMedia(
 		{
 			//min is not allowed in getDisplayMedia
-			video: true, 
+			video: {
+				frameRate: {
+					max: 30
+				}
+			}, 
 			audio: {
 				channelCount:2,
+				echoCancellation: false,
+				autoGainControl: false,
+				noiseSuppression: false,
 			}, 
 			preferCurrentTab:true
 		})
+		
+	
 	
  	const track = stream.getVideoTracks()[0];
+	console.log("video track settings: ", track.getSettings());
+	
+	const audioTrack = stream.getAudioTracks()[0];
+	console.log("audio track settings: ", audioTrack.getSettings());
 
 	const constra = {
         width: { 

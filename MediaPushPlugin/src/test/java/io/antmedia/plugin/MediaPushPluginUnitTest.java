@@ -175,7 +175,7 @@ public class MediaPushPluginUnitTest  {
         log.info("incoming result is {}", result.getMessage());
 
         assertTrue(result.getMessage().contains("not a valid url"));
-        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString());
+        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString(), Mockito.anyList());
     }
     
 
@@ -206,7 +206,7 @@ public class MediaPushPluginUnitTest  {
         log.info("incoming result is {}", result.getMessage());
 
         assertTrue(result.getMessage().contains("already exist"));
-        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString());
+        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString(), Mockito.anyList());
     }
 
     @Test
@@ -224,14 +224,14 @@ public class MediaPushPluginUnitTest  {
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
         when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        Mockito.doThrow(new IOException()).when(plugin).createDriver(width, height, "streamId");
+        Mockito.doThrow(new IOException()).when(plugin).createDriver(width, height, "streamId", null);
 
         // Act
         Result result = plugin.startMediaPush(streamId, websocketUrl,endpoint.getWidth(), endpoint.getHeight(), endpoint.getUrl(), endpoint.getToken(), null);
 
         // Assert
         assertFalse(result.isSuccess());
-        verify(plugin).createDriver(width, height, "streamId");
+        verify(plugin).createDriver(width, height, "streamId", null);
     }
     
     @Test
@@ -269,7 +269,7 @@ public class MediaPushPluginUnitTest  {
         assertFalse(result.isSuccess());
         log.info("Message is: {}",result.getMessage());
        
-        verify(plugin).createDriver(width, height, "streamId");
+        verify(plugin).createDriver(width, height, "streamId", null);
         assertFalse(plugin.getDrivers().containsKey(streamId));
 
     }
