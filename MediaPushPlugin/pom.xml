@@ -13,11 +13,13 @@
 	<url>http://maven.apache.org</url>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<sonar.projectKey>io.antmedia.plugin:media-push</sonar.projectKey>
+		<sonar.organization>ant-media-plugins</sonar.organization>
 	</properties>
 	<developers>
     		<developer>
-      		<id>Mustafa</id>
-      		<email>mustafa.boleken@antmedia.io</email>
+	      		<id>Mustafa</id>
+	      		<email>mustafa.boleken@antmedia.io</email>
     		</developer>
   	</developers>
   	<licenses>
