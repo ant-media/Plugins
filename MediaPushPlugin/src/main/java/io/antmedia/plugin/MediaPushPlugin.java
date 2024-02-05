@@ -198,6 +198,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return startMediaPush(streamIdPar, websocketUrl, endpoint);
 	}
 
+	@SuppressWarnings("javasecurity:S5334")
 	@Override
 	public Result startMediaPush(String streamIdPar, String websocketUrl, Endpoint endpoint) 
 	{
@@ -257,7 +258,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			driver.get(publisherUrl);
 
 
-			
 			driver.executeScript(
 					String.format("document.getElementById('media-push-iframe').src='%s'", url)
 					);
