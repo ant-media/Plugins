@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +14,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
@@ -62,6 +64,50 @@ public class MediaPushPluginUnitTest  {
 		WebDriverManager.chromedriver().setup();
 	}
 	
+	@Test
+	public void testCreateDriverWithExtraSwitches() {
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        
+       
+        
+        try {
+			RemoteWebDriver driver = plugin.createDriver(1280, 720, "streamId", Arrays.asList("--disable-gpu", "--start-fullscreen"));
+			driver.quit();
+			
+			driver = plugin.createDriver(1280, 720, "streamId", null);
+			driver.quit();
+			
+			driver = plugin.createDriver(1280, 720, "streamId", Arrays.asList());
+			driver.quit();
+			
+			driver = plugin.createDriver(1280, 720, "streamId", Arrays.asList(""));
+			driver.quit();
+						
+		} catch (IOException e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+		}
+
+	}
+	
+	@Test
+	public void testStartMediaPushWithEndpoint() throws IOException {
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        
+        Endpoint endpoint = new Endpoint();
+        endpoint.setUrl("http://example.com");
+        endpoint.setWidth(1280);
+        endpoint.setHeight(720);
+        endpoint.setToken("token");
+        endpoint.setExtraChromeSwitches("--disable-gpu,--start-fullscreen"); 
+        
+        
+        plugin.startMediaPush("streamId", "ws://example.antmedia.io", endpoint);
+        
+        verify(plugin).createDriver(1280, 720, "streamId", Arrays.asList("--disable-gpu", "--start-fullscreen"));
+        
+
+	}
 		
     @Test
     public void testSendCommand_WhenDriverExists_ShouldExecuteCommand() {
@@ -175,7 +221,7 @@ public class MediaPushPluginUnitTest  {
         log.info("incoming result is {}", result.getMessage());
 
         assertTrue(result.getMessage().contains("not a valid url"));
-        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString());
+        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString(), Mockito.anyList());
     }
     
 
@@ -206,7 +252,7 @@ public class MediaPushPluginUnitTest  {
         log.info("incoming result is {}", result.getMessage());
 
         assertTrue(result.getMessage().contains("already exist"));
-        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString());
+        verify(plugin, never()).createDriver(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyString(), Mockito.anyList());
     }
 
     @Test
@@ -224,14 +270,14 @@ public class MediaPushPluginUnitTest  {
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
         when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        Mockito.doThrow(new IOException()).when(plugin).createDriver(width, height, "streamId");
+        Mockito.doThrow(new IOException()).when(plugin).createDriver(width, height, "streamId", null);
 
         // Act
         Result result = plugin.startMediaPush(streamId, websocketUrl,endpoint.getWidth(), endpoint.getHeight(), endpoint.getUrl(), endpoint.getToken(), null);
 
         // Assert
         assertFalse(result.isSuccess());
-        verify(plugin).createDriver(width, height, "streamId");
+        verify(plugin).createDriver(width, height, "streamId", null);
     }
     
     @Test
@@ -269,7 +315,7 @@ public class MediaPushPluginUnitTest  {
         assertFalse(result.isSuccess());
         log.info("Message is: {}",result.getMessage());
        
-        verify(plugin).createDriver(width, height, "streamId");
+        verify(plugin).createDriver(width, height, "streamId", null);
         assertFalse(plugin.getDrivers().containsKey(streamId));
 
     }
