@@ -10,6 +10,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -78,6 +79,28 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return drivers;
 	}
 
+	/**
+	 * All official switches 
+	 * https://source.chromium.org/chromium/chromium/src/+/main:ui/gl/gl_switches.cc
+	 * 
+	 * Extra
+	 * https://peter.sh/experiments/chromium-command-line-switches/
+	 */
+	private static final List<String> CHROME_DEFAULT_SWITHES = 
+			Arrays.asList(
+					"--remote-allow-origins=*",
+					"--enable-usermedia-screen-capturing",
+					"--allow-http-screen-capture",
+					"--disable-infobars",
+					"--hide-scrollbars",
+					"--auto-accept-this-tab-capture",
+					"--no-sandbox",
+					"--autoplay-policy=no-user-gesture-required",
+					"--disable-background-media-suspend",
+					"--disable-gpu-vsync",
+					"--disable-audio-output",
+					"--disable-background-timer-throttling",
+					"--headless=new");
 
 	public static final int TIMEOUT_IN_SECONDS = 30;
 
@@ -171,16 +194,41 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			return false;
 		}
 	}
-
+	
+	@Override
 	public Result startMediaPush(String streamIdPar, String websocketUrl, int width, int height, String url, String token, String recordTypeString) 
 	{
+		//String URL, int width, int height, String jsCommand, String token
+		Endpoint endpoint = new Endpoint(url, width, height, null, token);
+		endpoint.setRecordType(recordTypeString);
+		return startMediaPush(streamIdPar, websocketUrl, endpoint);
+	}
 
+	@SuppressWarnings("javasecurity:S5334")
+	@Override
+	public Result startMediaPush(String streamIdPar, String websocketUrl, Endpoint endpoint) 
+	{
+
+		String url = endpoint.getUrl();
+		int width = endpoint.getWidth();
+		int height = endpoint.getHeight();
+		String token = endpoint.getToken();
+		String recordTypeString = endpoint.getRecordType();
+		String extraChromeSwitches = endpoint.getExtraChromeSwitches();
+		
+		List<String> extraChromeSwitchList = null;
+		if (StringUtils.isNotBlank(extraChromeSwitches)) {
+			extraChromeSwitchList = Arrays.asList(extraChromeSwitches.split(","));
+		}
+		
 		Result result = new Result(false);
 
 		if (!isValidURL(url)) 
 		{
 			result.setMessage("Incoming url: "+ url +" is not a valid url");
-			logger.info("Incoming url: {} is not a valid url", url);
+			if (logger.isInfoEnabled()) {
+				logger.info("Incoming url: {} is not a valid url", url.replaceAll("[\n\r]", "_"));
+			}
 			return result;
 		}
 
@@ -200,7 +248,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			String publisherUrl = getPublisherHTMLURL(websocketUrl);
 
 
-			driver = createDriver(width, height, streamId);
+			driver = createDriver(width, height, streamId, extraChromeSwitchList);
 			driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 			driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 
@@ -215,9 +263,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			logger.info("publisherUrl -> {}", publisherUrl);
 			driver.get(publisherUrl);
 
-			
+
 			driver.executeScript(
-					"document.getElementById('media-push-iframe').src='" + url + "'"
+					String.format("document.getElementById('media-push-iframe').src='%s'", url)
 					);
 
 
@@ -231,13 +279,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			wait.until(ExpectedConditions.jsReturnsValue("return (typeof window.startBroadcasting != 'undefined')"));
 
 
-			driver.executeScript("window.startBroadcasting({"
-					+ "websocketURL:'"+websocketUrl +"',"
-					+ "streamId:'" + streamId + "',"
-					+ "width:" + width + ","
-					+ "height:" + height + ","
-					+ "token:'" + (StringUtils.isNotBlank(token) ? token : "") + "'," 
-					+ "});");
+			String startBroadcastingCommand = String.format("window.startBroadcasting({websocketURL:'%s',streamId:'%s',width:%d,height:%d,token:'%s'});", 
+					websocketUrl, streamId, width, height, StringUtils.isNotBlank(token) ? token : "");
+			driver.executeScript(startBroadcastingCommand);
 
 
 			// wait until stream is started
@@ -296,10 +340,10 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 		String publisherHtmlURL = websocketURLObject.getScheme().contains("wss") ? "https://" : "http://";
 		publisherHtmlURL += websocketURLObject.getHost();
-		
-		
+
+
 		publisherHtmlURL +=  websocketURLObject.getPort() != -1 ? (":" + websocketURLObject.getPort()) : "";
-		
+
 		String path = websocketURLObject.getPath();
 
 		//http://127.0.0.1:5080/ConferenceCall/js/media-push/publisher.js
@@ -308,7 +352,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			publisherHtmlURL += path.substring(0, lastSlashIndex);
 		}
 		publisherHtmlURL +=  File.separator + MEDIA_PUSH_FOLDER + File.separator + MEDIA_PUSH_PUBLISHER_HTML;
-		
+
 		return publisherHtmlURL;
 	}
 	public String getFileName(String streamId){
@@ -377,9 +421,13 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 		return result;
 	}
-
-	public RemoteWebDriver createDriver(int width, int height, String streamId) throws IOException 
+	
+	
+	@SuppressWarnings("java:S1130")
+	public RemoteWebDriver createDriver(int width, int height, String streamId, List<String> extraChromeSwitchList) throws IOException 
 	{
+		streamId = streamId.replaceAll("[\n\r]", "_");
+
 		logger.info("Creating chrome session for streamId:{} and windows wxh:{}x{}", streamId, width, height);
 		File logFolder = new File("log");
 
@@ -392,27 +440,24 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 
 		ChromeOptions options = new ChromeOptions();
-		List<String> args = new ArrayList<>();
+		List<String> args = new ArrayList<>(CHROME_DEFAULT_SWITHES);
 
-		args.add("--remote-allow-origins=*");
-		args.add("--enable-usermedia-screen-capturing");
-		args.add("--allow-http-screen-capture");
-		args.add("--disable-infobars");
-		args.add("--hide-scrollbars");
-		args.add("--auto-accept-this-tab-capture");
-		args.add("--no-sandbox");
-		args.add("--autoplay-policy=no-user-gesture-required");
-		args.add("--disable-background-media-suspend");
+		
 		if (height > 0 && width > 0) {
 			args.add(String.format("--window-size=%s,%s", width, height));
 		}
 		else {
 			logger.info("creating the driver with default width and height for streamId:{}", streamId);
 		}
-		args.add("--headless=new");
-		//args.add("--start-fullscreen");
-		//args.add("--kiosk");
-		args.add("--disable-gpu");
+		
+		if (extraChromeSwitchList != null) {
+			for (String extraChromeSwitch : extraChromeSwitchList) {
+				if (StringUtils.isBlank(extraChromeSwitch)) {
+					continue;
+				}
+				args.add(extraChromeSwitch);
+			}
+		}
 
 		options.setExperimentalOption("useAutomationExtension", false);
 		options.setExperimentalOption("excludeSwitches", List.of("enable-automation"));

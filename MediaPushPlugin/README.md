@@ -33,24 +33,53 @@ You can record the broadcast if needed. But you need to start the recording manu
 
 Media Push Plugin have REST API to control the plugin. 
 
-* Start the broadcast
+### Start the broadcast
 
 Call the REST Method below to let Ant Media Server broadcast the web page. You should pass the url of the web page and can pass streamId as query parameter you wanted to use as a parameter.
-   ```
-   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/start" -d '{"url": "http://example.com", "width": 1280, "height": 720}'
+   ```shell
+   export ANT_MEDIA_SERVER_BASE_URL=https://antmedia.example.com:5443
+   export APP_NAME=WebRTCAppEE
+   export URL_TO_RECORD=https://antmedia.example.com/play.html?id=stream1
+   
+   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d '{"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720}'
    ```
 
-* Stop the broadcast
+  The command should respond something like below. Pay attention that `dataId` field is the `streamId` that is generated.
+  ```
+  HTTP/1.1 200 
+  Content-Type: Application/json
+  Content-Length: 80
+  Date: Mon, 05 Feb 2024 15:23:42 GMT
+
+  {"success":true,"message":null,"dataId":"Z8HfjJD1oLnk1707146618681","errorId":0}
+  ```
+
+## Stop the broadcast
 
 Call the REST Method below to let Ant Media Server with the stream id you specified in the start method.
+   ```shell
+   export STREAM_ID=Z8HfjJD1oLnk1707146618681
+   curl -i -X POST -H "Accept: Application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/stop/${STREAM_ID}"
    ```
-   curl -i -X POST -H "Accept: Application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/stop/{streamId}"
-   ```
+### Recording
+It's also available to record by default. Just add `recordType` option as follows when you're making the request. Then the above request will change to something like this
+```shell
+curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  {"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4"}
+```
 
-* Send javascript command to a webpage with given stream id
+#### Adding Chrome Switches
+If you need to add extra chrome switches, you can give them in `extraChromeSwitches` fields in comma-separated way. Here is a sample
+```shell
+curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  {"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4", "extraChromeSwitches":"--start-fullscreen,--disable-gpu"}
+```
+
+For the default switches, please visit MediaPushPlugin.java and find `CHROME_DEFAULT_SWITHES` field. Lastly, all chrome switches are listed [on here](https://peter.sh/experiments/chromium-command-line-switches/) 
+
+
+#### Run javascript command in the webpage
 
 Call the REST Method below to let Ant Media Server with the stream id you specified in the start method. You should pass the javascript command in the body.
-   ```
+   ```shell
    curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/send-command?streamId={streamId}"  -d '{"jsCommand": "{javascript_command_which_is_executed}"}'
    ```
 

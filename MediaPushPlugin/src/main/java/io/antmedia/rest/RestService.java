@@ -56,9 +56,9 @@ public class RestService {
 		}
 		String websocketUrl = getWebSocketURL(uriInfo);
 
-		MediaPushPlugin app = getPluginApp();
+		MediaPushPlugin mediaPushPlugin = getPluginApp();
 
-		return app.startMediaPush(streamId, websocketUrl, request.getWidth(), request.getHeight(), request.getUrl(),request.getToken(), request.getRecordType());
+		return mediaPushPlugin.startMediaPush(streamId, websocketUrl, request.getWidth(), request.getHeight(), request.getUrl(),request.getToken(), request.getRecordType());
 	}
 
 	/*

@@ -1,5 +1,7 @@
 package io.antmedia.model;
 
+import io.antmedia.plugin.MediaPushPlugin;
+
 public class Endpoint {
 
     private String url;
@@ -14,6 +16,14 @@ public class Endpoint {
 
     //it can be mp4 or webm
     private String recordType;
+    
+    /**
+     * Comma-separated extra chrome switches. All switches are available below
+     * https://peter.sh/experiments/chromium-command-line-switches/
+     * 
+     * Default switches are on {@link MediaPushPlugin#CHROME_DEFAULT_SWITHES}
+     */
+    private String extraChromeSwitches;
     
     public Endpoint() {
     }
@@ -72,5 +82,13 @@ public class Endpoint {
 
 	public void setRecordType(String recordType) {
 		this.recordType = recordType;
+	}
+
+	public String getExtraChromeSwitches() {
+		return extraChromeSwitches;
+	}
+
+	public void setExtraChromeSwitches(String extraChromeSwitches) {
+		this.extraChromeSwitches = extraChromeSwitches;
 	}
 }
