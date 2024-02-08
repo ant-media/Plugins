@@ -281,6 +281,8 @@ public class MediaPushPluginUnitTest  {
         // Arrange
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
+        URI uri = Mockito.mock(URI.class);
+
         RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
         String streamId = "streamId";
         Result expectedResult = new Result(true, "Media Push stopped");
@@ -288,7 +290,7 @@ public class MediaPushPluginUnitTest  {
         plugin.getDrivers().put(streamId, driver);
 
         // Act
-        Result result = plugin.stopMediaPush(streamId);
+        Result result = plugin.stopMediaPush(streamId,uri);
 
         // Assert
         //it's false because executeScript timeout is triggered
@@ -309,6 +311,7 @@ public class MediaPushPluginUnitTest  {
         // Arrange
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
+        URI uri = Mockito.mock(URI.class);
         String streamId = "streamId";
         Result expectedResult = new Result(false, "Driver does not exist for stream id: " + streamId, 404);
 
@@ -316,7 +319,7 @@ public class MediaPushPluginUnitTest  {
         when(drivers.containsKey(streamId)).thenReturn(false);
 
         // Act
-        Result result = plugin.stopMediaPush(streamId);
+        Result result = plugin.stopMediaPush(streamId,uri);
 
         // Assert
         assertFalse(result.isSuccess());

@@ -13,8 +13,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
+import io.antmedia.muxer.HLSMuxer;
+import io.antmedia.muxer.MuxAdaptor;
+import io.antmedia.muxer.Muxer;
+import io.antmedia.muxer.RecordMuxer;
+import jakarta.ws.rs.core.UriInfo;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -305,20 +311,51 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		
 		return publisherHtmlURL;
 	}
+	public String getFileName(String streamId){
+		MuxAdaptor muxAdaptor = getApplication().getMuxAdaptor(streamId);
+		String fileName = streamId;
 
-	public Result stopMediaPush(String streamId) {
+		if(muxAdaptor == null)
+			return fileName;
+
+		List<Muxer> list = muxAdaptor.getMuxerList();
+		for (Muxer muxer : list) {
+			if (muxer instanceof RecordMuxer) {
+				fileName = muxer.getFile().getName();
+			}
+		}
+		return fileName;
+	}
+	public String getRecordingURL(String streamId ,URI uri){
+		String streamURL = null;
+		if(uri != null){
+			String protocol = "wss".equals(uri.getScheme()) ? "https" : "http";
+			String applicationName = uri.getPath().split("/")[1];
+			String hostName =  uri.getHost();
+			String port =  ((uri.getPort() != -1 ) ? ":" + uri.getPort() + "/" : "/");
+			streamURL = protocol + "://" + hostName + port + applicationName + "/streams/" + getFileName(streamId);
+		}
+        return streamURL;
+    }
+	public Result stopMediaPush(String streamId , URI webURI) {
 		Result result = new Result(false);
-		if (!drivers.containsKey(streamId)) 
+		if (!drivers.containsKey(streamId))
 		{
 			logger.warn("Driver does not exist for stream id: {}", streamId);
 			result.setMessage("Driver does not exist for stream id: " + streamId);
 			return result;
+		}
+		AntMediaApplicationAdapter app = getApplication();
+		if(app.getMuxAdaptor(streamId) !=null && app.getMuxAdaptor(streamId).isRecording()){
+			String recordingURL = getRecordingURL(streamId, webURI);
+			result.setDataId(recordingURL);
 		}
 
 		RemoteWebDriver driver = drivers.remove(streamId);
 		recordingMap.remove(streamId);
 
 		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+
 
 		try 
 		{

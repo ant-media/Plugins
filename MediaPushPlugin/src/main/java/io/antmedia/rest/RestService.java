@@ -2,6 +2,8 @@ package io.antmedia.rest;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
@@ -52,11 +54,7 @@ public class RestService {
 		if (uriInfo == null) {
 			return new Result(false, "Bad request");
 		}
-
-		String websocketScheme = ("https".equals(uriInfo.getBaseUri().getScheme())) ? "wss" : "ws";
-		String applicationName = uriInfo.getBaseUri().getPath().split("/")[1];
-
-		String websocketUrl = websocketScheme + "://" + uriInfo.getBaseUri().getHost() + ((uriInfo.getBaseUri().getPort() != -1 ) ? ":" + uriInfo.getBaseUri().getPort() + "/" : "/") + applicationName + "/websocket";
+		String websocketUrl = getWebSocketURL(uriInfo);
 
 		MediaPushPlugin app = getPluginApp();
 
@@ -72,9 +70,22 @@ public class RestService {
 	@Path("/stop/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result stopMediaPush(@PathParam("id") String id) {
+	public Result stopMediaPush(@Context UriInfo uriInfo , @PathParam("id") String id) {
 		MediaPushPlugin app = getPluginApp();
-		return app.stopMediaPush(id);
+		if (uriInfo == null) {
+			return new Result(false, "Bad request");
+		}
+		URI webSokURI = null;
+		String websocketUrl = getWebSocketURL(uriInfo);
+
+		try {
+			webSokURI = new URI(websocketUrl);
+		}
+		catch(URISyntaxException e){
+			System.out.println(ExceptionUtils.getMessage(e));
+		}
+
+		return app.stopMediaPush(id,webSokURI);
 	}
 
 	/*
@@ -105,5 +116,11 @@ public class RestService {
 	private MediaPushPlugin getPluginApp() {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
 		return (MediaPushPlugin) appCtx.getBean("plugin.mediaPushPlugin");
+	}
+	public String getWebSocketURL(UriInfo uriInfo){
+		String websocketScheme = ("https".equals(uriInfo.getBaseUri().getScheme())) ? "wss" : "ws";
+		String applicationName = uriInfo.getBaseUri().getPath().split("/")[1];
+		String websocketUrl = websocketScheme + "://" + uriInfo.getBaseUri().getHost() + ((uriInfo.getBaseUri().getPort() != -1 ) ? ":" + uriInfo.getBaseUri().getPort() + "/" : "/") + applicationName + "/websocket";
+		return websocketUrl;
 	}
 }
