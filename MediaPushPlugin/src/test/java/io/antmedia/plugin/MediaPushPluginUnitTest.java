@@ -5,9 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -20,6 +18,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
+import org.glassfish.jersey.server.Uri;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
@@ -372,6 +371,42 @@ public class MediaPushPluginUnitTest  {
         assertEquals(expectedResult.getMessage(), result.getMessage());
     }
 
-   
+    @Test
+    public void testStopMediaPush_RecordingURL() throws URISyntaxException {
+        // Arrange
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
+        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
 
+        String streamId = "streamId";
+        String recordURl = "testurl";
+        URI uri = new URI("testurl");
+
+        plugin.getDrivers().put(streamId, driver);
+        doReturn(recordURl).when(plugin).getRecordingURL(any(),any());
+        Result result = plugin.stopMediaPush(streamId,uri);
+        assertEquals(result.getDataId(),recordURl);
+    }
+    @Test
+    public void testGetRecordingURl() throws URISyntaxException {
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        String streamId = "stream1";
+        String fileName = "abc.mp4";
+
+        plugin.recordingFileNameMap.put(streamId,fileName);
+        String recordingUrl = "ws://localhost:5080/Conference/websocket";
+        assertEquals(plugin.getRecordingURL(streamId,new URI(recordingUrl)),"http://localhost:5080/Conference/streams/"+fileName);
+
+        recordingUrl = "wss://localhost:5080/Conference/websocket";
+        assertEquals(plugin.getRecordingURL(streamId,new URI(recordingUrl)),"https://localhost:5080/Conference/streams/"+fileName);
+
+        recordingUrl = "wss://localhost/Conference/websocket";
+        assertEquals(plugin.getRecordingURL(streamId,new URI(recordingUrl)),"https://localhost/Conference/streams/"+fileName);
+
+        plugin.recordingFileNameMap.remove(streamId);
+        assertEquals(plugin.getRecordingURL(streamId,new URI(recordingUrl)),null);
+
+        plugin.recordingFileNameMap.remove(streamId);
+        assertEquals(plugin.getRecordingURL(streamId,null),null);
+    }
 }

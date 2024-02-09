@@ -70,6 +70,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	private Map<String, RecordType> recordingMap = new ConcurrentHashMap<>();
 
+	public Map<String, String> recordingFileNameMap = new ConcurrentHashMap<>();
 
 	private boolean initialized = false;
 	private ApplicationContext applicationContext;
@@ -355,29 +356,17 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 		return publisherHtmlURL;
 	}
-	public String getFileName(String streamId){
-		MuxAdaptor muxAdaptor = getApplication().getMuxAdaptor(streamId);
-		String fileName = streamId;
 
-		if(muxAdaptor == null)
-			return fileName;
-
-		List<Muxer> list = muxAdaptor.getMuxerList();
-		for (Muxer muxer : list) {
-			if (muxer instanceof RecordMuxer) {
-				fileName = muxer.getFile().getName();
-			}
-		}
-		return fileName;
-	}
 	public String getRecordingURL(String streamId ,URI uri){
 		String streamURL = null;
-		if(uri != null){
+		String fileName =  recordingFileNameMap.get(streamId);
+
+		if(uri != null && fileName != null){
 			String protocol = "wss".equals(uri.getScheme()) ? "https" : "http";
 			String applicationName = uri.getPath().split("/")[1];
 			String hostName =  uri.getHost();
 			String port =  ((uri.getPort() != -1 ) ? ":" + uri.getPort() + "/" : "/");
-			streamURL = protocol + "://" + hostName + port + applicationName + "/streams/" + getFileName(streamId);
+			streamURL = protocol + "://" + hostName + port + applicationName + "/streams/" + fileName;
 		}
         return streamURL;
     }
@@ -389,11 +378,10 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			result.setMessage("Driver does not exist for stream id: " + streamId);
 			return result;
 		}
-		AntMediaApplicationAdapter app = getApplication();
-		if(app.getMuxAdaptor(streamId) !=null && app.getMuxAdaptor(streamId).isRecording()){
-			String recordingURL = getRecordingURL(streamId, webURI);
-			result.setDataId(recordingURL);
-		}
+
+		String recordingURL = getRecordingURL(streamId, webURI);
+		result.setDataId(recordingURL);
+
 
 		RemoteWebDriver driver = drivers.remove(streamId);
 		recordingMap.remove(streamId);
@@ -483,7 +471,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	{
 		if (recordingMap.containsKey(streamId)) 
 		{
-			getApplication().getMuxAdaptor(streamId).startRecording(recordingMap.get(streamId), 0);
+			RecordMuxer recordMuxer = getApplication().getMuxAdaptor(streamId).startRecording(recordingMap.get(streamId), 0);
+			recordingFileNameMap.put(streamId,recordMuxer.getFileName());
 		}
 	}
 
@@ -491,6 +480,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	public void streamFinished(String streamId) {
 		WebDriver driver = drivers.remove(streamId);
 		recordingMap.remove(streamId);
+		recordingFileNameMap.remove(streamId);
 		if (driver != null) {
 			driver.quit();
 		}
