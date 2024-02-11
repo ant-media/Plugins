@@ -16,7 +16,12 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.RecordType;
+import io.antmedia.muxer.MuxAdaptor;
+import io.antmedia.muxer.RecordMuxer;
 import org.apache.commons.lang3.StringUtils;
 import org.glassfish.jersey.server.Uri;
 import org.junit.BeforeClass;
@@ -408,5 +413,46 @@ public class MediaPushPluginUnitTest  {
 
         plugin.recordingFileNameMap.remove(streamId);
         assertEquals(plugin.getRecordingURL(streamId,null),null);
+    }
+    @Test
+    public void testStreamFinished(){
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        String streamId = "stream1";
+        plugin.recordingFileNameMap = Mockito.spy(new ConcurrentHashMap<>());
+        plugin.recordingMap = Mockito.spy(new ConcurrentHashMap<>());
+        plugin.drivers = Mockito.spy(new ConcurrentHashMap<>());
+
+        plugin.streamFinished("stream1");
+
+        verify(plugin.recordingFileNameMap).remove(streamId);
+        verify(plugin.recordingMap).remove(streamId);
+        verify(plugin.drivers).remove(streamId);
+
+    }
+    @Test
+    public void testStreamStarted(){
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        String streamId = "stream1";
+        String fileName = "stream1.mp4";
+        RecordType recordType = mock(RecordType.class);
+
+        plugin.recordingFileNameMap = Mockito.spy(new ConcurrentHashMap<>());
+        plugin.recordingMap = Mockito.spy(new ConcurrentHashMap<>());
+        plugin.recordingMap.put(streamId, recordType);
+
+        RecordMuxer recordMuxer = Mockito.mock(RecordMuxer.class);
+        doReturn(fileName).when(recordMuxer).getFileName();
+        MuxAdaptor muxAdaptor = Mockito.mock(MuxAdaptor.class);
+
+        AntMediaApplicationAdapter applicationAdapter = Mockito.mock(AntMediaApplicationAdapter.class);
+        doReturn(applicationAdapter).when(plugin).getApplication();
+        doReturn(muxAdaptor).when(applicationAdapter).getMuxAdaptor(any());
+        doReturn(recordMuxer).when(muxAdaptor).startRecording(any(),anyInt());
+
+        plugin.streamStarted("stream1");
+
+        verify(plugin.recordingFileNameMap).put(streamId,fileName);
+        verify(muxAdaptor).startRecording(any(),anyInt());
+
     }
 }

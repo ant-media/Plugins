@@ -66,9 +66,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	protected static Logger logger = LoggerFactory.getLogger(MediaPushPlugin.class);
 
-	private Map<String, RemoteWebDriver> drivers = new ConcurrentHashMap<>();
+	public Map<String, RemoteWebDriver> drivers = new ConcurrentHashMap<>();
 
-	private Map<String, RecordType> recordingMap = new ConcurrentHashMap<>();
+	public Map<String, RecordType> recordingMap = new ConcurrentHashMap<>();
 
 	public Map<String, String> recordingFileNameMap = new ConcurrentHashMap<>();
 
