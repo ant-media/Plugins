@@ -97,7 +97,8 @@ public class MediaPushPluginIntegrationTest  {
 		endpoint.setWidth(1280);
 		endpoint.setHeight(720);
 		endpoint.setUrl("http://google.com");
-		
+		endpoint.setRecordType("mp4");
+
 		Result result = startStreaming(endpoint);
 		assertTrue(result.isSuccess());
 		String streamId = result.getDataId();
@@ -120,17 +121,12 @@ public class MediaPushPluginIntegrationTest  {
 		
 		result = stopStreaming(streamId);
 		assertTrue(result.isSuccess());
-		
+		assertEquals(result.getDataId(),"http://127.0.0.1:5080/LiveApp/streams/"+streamId+".mp4");
 		
 		
 		//Repeat the process for 640x360
 	}
-	
-	
-	
-	
-	
-	
+
 	public static StringBuffer readResponse(HttpResponse response) throws IOException {
 		StringBuffer result = new StringBuffer();
 
