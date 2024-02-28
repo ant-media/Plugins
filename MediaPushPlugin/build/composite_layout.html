@@ -33,14 +33,13 @@
 
     let fps = 10;
     let loopRunning = false;
-    let layoutList = [];
+    var layoutList = [];
 
     let effectCanvas = null;
     let canvasStream = null;
     let ctx = null;
-
+    window.a="1";
     let cycle = 0;
-
     function start(canvasWidth, canvasHeight, firstTime)
     {
         if (loopRunning)
@@ -104,7 +103,8 @@
                 ctx.drawImage(image, layout.region.xPos, layout.region.yPos, layout.region.width, layout.region.height);
             } else {
                 let video = document.getElementById("remoteVideo" + layout.streamId);
-                ctx.drawImage(video, layout.region.xPos, layout.region.yPos, layout.region.width, layout.region.height);
+                if(video)
+                    ctx.drawImage(video, layout.region.xPos, layout.region.yPos, layout.region.width, layout.region.height);
             }
         }
         ctx.restore();
@@ -125,39 +125,38 @@
         webRTCAdaptorPlay.enableTrack(streamNameBox.value, trackId, true);
     }
 
+
     function playVideo(obj) {
-        var room = roomId;
-        console.log("new stream available with id: "
-            + obj.streamId + "on the room:" + room);
 
-        var index;
-        if(obj.track.kind == "video") {
-            index = obj.track.id.replace("ARDAMSv", "");
-        }
-        else if(obj.track.kind == "audio") {
-            index = obj.track.id.replace("ARDAMSa", "");
-        }
+        //In multitrack conferencing the stream is same, tracks are being and remove from the stream
 
-        if(index == room) {
+        console.log("new track available with id: "
+            + obj.trackId + " and kind: " + obj.track.kind + " on the room:" + roomId);
+
+        //trackId is ARDAMSv+STREAM_ID or  ARDAMSa+STREAM_ID
+        var incomingTrackId = obj.trackId.substring("ARDAMSx".length);
+
+        if (incomingTrackId == roomId || incomingTrackId == publisherId) {
             return;
         }
 
-        var video = document.getElementById("remoteVideo"+index);
+        var video = document.getElementById("remoteVideo" + incomingTrackId);
 
         if (video == null) {
-            createRemoteVideo(index);
-            video = document.getElementById("remoteVideo"+index);
+            createRemoteVideo(incomingTrackId);
+            video = document.getElementById("remoteVideo" + incomingTrackId);
             video.srcObject = new MediaStream();
         }
 
         video.srcObject.addTrack(obj.track)
 
-        obj.track.onended = event => {
-            video.srcObject.removeTrack(event.currentTarget);
-            if(video.srcObject.getTracks().length == 0) {
-                removeRemoteVideo(index);
-            }
-        };
+        obj.stream.onremovetrack = event => {
+            console.log("track is removed with id: " + event.track.id)
+            console.log(event);
+            var removedTrackId = event.track.id.substring("ARDAMSx".length);
+            removeRemoteVideo(removedTrackId);
+        }
+
     }
 
     function createRemoteVideo(streamId) {
@@ -260,21 +259,6 @@
                 console.log("iceConnectionState Changed: ",JSON.stringify(obj));
             }
             else if (info == "data_received") {
-                var messageObject = JSON.parse(obj.data);
-                var layoutOptions = messageObject.layoutOptions;
-                var canvasOptions = layoutOptions.canvas;
-                var layout = layoutOptions.layout;
-                effectCanvas.width = canvasOptions.width;
-                effectCanvas.height = canvasOptions.height;
-                let localVideoElement = document.getElementById("localVideo");
-                //localVideoElement.width = canvasOptions.width;
-                //localVideoElement.height = canvasOptions.height;
-                loopRunning = false;
-                start(canvasOptions.width, canvasOptions.height, false);
-                layout.forEach(function(item) {
-                    createImage(item.streamId+"IMG", item.placeholderImageUrl);
-                });
-                layoutList = layout;
             }
             else if (info == "bitrateMeasurement") {
             }
@@ -315,9 +299,11 @@
                     console.log("Connecton closed: "
                         + JSON.stringify(obj));
                 }
-            } else if (info == "newStreamAvailable") {
+            }
+            else if (info == "newTrackAvailable") {
                 playVideo(obj);
-            } else if (info == "data_received") {
+            }
+            else if (info == "data_received") {
                 var notificationEvent = JSON.parse(obj.data);
                 if(notificationEvent != null && typeof(notificationEvent) == "object") {
                     var eventStreamId = notificationEvent.streamId;
@@ -389,6 +375,26 @@
         },
         false
     );
+    window.setLayout = (layout)=> {
+        var messageObject = JSON.parse(layout);
+        var canvasOptions = messageObject.canvas;
+        var layout = messageObject.layout;
+        effectCanvas.width = canvasOptions.width;
+        effectCanvas.height = canvasOptions.height;
+        let localVideoElement = document.getElementById("localVideo");
+        //localVideoElement.width = canvasOptions.width;
+        //localVideoElement.height = canvasOptions.height;
+        loopRunning = false;
+        start(canvasOptions.width, canvasOptions.height, false);
+        layout.forEach(function(item) {
+            createImage(item.streamId+"IMG", item.placeholderImageUrl);
+        });
+        layoutList = layout;
+    }
+    window.getLayout = ()=>{
+        return layoutList;
+    }
+
 
 </script>
 </body>
