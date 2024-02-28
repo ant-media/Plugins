@@ -127,9 +127,6 @@
 
 
     function playVideo(obj) {
-
-        //In multitrack conferencing the stream is same, tracks are being and remove from the stream
-
         console.log("new track available with id: "
             + obj.trackId + " and kind: " + obj.track.kind + " on the room:" + roomId);
 
@@ -173,7 +170,7 @@
     function removeRemoteVideo(streamId) {
         var video = document.getElementById("remoteVideo"+streamId);
         if (video != null) {
-            var player = document.getElementById("player" + streamId);
+            var player = document.getElementById("remoteVideo" + streamId);
             video.srcObject = null;
             document.getElementById("players").removeChild(player);
         }
@@ -259,6 +256,9 @@
                 console.log("iceConnectionState Changed: ",JSON.stringify(obj));
             }
             else if (info == "data_received") {
+                document.write("fasdfasdfasdfasdfsfasdfasf "+window.layoutList)
+
+//                setLayout(obj.data)
             }
             else if (info == "bitrateMeasurement") {
             }
