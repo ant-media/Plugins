@@ -171,8 +171,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			JavascriptExecutor js = (JavascriptExecutor) driver;
 			Object response = js.executeScript(command);
 			Result result = new Result(true, streamId, "Command executed");
-            if(response != null)
+            if(response != null) {
 				result.setDataId(response.toString());
+			}
             return result;
 		} catch (Exception e) {
 			logger.error("Command cannot be executed: {} " , e.getMessage());
