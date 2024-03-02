@@ -4,6 +4,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -182,7 +183,7 @@ public class FilterAdaptorUnitTest {
 	public void testFiltering(boolean videoEnabled, String videoFilter, boolean audioEnabled, String audioFilter) {
 		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
-		when(app.createCustomBroadcast(anyString())).thenReturn(mock(IFrameListener.class));
+		when(app.createCustomBroadcast(anyString(), anyInt(), anyInt())).thenReturn(mock(IFrameListener.class));
 
 		String stream1 = "inStream1";
 		String stream2 = "inStream2";
