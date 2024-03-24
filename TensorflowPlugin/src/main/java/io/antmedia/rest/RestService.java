@@ -1,8 +1,14 @@
 package io.antmedia.rest;
 
+import org.springframework.context.ApplicationContext;
+import org.springframework.stereotype.Component;
+import org.springframework.web.context.WebApplicationContext;
+
+import io.antmedia.plugin.TensorflowPlugin;
+import io.antmedia.rest.model.Result;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.servlet.ServletContext;
 import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -12,14 +18,6 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
-
-import org.springframework.context.ApplicationContext;
-import org.springframework.stereotype.Component;
-import org.springframework.web.context.WebApplicationContext;
-
-import io.antmedia.plugin.TensorflowPlugin;
-import io.antmedia.rest.model.Result;
-import io.swagger.annotations.ApiParam;
 
 @Component
 @Path("/v2/tensorflow")
@@ -36,7 +34,7 @@ public class RestService {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response start(@PathParam("streamId") String streamId, 
-			@ApiParam(value = "To create image files instead of realtime demonstrations.", required = false) @QueryParam("offline") boolean offline) {
+			@Parameter(description = "To create image files instead of realtime demonstrations.", required = false) @QueryParam("offline") boolean offline) {
 		TensorflowPlugin app = getPluginApp();
 		
 		boolean result = app.startDetection(streamId, !offline);
