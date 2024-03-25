@@ -5,9 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -61,7 +59,7 @@ public class MediaPushPluginUnitTest  {
 	@BeforeClass
 	public static void beforeClass() 
 	{
-		WebDriverManager.chromedriver().setup();
+		//WebDriverManager.chromedriver().setup();
 	}
 	
 	@Test
@@ -120,10 +118,14 @@ public class MediaPushPluginUnitTest  {
         String command = "someCommand";
         Result expectedResult = new Result(true, streamId, "Command executed");
 
+        Object obj = "test";
         when(plugin.getDrivers()).thenReturn(drivers);
         when(drivers.containsKey(streamId)).thenReturn(true);
         when(drivers.get(streamId)).thenReturn(driver);
-        when(js.executeScript(command)).thenReturn(null);
+        expectedResult.setDataId(obj.toString());
+        when(driver.executeScript(command)).thenReturn(obj);
+
+
 
         // Act
         Result result = plugin.sendCommand(streamId, command);
