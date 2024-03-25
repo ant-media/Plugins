@@ -3,6 +3,8 @@ package io.antmedia.plugin;
 import io.antmedia.model.Endpoint;
 import io.antmedia.rest.model.Result;
 
+import java.net.URI;
+
 /**
  * MediaPush Plugin Interface
  * If you need to change the interface, make sure that it's backward compatible because
@@ -42,6 +44,6 @@ public interface IMediaPushPlugin {
 	 * @param streamId
 	 * @return
 	 */
-	public Result stopMediaPush(String streamId);
+	public Result stopMediaPush(String streamId , URI streamURI);
 
 }
