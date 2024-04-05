@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +22,8 @@ import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.MCUFilterTextGenerator;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.api.IStreamListener;
+import io.antmedia.webrtc.VideoCodec;
+import io.antmedia.webrtc.api.IWebRTCAdaptor;
 import io.antmedia.websocket.WebSocketConstants;
 
 @Component(value="filters.mcu")
@@ -40,6 +41,8 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	private static Logger logger = LoggerFactory.getLogger(MCUManager.class);
 	private Queue<String> roomsHasCustomFilters = new ConcurrentLinkedQueue<>();
 	private Queue<String> customRooms = new ConcurrentLinkedQueue<>();
+
+	private IWebRTCAdaptor webRTCAdaptor = null;
 	
 
 
@@ -77,6 +80,13 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		}
 		return appAdaptor;
 	}
+	
+	public IWebRTCAdaptor getWebRTCAdaptor() {
+		if(webRTCAdaptor == null) {
+			webRTCAdaptor = (IWebRTCAdaptor) applicationContext.getBean(IWebRTCAdaptor.BEAN_NAME);
+		}
+		return webRTCAdaptor;
+	}
 
 	public FiltersManager getFiltersManager() {
 		if(filtersManager == null) {
@@ -99,12 +109,22 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 			//Update room filter if there is no custom filter
 			try {
 				List<String> streams = new ArrayList<>();
+				List<Integer> videoEnabledIndices = new ArrayList<>();
+
 				streams.addAll(room.getRoomStreamList());
 
+				int index = 0;
 				for (String streamId : room.getRoomStreamList()) {
 					Broadcast broadcast = datastore.get(streamId);
 					if(broadcast == null || !broadcast.getStatus().equals(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING)) {
 						streams.remove(streamId);
+					}
+					else {
+						boolean isVideoEnabled = isVideoEnabled(streamId);
+						if(isVideoEnabled) {
+							videoEnabledIndices.add(index);	
+						}
+						index++;
 					}
 				}
 				//
@@ -116,7 +136,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 					List<String> outputStreams = new ArrayList<>();
 					outputStreams.add(roomId+MERGED_SUFFIX);
 					filterConfiguration.setOutputStreams(outputStreams);
-					filterConfiguration.setVideoFilter(MCUFilterTextGenerator.createVideoFilter(streams.size()));
+					filterConfiguration.setVideoFilter(MCUFilterTextGenerator.createVideoFilter(videoEnabledIndices.size(), videoEnabledIndices));
 					filterConfiguration.setAudioFilter(MCUFilterTextGenerator.createAudioFilter(streams.size()));
 					filterConfiguration.setVideoEnabled(!room.getMode().equals(WebSocketConstants.AMCU));
 					filterConfiguration.setAudioEnabled(true);
@@ -152,6 +172,10 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		}
 
 		return result;
+	}
+
+	public boolean isVideoEnabled(String streamId) {
+		return getWebRTCAdaptor().getStreamInfo(streamId).get(0).getVideoCodec() != VideoCodec.NOVIDEO;
 	}
 
 	private void roomHasChange(String roomId) {

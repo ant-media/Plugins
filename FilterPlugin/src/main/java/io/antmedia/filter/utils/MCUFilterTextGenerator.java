@@ -1,5 +1,8 @@
 package io.antmedia.filter.utils;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,30 +10,38 @@ import org.slf4j.LoggerFactory;
 import io.antmedia.plugin.MCUManager;
 
 public class MCUFilterTextGenerator {
-	
+
 	private static Logger logger = LoggerFactory.getLogger(MCUFilterTextGenerator.class);
-	
+
 	public static String createAudioFilter(int streamCount) {
 		if(streamCount == 1) {
 			return "[in0]acopy[out0]";
 		}
-		
-		String filter = "";
-        for (int i = 0; i < streamCount; i++) {
-            filter += "[in" + i + "]";
-        }
-        filter += "amix=inputs=" + streamCount + "[out0]";
 
-        return filter;
+		String filter = "";
+		for (int i = 0; i < streamCount; i++) {
+			filter += "[in" + i + "]";
+		}
+		filter += "amix=inputs=" + streamCount + "[out0]";
+
+		return filter;
 	}
 
 	public static String createVideoFilter(int streamCount) {
-			
+		List<Integer> inputIndices = new ArrayList<Integer>();
+		for (int i = 0; i < streamCount; i++) {
+			inputIndices.add(i);
+		}
+		return createVideoFilter(streamCount, inputIndices);
+	}
+	
+	
+	public static String createVideoFilter(int streamCount, List<Integer> inputIndices) {
 		int width = 360;
 		int height = 240;
 		String color = "black";
 		int margin = 3;
-		
+
 		if(streamCount == 1) {
 			return "[in0]copy[out0]";
 		}
@@ -39,12 +50,12 @@ public class MCUFilterTextGenerator {
 		int columns = (int) Math.ceil(Math.sqrt((double)streamCount));
 		int rows = (int) Math.ceil((double)streamCount/columns);
 		int lastRowColumns = streamCount - (rows - 1) * columns;
-		
+
 		width = Math.min(360, 720/columns);
 		height = 240*width/360;
 
 		for (int i = 0; i < streamCount; i++) {
-			filter += "[in" + i + "]scale="+(width-2*margin)+":"+(height-2*margin)+":force_original_aspect_ratio=decrease";
+			filter += "[in" + inputIndices.get(i) + "]scale="+(width-2*margin)+":"+(height-2*margin)+":force_original_aspect_ratio=decrease";
 			filter += ",pad="+width+":"+height+":"+margin+":"+margin+":color="+color;
 			filter += "[s" + i + "];";
 		}
@@ -70,9 +81,11 @@ public class MCUFilterTextGenerator {
 			}
 			filter += "vstack=inputs=" + rows + ",pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]";
 		}
-		
+
 		logger.info("generated filter:{}", filter);
 
 		return filter;
 	}
+
+
 }
