@@ -62,11 +62,11 @@ script:
 - sudo service antmedia restart
 - sleep 20
 #sonar project key and organization is defined in pom.xml
-- mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar -Dmaven.javadoc.skip=true -DskipTests=false --settings ../mvn-settings.xml --quiet
+- mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar -DskipTests=false --settings ../mvn-settings.xml --quiet
 
 - cd ../FilterPlugin
 - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report
-  sonar:sonar -Dmaven.javadoc.skip=true -Dsonar.projectKey=ant-media_plugins --settings ../mvn-settings.xml --quiet
+  sonar:sonar -Dsonar.projectKey=ant-media_plugins --settings ../mvn-settings.xml --quiet
 
 
 - cd ../TensorflowPlugin
