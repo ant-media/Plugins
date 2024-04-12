@@ -16,6 +16,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
+import io.antmedia.datastore.db.DataStore;
+import io.antmedia.datastore.db.DataStoreFactory;
+import io.antmedia.datastore.db.IDataStoreFactory;
+import io.antmedia.datastore.db.types.VoD;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -352,6 +356,11 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	@Override
 	public Result stopMediaPush(String streamId) {
+		return stopMediaPush(streamId, null);
+	}
+
+	@Override
+	public Result stopMediaPush(String streamId, String requestURL) {
 		Result result = new Result(false);
 		if (!drivers.containsKey(streamId)) 
 		{
@@ -377,12 +386,23 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 		catch(TimeoutException e) {
 			logger.error(ExceptionUtils.getStackTrace(e));
-			result.setMessage("Timeoutexception occured in stopping the stream. Fortunately, it'll quit the session to stop completely. Error message is " + e.getMessage());
+			result.setMessage("Timeout exception occurred in stopping the stream. Fortunately, it'll quit the session to stop completely. Error message is " + e.getMessage());
 
 		}
 		finally {
 			driver.quit();
 		}
+
+		if (StringUtils.isNotBlank(requestURL)) {
+			List<VoD> vodList = getDataStore().getVodList(0, 1, "date", "desc", streamId, "");
+			if (!vodList.isEmpty()) {
+				String recordingPath = requestURL + vodList.get(0).getFilePath();
+
+				String message = result.isSuccess() ? "Stream is stopped successfully. Recording is available at " : result.getMessage() + "Recording is available at ";
+				result.setMessage(message + recordingPath);
+			}
+		}
+
 		return result;
 	}
 	
@@ -440,6 +460,10 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	public AntMediaApplicationAdapter getApplication() {
 		return (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
+	}
+
+	public DataStore getDataStore(){
+		return ((DataStoreFactory) applicationContext.getBean(IDataStoreFactory.BEAN_NAME)).getDataStore();
 	}
 
 	@Override

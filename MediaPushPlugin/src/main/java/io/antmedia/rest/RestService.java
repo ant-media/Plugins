@@ -72,9 +72,17 @@ public class RestService {
 	@Path("/stop/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result stopMediaPush(@PathParam("id") String id) {
+	public Result stopMediaPush(@PathParam("id") String id, @Context UriInfo uriInfo) {
 		MediaPushPlugin app = getPluginApp();
-		return app.stopMediaPush(id);
+
+		String applicationName = uriInfo.getBaseUri().getPath().split("/")[1];
+		String httpURL = uriInfo.getBaseUri().getScheme() +"://" + uriInfo.getBaseUri().getHost();
+		if(uriInfo.getBaseUri().getPort() != -1) {
+			httpURL += ":" + uriInfo.getBaseUri().getPort();
+		}
+		httpURL += "/" + applicationName + "/";
+
+		return app.stopMediaPush(id, httpURL);
 	}
 
 	/*
