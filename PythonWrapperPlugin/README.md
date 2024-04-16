@@ -23,6 +23,8 @@ You can send the broadcast to your Python Script with this plugin. You can use t
     
 ## How to Use
 
+NOTE: To be able to use Python Wrapper Plugin, you should add at least one adaptive setting.
+
 Python Wrapper Plugin have REST API to control the plugin.
 
 * Start the Python Script
