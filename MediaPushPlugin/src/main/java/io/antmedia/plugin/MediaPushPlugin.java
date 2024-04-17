@@ -356,11 +356,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	@Override
 	public Result stopMediaPush(String streamId) {
-		return stopMediaPush(streamId, null);
-	}
-
-	@Override
-	public Result stopMediaPush(String streamId, String requestURL) {
 		Result result = new Result(false);
 		if (!drivers.containsKey(streamId)) 
 		{
@@ -393,14 +388,10 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			driver.quit();
 		}
 
-		if (StringUtils.isNotBlank(requestURL)) {
-			List<VoD> vodList = getDataStore().getVodList(0, 1, "date", "desc", streamId, "");
-			if (!vodList.isEmpty()) {
-				String recordingPath = requestURL + vodList.get(0).getFilePath();
-
-				String message = result.isSuccess() ? "Stream is stopped successfully. Recording is available at " : result.getMessage() + "Recording is available at ";
-				result.setMessage(message + recordingPath);
-			}
+		List<VoD> vodList = getDataStore().getVodList(0, 1, "date", "desc", streamId, "");
+		if (!vodList.isEmpty()) {
+			String recordedFileName = vodList.get(0).getFilePath();
+			result.setDataId(recordedFileName);
 		}
 
 		return result;

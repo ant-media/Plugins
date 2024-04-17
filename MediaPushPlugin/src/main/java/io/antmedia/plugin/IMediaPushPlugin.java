@@ -43,13 +43,4 @@ public interface IMediaPushPlugin {
 	 * @return
 	 */
 	public Result stopMediaPush(String streamId);
-
-	/**
-	 *
-	 * @param streamId
-	 * @param requestURL
-	 * @return
-	 */
-	public Result stopMediaPush(String streamId, String requestURL);
-
 }

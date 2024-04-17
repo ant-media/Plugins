@@ -75,14 +75,7 @@ public class RestService {
 	public Result stopMediaPush(@PathParam("id") String id, @Context UriInfo uriInfo) {
 		MediaPushPlugin app = getPluginApp();
 
-		String applicationName = uriInfo.getBaseUri().getPath().split("/")[1];
-		String httpURL = uriInfo.getBaseUri().getScheme() +"://" + uriInfo.getBaseUri().getHost();
-		if(uriInfo.getBaseUri().getPort() != -1) {
-			httpURL += ":" + uriInfo.getBaseUri().getPort();
-		}
-		httpURL += "/" + applicationName + "/";
-
-		return app.stopMediaPush(id, httpURL);
+		return app.stopMediaPush(id);
 	}
 
 	/*
