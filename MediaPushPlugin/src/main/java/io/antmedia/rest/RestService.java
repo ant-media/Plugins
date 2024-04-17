@@ -72,7 +72,7 @@ public class RestService {
 	@Path("/stop/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result stopMediaPush(@PathParam("id") String id, @Context UriInfo uriInfo) {
+	public Result stopMediaPush(@PathParam("id") String id) {
 		MediaPushPlugin app = getPluginApp();
 
 		return app.stopMediaPush(id);
