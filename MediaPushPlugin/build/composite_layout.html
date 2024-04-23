@@ -1,569 +1,573 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <script src="js/external/adapter-latest.js"></script>
     <title>MediaPush</title>
 </head>
+
 <body>
 
-<div id="players">
-</div>
+    <div id="players">
+    </div>
 
-<div id="imageContainer">
-</div>
+    <div id="imageContainer">
+    </div>
 
-<video id="localVideo" autoplay controls playsinline></video>
+    <video id="localVideo" autoplay controls playsinline></video>
 
-<script type="module">
+    <script type="module">
 
-    import './js/loglevel.min.js';
-    import {WebRTCAdaptor} from "./js/webrtc_adaptor.js"
-    import {getUrlParameter} from "./js/fetch.stream.js"
-    import {SoundMeter} from "./js/soundmeter.js"
-    import { generateRandomString, getWebSocketURL, errorHandler } from "./js/utility.js"
+        import './js/loglevel.min.js';
+        import { WebRTCAdaptor } from "./js/webrtc_adaptor.js"
+        import { getUrlParameter } from "./js/fetch.stream.js"
+        //import {StreamMerger} from "./js/composite_layout.js"
+        import { SoundMeter } from "./js/soundmeter.js"
+        import { generateRandomString, getWebSocketURL, errorHandler } from "./js/utility.js"
 
-    const Logger = window.log;
+        const Logger = window.log;
 
-    var roomId = getUrlParameter("roomId");
-    var publisherId = getUrlParameter("publisherId");
+        var roomId = getUrlParameter("roomId");
+        var publisherId = getUrlParameter("publisherId");
 
-    var tracks = [];
-    let closedCameraList = [];
+        var tracks = [];
+        let closedCameraList = [];
 
-    let fps = 10;
-    let loopRunning = false;
+        let fps = 10;
+        let loopRunning = false;
 
-    let effectCanvas = null;
-    let canvasStream = null;
-    let ctx = null;
+        let effectCanvas = null;
+        let canvasStream = null;
+        let ctx = null;
 
-    let cycle = 0;
+        let cycle = 0;
 
-    class StreamMerger {
-    /**
-     * 
-     * @param {number} width 
-     * @param {number} height 
-     * @param {boolean} autoMode 
-     * @param {*} aspectRatio 
-     */
-    constructor(width, height, autoMode, aspectRatio) {
-        this.streams = [];
-        this.width = width;
-        this.height = height;
-        const AudioContext = window.AudioContext || window.webkitAudioContext
-        this.audioCtx = new AudioContext();
-        this.audioDestination = this.audioCtx.createMediaStreamDestination()
-        this.autoMode = autoMode;
+        class StreamMerger {
+            /**
+             * 
+             * @param {number} width 
+             * @param {number} height 
+             * @param {boolean} autoMode 
+             * @param {*} aspectRatio 
+             */
+            constructor(width, height, autoMode, aspectRatio) {
+                this.streams = [];
+                this.width = width;
+                this.height = height;
+                const AudioContext = window.AudioContext || window.webkitAudioContext
+                this.audioCtx = new AudioContext();
+                this.audioDestination = this.audioCtx.createMediaStreamDestination()
+                this.autoMode = autoMode;
 
-        this.aspectRatio = aspectRatio;
-        this.stream_height = height;
-        this.stream_width = width;
+                this.aspectRatio = aspectRatio;
+                this.stream_height = height;
+                this.stream_width = width;
 
-        //4:3 portrait mode stream width height
-        this.pwidth = 0
-        this.pheight = 0
+                //4:3 portrait mode stream width height
+                this.pwidth = 0
+                this.pheight = 0
 
-        //4:3 vertical mode stream width height
-        this.vwidth = 0
-        this.wheight = 0;
+                //4:3 vertical mode stream width height
+                this.vwidth = 0
+                this.wheight = 0;
 
-        this.canvas = document.createElement('canvas');
-        this.canvas.setAttribute('width', this.width);
-        this.canvas.setAttribute('height', this.height);
-        this.ctx = this.canvas.getContext('2d');
+                this.canvas = document.createElement('canvas');
+                this.canvas.setAttribute('width', this.width);
+                this.canvas.setAttribute('height', this.height);
+                this.ctx = this.canvas.getContext('2d');
 
-        this.streamCount = 0;
-        this.frameCount = 0;
+                this.streamCount = 0;
+                this.frameCount = 0;
 
-        // delay node for video sync
-        this.videoSyncDelayNode = this.audioCtx.createDelay(5.0)
-        this.videoSyncDelayNode.connect(this.audioDestination)
+                // delay node for video sync
+                this.videoSyncDelayNode = this.audioCtx.createDelay(5.0)
+                this.videoSyncDelayNode.connect(this.audioDestination)
 
-        this.started = false;
-        this.fps = 30;
-    }
-
-    getResult() {
-        return this.result;
-    }
-
-    createImage(id, src) {
-        var image = document.createElement("img");
-        this.getBase64FromUrl(src).then(data => {
-            image.src = data;
-        });
-        image.id = id;
-        image.style.display = "none";
-        document.getElementById("imageContainer").appendChild(image);
-        return image;
-    }
-
-    getBase64FromUrl = async (url) => {
-        const data = await fetch(url);
-        const blob = await data.blob();
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = () => {
-                const base64data = reader.result;
-                resolve(base64data);
+                this.started = false;
+                this.fps = 30;
             }
-        });
-    }
 
-    /*
-    * Options
-    * streamId = Id of the stream
-    * width = width of the stream that is being merged
-    * height = height of the stream that is being merged
-    * X = Starting location pixel on canvas horizontal
-    * Y = Starting location pixel on canvas vertical
-    * Xindex = placement index of videos, index 0 means width * 0, index 1 means width * 1 as starting points
-    * Yindex = placement index of videos, index 0 means height * 0, index 1 means height* 1 as starting points
-    * mute = mute stream or not
-    * 
-    */
-    /**
-     * 
-     * @param {MediaStream} mediaStream 
-     * @param {object} options 
-     */
-    addStream(mediaStream, options) {
-        this.streamCount++;
-        const stream = {}
-        this.audioCtx.resume();
-        stream.streamId = options.streamId;
-
-        stream.width = options.width || 150;
-        stream.height = options.height || 150;
-        stream.portrait = false;
-        stream.aspectRatio = 4 / 3;
-        stream.isCameraClosed = false;
-        stream.placeholderImageUrl = options.placeholderImageUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-        stream.placeholderImageElement = this.createImage(options.streamId+"IMG", options.placeholderImageUrl);
-
-        stream.x = options.x || 0;
-        stream.y = options.y || 0;
-
-        //options.x == undefined ? stream.x = (stream.width * stream.Xindex) : stream.x = options.x;
-        //options.x == undefined ? stream.y = (stream.height * stream.Yindex) : stream.y = options.y;
-
-        stream.mute = options.mute || false;
-
-        let videoElement = null
-
-        videoElement = document.createElement('video');
-        videoElement.autoplay = true;
-        videoElement.muted = true;
-        videoElement.srcObject = mediaStream;
-        videoElement.setAttribute('style', 'position:fixed; left: 0px; top:0px; display: none pointer-events: none; opacity:0;');
-        document.body.appendChild(videoElement);
-
-        if (!stream.mute) {
-            stream.audioSource = this.audioCtx.createMediaStreamSource(mediaStream)
-            stream.audioGainNode = this.audioCtx.createGain() // Intermediate gain node
-            stream.audioGainNode.gain.value = 1
-            stream.audioSource.connect(stream.audioGainNode).connect(this.audioDestination) // Default is direct connect
-        }
-        stream.element = videoElement
-        this.streams.push(stream);
-
-        if (this.autoMode == true) {
-            //this.resizeAndSortV2();
-            /*
-            * To understand the incoming resolution we need to wait until the stream is rendered
-            * If the incoming stream is coming from mobile portrait mode default getUserMedia ratio is 3:4
-            */
-            videoElement.onloadedmetadata = () => {
-                Logger.debug("streamId = " + stream.streamId);
-                var pheight = mediaStream.getVideoTracks()[0].getSettings().height;
-                var pwidth = mediaStream.getVideoTracks()[0].getSettings().width;
-                if (pheight > pwidth) {
-                    Logger.debug("portrait mode");
-                    let xoffset = (stream.width - this.pwidth) / 2;
-                    stream.portrait = true;
-                    stream.x += xoffset;
-                    stream.width = this.pwidth;
-                    stream.height = this.pheight;
-                    Logger.warn("Location offset from metadata x = " + stream.x + " y = " + stream.y);
-                }
+            getResult() {
+                return this.result;
             }
-        }
-    }
 
-    requestAnimationFrameV2(callback) {
-        let fired = false
-        const interval = setInterval(() => {
-            if (!fired && document.hidden) {
-                fired = true
-                clearInterval(interval)
-                callback()
-            }
-        }, 1000 / this.fps)
-        requestAnimationFrame(() => {
-            if (!fired) {
-                fired = true
-                clearInterval(interval)
-                callback()
-            }
-        })
-    }
-
-    updateCanvasSize(width, height) {
-        this.width = width;
-        this.height = height;
-        this.canvas.setAttribute('width', this.width);
-        this.canvas.setAttribute('height', this.height);
-    }
-
-    start() {
-        this.started = true
-        this.requestAnimationFrameV2(this.draw.bind(this))
-
-        // Get the result of merged stream canvas
-        this.result = this.canvas.captureStream(this.fps)
-
-        // Remove "dead" audio track
-        const deadTrack = this.result.getAudioTracks()[0]
-        if (deadTrack) this.result.removeTrack(deadTrack)
-
-        // Add audio
-        const audioTracks = this.audioDestination.stream.getAudioTracks()
-        this.result.addTrack(audioTracks[0])
-    }
-
-    draw() {
-        if (!this.started) return;
-        this.frameCount++;
-
-        let awaiting = this.streams.length;
-        const done = () => {
-            awaiting--;
-            if (awaiting <= 0) {
-                this.requestAnimationFrameV2(this.draw.bind(this));
-            }
-        }
-        // clear the previous frame
-        this.ctx.fillStyle = "#000000";
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        this.streams.forEach((stream) => {
-            // default draw function
-            const width = stream.width;
-            const height = stream.height;
-            if (stream.isCameraClosed === true) {
-                this.ctx.drawImage(stream.placeholderImageElement, stream.x, stream.y, width, height);
-            } else {
-                this.ctx.drawImage(stream.element, stream.x, stream.y, width, height)
-            }
-            done()
-        })
-
-        if (this.streams.length === 0) done()
-    }
-
-    /**
-     * 
-     * @param {string} streamId 
-     */
-    removeStream(streamId) {
-        let removed = false;
-        for (let i = 0; i < this.streams.length; i++) {
-            const stream = this.streams[i]
-            if (streamId === stream.streamId) {
-                if (stream.element) {
-                    stream.element.remove()
-                }
-                removed = true;
-                this.streams[i] = null
-                this.streams.splice(i, 1)
-                i--
-            }
-        }
-        Logger.warn("removed streamId = " + streamId);
-    }
-
-    clearAllStreams() {
-        for (let i = 0; i < this.streams.length; i++) {
-            const stream = this.streams[i]
-            if (stream.element) {
-                stream.element.remove()
-            }
-            this.streams[i] = null
-            this.streams.splice(i, 1)
-            i--
-        }
-    }
-
-    stop() {
-        this.started = false
-
-        this.streams.forEach(stream => {
-            if (stream.element) {
-                stream.element.remove()
-            }
-        })
-        this.streams = []
-        this.audioCtx.close()
-        this.audioCtx = null
-        this.audioDestination = null
-        this.videoSyncDelayNode = null
-
-        this.result.getTracks().forEach((track) => {
-            track.stop()
-        })
-
-        this.result = null
-    }
-
-}
-
-var merger = new StreamMerger(640, 480, false, "4:3");
-    window.merger = merger;
-
-
-    function startMerger() {
-        var delayInMilliseconds = 1500;
-
-		setTimeout(function() {
-			merger.start();
-			var result = merger.getResult();
-			webRTCAdaptorPublisher.mediaManager.gotStream(result);
-            webRTCAdaptorPublisher.publish(publisherId);
-		}, delayInMilliseconds);
-    }
-
-    function addTrackList(streamId, trackList) {
-        addVideoTrack(streamId);
-        trackList.forEach(function(trackId) {
-            addVideoTrack(trackId);
-        });
-    }
-
-    function addVideoTrack(trackId) {
-        tracks.push(trackId);
-    }
-
-    function playVideo(obj) {
-        var room = roomId;
-        console.log("new stream available with id: "
-            + obj.streamId + "on the room:" + room);
-
-        var index;
-        if(obj.track.kind == "video") {
-            index = obj.track.id.replace("ARDAMSv", "");
-        }
-        else if(obj.track.kind == "audio") {
-            index = obj.track.id.replace("ARDAMSa", "");
-        }
-
-        if(index == room) {
-            return;
-        }
-
-        var video = document.getElementById("remoteVideo"+index);
-
-        if (video == null) {
-            createRemoteVideo(index);
-            video = document.getElementById("remoteVideo"+index);
-            video.srcObject = new MediaStream();
-        }
-
-        video.srcObject.addTrack(obj.track)
-
-        obj.track.onended = event => {
-            video.srcObject.removeTrack(event.currentTarget);
-            if(video.srcObject.getTracks().length == 0) {
-                removeRemoteVideo(index);
-            }
-        };
-    }
-
-    function createRemoteVideo(streamId) {
-        let video = document.createElement("video");
-        video.id = "remoteVideo"+streamId;
-        video.controls = true;
-        video.autoplay = true;
-        video.muted = true;
-        video.playsinline = true;
-        video.height = 10;
-        document.getElementById("players").appendChild(video);
-    }
-
-    function removeRemoteVideo(streamId) {
-        var video = document.getElementById("remoteVideo"+streamId);
-        if (video != null) {
-            var player = document.getElementById("player" + streamId);
-            video.srcObject = null;
-            document.getElementById("players").removeChild(player);
-        }
-    }
-
-    function startPlaying() {
-        var enabledTracks = [];
-        tracks.forEach(function(trackId) {
-            enabledTracks.push(trackId);
-        });
-
-        webRTCAdaptorPlay.play(roomId, "", "", enabledTracks);
-    }
-
-    var pc_config = {
-        'iceServers' : [ {
-            'urls' : 'stun:stun1.l.google.com:19302'
-        } ]
-    };
-
-    var sdpConstraints = {
-        OfferToReceiveAudio : false,
-        OfferToReceiveVideo : false
-
-    };
-    var mediaConstraints = {
-        video : true,
-        audio : true
-    };
-
-    var websocketURL = getWebSocketURL(location);
-
-    var webRTCAdaptorPublisher = new WebRTCAdaptor({
-        websocket_url : websocketURL,
-        mediaConstraints : mediaConstraints,
-        peerconnection_config : pc_config,
-        sdp_constraints : sdpConstraints,
-        localVideoId: "localVideo",
-        isPlayMode: true,
-        debug : true,
-        candidateTypes: ["tcp", "udp"],
-        callback : function(info, obj) {
-            if (info == "initialized") {
-                console.log("initialized");
-                startMerger();
-            } else if (info == "play_started") {
-                //joined the stream
-                console.log("play started");
-            } else if (info == "play_finished") {
-                //leaved the stream
-                console.log("play finished");
-            } else if (info == "closed") {
-                //console.log("Connection closed");
-                if (typeof obj != "undefined") {
-                    console.log("Connecton closed: "
-                        + JSON.stringify(obj));
-                }
-            } else if (info == "ice_connection_state_changed") {
-                console.log("iceConnectionState Changed: ",JSON.stringify(obj));
-            }
-            else if (info == "data_received") {
-                var messageObject = JSON.parse(obj.data);
-
-                if (messageObject == null || typeof messageObject != "object" || messageObject.streamId == null || typeof messageObject.streamId == "undefined" || messageObject.streamId !== publisherId) {
-                    return;
-                }
-
-                console.info("Message received: ", messageObject);
-                merger.clearAllStreams();
-                var layoutOptions = messageObject.layoutOptions;
-                var canvasOptions = layoutOptions.canvas;
-
-                merger.updateCanvasSize(canvasOptions.width, canvasOptions.height);
-
-                var layout = layoutOptions.layout;
-                loopRunning = false;
-                layout.forEach(function(item) {
-                    let video = document.getElementById("remoteVideo"+item.streamId);
-                    if (video != null && typeof video != "undefined" && video.srcObject != null && typeof video.srcObject != "undefined") {
-                        let region = item.region;
-                        merger.addStream(video.srcObject,{ x : region.xPos, y : region.yPos, width : region.width, height : region.height, streamId : item.streamId, placeholderImageUrl : item.placeholderImageUrl});
-                    }
-                    //createImage(item.streamId+"IMG", item.placeholderImageUrl);
+            createImage(id, src) {
+                var image = document.createElement("img");
+                this.getBase64FromUrl(src).then(data => {
+                    image.src = data;
                 });
-                // removeStream
-                //merger.addStream(obj.stream,{ Xindex : xindex, Yindex : yindex, streamId : obj.streamId});
+                image.id = id;
+                image.style.display = "none";
+                document.getElementById("imageContainer").appendChild(image);
+                return image;
             }
-            else if (info == "bitrateMeasurement") {
-            }
-            else if(info == "resolutionChangeInfo"){
-            }
-            else {
-                console.log( info + " notification received");
-            }
-        },
-        callbackError : function(error) {
-            //some of the possible errors, NotFoundError, SecurityError,PermissionDeniedError
 
-            console.log("error callback: " + JSON.stringify(error));
-            //alert(JSON.stringify(error));
-        }
-    });
+            getBase64FromUrl = async (url) => {
+                const data = await fetch(url);
+                const blob = await data.blob();
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(blob);
+                    reader.onloadend = () => {
+                        const base64data = reader.result;
+                        resolve(base64data);
+                    }
+                });
+            }
 
-    var webRTCAdaptorPlay = new WebRTCAdaptor({
-        websocket_url : websocketURL,
-        mediaConstraints : mediaConstraints,
-        peerconnection_config : pc_config,
-        sdp_constraints : sdpConstraints,
-        isPlayMode : true,
-        debug : true,
-        callback : function(info, obj) {
-            if (info == "initialized") {
-                console.log("initialized");
-                startPlaying();
-            } else if (info == "play_started") {
-                //joined the stream
-                console.log("play started");
-            } else if (info == "play_finished") {
-                //leaved the stream
-                console.log("play finished");
-            } else if (info == "closed") {
-                //console.log("Connection closed");
-                if (typeof obj != "undefined") {
-                    console.log("Connecton closed: "
-                        + JSON.stringify(obj));
+            /*
+            * Options
+            * streamId = Id of the stream
+            * width = width of the stream that is being merged
+            * height = height of the stream that is being merged
+            * X = Starting location pixel on canvas horizontal
+            * Y = Starting location pixel on canvas vertical
+            * Xindex = placement index of videos, index 0 means width * 0, index 1 means width * 1 as starting points
+            * Yindex = placement index of videos, index 0 means height * 0, index 1 means height* 1 as starting points
+            * mute = mute stream or not
+            * 
+            */
+            /**
+             * 
+             * @param {MediaStream} mediaStream 
+             * @param {object} options 
+             */
+            addStream(mediaStream, options) {
+                this.streamCount++;
+                const stream = {}
+                this.audioCtx.resume();
+                stream.streamId = options.streamId;
+
+                stream.width = options.width || 150;
+                stream.height = options.height || 150;
+                stream.portrait = false;
+                stream.aspectRatio = 4 / 3;
+                stream.isCameraClosed = false;
+                stream.placeholderImageUrl = options.placeholderImageUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+                stream.placeholderImageElement = this.createImage(options.streamId + "IMG", options.placeholderImageUrl);
+
+                stream.x = options.x || 0;
+                stream.y = options.y || 0;
+
+                //options.x == undefined ? stream.x = (stream.width * stream.Xindex) : stream.x = options.x;
+                //options.x == undefined ? stream.y = (stream.height * stream.Yindex) : stream.y = options.y;
+
+                stream.mute = options.mute || false;
+
+                let videoElement = null
+
+                videoElement = document.createElement('video');
+                videoElement.autoplay = true;
+                videoElement.muted = true;
+                videoElement.srcObject = mediaStream;
+                videoElement.setAttribute('style', 'position:fixed; left: 0px; top:0px; display: none pointer-events: none; opacity:0;');
+                document.body.appendChild(videoElement);
+
+                if (!stream.mute) {
+                    stream.audioSource = this.audioCtx.createMediaStreamSource(mediaStream)
+                    stream.audioGainNode = this.audioCtx.createGain() // Intermediate gain node
+                    stream.audioGainNode.gain.value = 1
+                    stream.audioSource.connect(stream.audioGainNode).connect(this.audioDestination) // Default is direct connect
                 }
-            } else if (info == "newStreamAvailable") {
-                playVideo(obj);
-            } else if (info == "data_received") {
-                var notificationEvent = JSON.parse(obj.data);
-                if(notificationEvent != null && typeof(notificationEvent) == "object") {
-                    var eventStreamId = notificationEvent.streamId;
-                    var eventTyp = notificationEvent.eventType;
+                stream.element = videoElement
+                this.streams.push(stream);
 
-                    if(eventTyp == "CAM_TURNED_OFF") {
-                        closedCameraList.push(eventStreamId);
-                        console.log("Camera turned off for : ", eventStreamId);
-                    } else if (eventTyp == "CAM_TURNED_ON"){
-                        closedCameraList = closedCameraList.filter(function(item) {
-                            return item !== eventStreamId
-                        });
-                        console.log("Camera turned on for : ", eventStreamId);
-                    } else if (eventTyp == "MIC_MUTED"){
-                        console.log("Microphone muted for : ", eventStreamId);
-                    } else if (eventTyp == "MIC_UNMUTED"){
-                        console.log("Microphone unmuted for : ", eventStreamId);
-                    } else if (eventTyp == "CHAT_MESSAGE"){
-                        $("#all-messages").append("Received: " + notificationEvent.message + "<br>");
+                if (this.autoMode == true) {
+                    //this.resizeAndSortV2();
+                    /*
+                    * To understand the incoming resolution we need to wait until the stream is rendered
+                    * If the incoming stream is coming from mobile portrait mode default getUserMedia ratio is 3:4
+                    */
+                    videoElement.onloadedmetadata = () => {
+                        Logger.debug("streamId = " + stream.streamId);
+                        var pheight = mediaStream.getVideoTracks()[0].getSettings().height;
+                        var pwidth = mediaStream.getVideoTracks()[0].getSettings().width;
+                        if (pheight > pwidth) {
+                            Logger.debug("portrait mode");
+                            let xoffset = (stream.width - this.pwidth) / 2;
+                            stream.portrait = true;
+                            stream.x += xoffset;
+                            stream.width = this.pwidth;
+                            stream.height = this.pheight;
+                            Logger.warn("Location offset from metadata x = " + stream.x + " y = " + stream.y);
+                        }
                     }
                 }
-            } else if (info == "trackList") {
-                addTrackList(obj.streamId, obj.trackList);
             }
-        },
-        callbackError : function(error) {
-            //some of the possible errors, NotFoundError, SecurityError,PermissionDeniedError
 
-            console.log("error callback: " + JSON.stringify(error));
-            //alert(JSON.stringify(error));
-            if (error == "no_stream_exist") {
-                setTimeout(function() {
-                    webRTCAdaptorPlay.play(roomId, "", "", []);
-                    console.log("Retrying Play Stream");
-                }, 3000);
+            requestAnimationFrameV2(callback) {
+                let fired = false
+                const interval = setInterval(() => {
+                    if (!fired && document.hidden) {
+                        fired = true
+                        clearInterval(interval)
+                        callback()
+                    }
+                }, 1000 / this.fps)
+                requestAnimationFrame(() => {
+                    if (!fired) {
+                        fired = true
+                        clearInterval(interval)
+                        callback()
+                    }
+                })
+            }
+
+            updateCanvasSize(width, height) {
+                this.width = width;
+                this.height = height;
+                this.canvas.setAttribute('width', this.width);
+                this.canvas.setAttribute('height', this.height);
+            }
+
+            start() {
+                this.started = true
+                this.requestAnimationFrameV2(this.draw.bind(this))
+
+                // Get the result of merged stream canvas
+                this.result = this.canvas.captureStream(this.fps)
+
+                // Remove "dead" audio track
+                const deadTrack = this.result.getAudioTracks()[0]
+                if (deadTrack) this.result.removeTrack(deadTrack)
+
+                // Add audio
+                const audioTracks = this.audioDestination.stream.getAudioTracks()
+                this.result.addTrack(audioTracks[0])
+            }
+
+            draw() {
+                if (!this.started) return;
+                this.frameCount++;
+
+                let awaiting = this.streams.length;
+                const done = () => {
+                    awaiting--;
+                    if (awaiting <= 0) {
+                        this.requestAnimationFrameV2(this.draw.bind(this));
+                    }
+                }
+                // clear the previous frame
+                this.ctx.fillStyle = "#000000";
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.streams.forEach((stream) => {
+                    // default draw function
+                    const width = stream.width;
+                    const height = stream.height;
+                    if (stream.isCameraClosed === true) {
+                        this.ctx.drawImage(stream.placeholderImageElement, stream.x, stream.y, width, height);
+                    } else {
+                        this.ctx.drawImage(stream.element, stream.x, stream.y, width, height)
+                    }
+                    done()
+                })
+
+                if (this.streams.length === 0) done()
+            }
+
+            /**
+             * 
+             * @param {string} streamId 
+             */
+            removeStream(streamId) {
+                let removed = false;
+                for (let i = 0; i < this.streams.length; i++) {
+                    const stream = this.streams[i]
+                    if (streamId === stream.streamId) {
+                        if (stream.element) {
+                            stream.element.remove()
+                        }
+                        removed = true;
+                        this.streams[i] = null
+                        this.streams.splice(i, 1)
+                        i--
+                    }
+                }
+                Logger.warn("removed streamId = " + streamId);
+            }
+
+            clearAllStreams() {
+                for (let i = 0; i < this.streams.length; i++) {
+                    const stream = this.streams[i]
+                    if (stream.element) {
+                        stream.element.remove()
+                    }
+                    this.streams[i] = null
+                    this.streams.splice(i, 1)
+                    i--
+                }
+            }
+
+            stop() {
+                this.started = false
+
+                this.streams.forEach(stream => {
+                    if (stream.element) {
+                        stream.element.remove()
+                    }
+                })
+                this.streams = []
+                this.audioCtx.close()
+                this.audioCtx = null
+                this.audioDestination = null
+                this.videoSyncDelayNode = null
+
+                this.result.getTracks().forEach((track) => {
+                    track.stop()
+                })
+
+                this.result = null
+            }
+
+        }
+
+        var merger = new StreamMerger(640, 480, false, "4:3");
+        window.merger = merger;
+
+
+        function startMerger() {
+            var delayInMilliseconds = 1500;
+
+            setTimeout(function () {
+                merger.start();
+                var result = merger.getResult();
+                webRTCAdaptorPublisher.mediaManager.gotStream(result);
+                webRTCAdaptorPublisher.publish(publisherId);
+            }, delayInMilliseconds);
+        }
+
+        function addTrackList(streamId, trackList) {
+            addVideoTrack(streamId);
+            trackList.forEach(function (trackId) {
+                addVideoTrack(trackId);
+            });
+        }
+
+        function addVideoTrack(trackId) {
+            tracks.push(trackId);
+        }
+
+        function playVideo(obj) {
+            var room = roomId;
+            console.log("new stream available with id: "
+                + obj.streamId + "on the room:" + room);
+
+            var index;
+            if (obj.track.kind == "video") {
+                index = obj.track.id.replace("ARDAMSv", "");
+            }
+            else if (obj.track.kind == "audio") {
+                index = obj.track.id.replace("ARDAMSa", "");
+            }
+
+            if (index == room) {
+                return;
+            }
+
+            var video = document.getElementById("remoteVideo" + index);
+
+            if (video == null) {
+                createRemoteVideo(index);
+                video = document.getElementById("remoteVideo" + index);
+                video.srcObject = new MediaStream();
+            }
+
+            video.srcObject.addTrack(obj.track)
+
+            obj.track.onended = event => {
+                video.srcObject.removeTrack(event.currentTarget);
+                if (video.srcObject.getTracks().length == 0) {
+                    removeRemoteVideo(index);
+                }
+            };
+        }
+
+        function createRemoteVideo(streamId) {
+            let video = document.createElement("video");
+            video.id = "remoteVideo" + streamId;
+            video.controls = true;
+            video.autoplay = true;
+            video.muted = true;
+            video.playsinline = true;
+            video.height = 10;
+            document.getElementById("players").appendChild(video);
+        }
+
+        function removeRemoteVideo(streamId) {
+            var video = document.getElementById("remoteVideo" + streamId);
+            if (video != null) {
+                var player = document.getElementById("player" + streamId);
+                video.srcObject = null;
+                document.getElementById("players").removeChild(player);
             }
         }
-    });
 
-</script>
+        function startPlaying() {
+            var enabledTracks = [];
+            tracks.forEach(function (trackId) {
+                enabledTracks.push(trackId);
+            });
+
+            webRTCAdaptorPlay.play(roomId, "", "", enabledTracks);
+        }
+
+        var pc_config = {
+            'iceServers': [{
+                'urls': 'stun:stun1.l.google.com:19302'
+            }]
+        };
+
+        var sdpConstraints = {
+            OfferToReceiveAudio: false,
+            OfferToReceiveVideo: false
+
+        };
+        var mediaConstraints = {
+            video: true,
+            audio: true
+        };
+
+        var websocketURL = getWebSocketURL(location);
+
+        var webRTCAdaptorPublisher = new WebRTCAdaptor({
+            websocket_url: websocketURL,
+            mediaConstraints: mediaConstraints,
+            peerconnection_config: pc_config,
+            sdp_constraints: sdpConstraints,
+            localVideoId: "localVideo",
+            isPlayMode: true,
+            debug: true,
+            candidateTypes: ["tcp", "udp"],
+            callback: function (info, obj) {
+                if (info == "initialized") {
+                    console.log("initialized");
+                    startMerger();
+                } else if (info == "play_started") {
+                    //joined the stream
+                    console.log("play started");
+                } else if (info == "play_finished") {
+                    //leaved the stream
+                    console.log("play finished");
+                } else if (info == "closed") {
+                    //console.log("Connection closed");
+                    if (typeof obj != "undefined") {
+                        console.log("Connecton closed: "
+                            + JSON.stringify(obj));
+                    }
+                } else if (info == "ice_connection_state_changed") {
+                    console.log("iceConnectionState Changed: ", JSON.stringify(obj));
+                }
+                else if (info == "data_received") {
+                    var messageObject = JSON.parse(obj.data);
+
+                    if (messageObject == null || typeof messageObject != "object" || messageObject.streamId == null || typeof messageObject.streamId == "undefined" || messageObject.streamId !== publisherId) {
+                        return;
+                    }
+
+                    console.info("Message received: ", messageObject);
+                    merger.clearAllStreams();
+                    var layoutOptions = messageObject.layoutOptions;
+                    var canvasOptions = layoutOptions.canvas;
+
+                    merger.updateCanvasSize(canvasOptions.width, canvasOptions.height);
+
+                    var layout = layoutOptions.layout;
+                    loopRunning = false;
+                    layout.forEach(function (item) {
+                        let video = document.getElementById("remoteVideo" + item.streamId);
+                        if (video != null && typeof video != "undefined" && video.srcObject != null && typeof video.srcObject != "undefined") {
+                            let region = item.region;
+                            merger.addStream(video.srcObject, { x: region.xPos, y: region.yPos, width: region.width, height: region.height, streamId: item.streamId, placeholderImageUrl: item.placeholderImageUrl });
+                        }
+                        //createImage(item.streamId+"IMG", item.placeholderImageUrl);
+                    });
+                    // removeStream
+                    //merger.addStream(obj.stream,{ Xindex : xindex, Yindex : yindex, streamId : obj.streamId});
+                }
+                else if (info == "bitrateMeasurement") {
+                }
+                else if (info == "resolutionChangeInfo") {
+                }
+                else {
+                    console.log(info + " notification received");
+                }
+            },
+            callbackError: function (error) {
+                //some of the possible errors, NotFoundError, SecurityError,PermissionDeniedError
+
+                console.log("error callback: " + JSON.stringify(error));
+                //alert(JSON.stringify(error));
+            }
+        });
+
+        var webRTCAdaptorPlay = new WebRTCAdaptor({
+            websocket_url: websocketURL,
+            mediaConstraints: mediaConstraints,
+            peerconnection_config: pc_config,
+            sdp_constraints: sdpConstraints,
+            isPlayMode: true,
+            debug: true,
+            callback: function (info, obj) {
+                if (info == "initialized") {
+                    console.log("initialized");
+                    startPlaying();
+                } else if (info == "play_started") {
+                    //joined the stream
+                    console.log("play started");
+                } else if (info == "play_finished") {
+                    //leaved the stream
+                    console.log("play finished");
+                } else if (info == "closed") {
+                    //console.log("Connection closed");
+                    if (typeof obj != "undefined") {
+                        console.log("Connecton closed: "
+                            + JSON.stringify(obj));
+                    }
+                } else if (info == "newStreamAvailable") {
+                    playVideo(obj);
+                } else if (info == "data_received") {
+                    var notificationEvent = JSON.parse(obj.data);
+                    if (notificationEvent != null && typeof (notificationEvent) == "object") {
+                        var eventStreamId = notificationEvent.streamId;
+                        var eventTyp = notificationEvent.eventType;
+
+                        if (eventTyp == "CAM_TURNED_OFF") {
+                            closedCameraList.push(eventStreamId);
+                            console.log("Camera turned off for : ", eventStreamId);
+                        } else if (eventTyp == "CAM_TURNED_ON") {
+                            closedCameraList = closedCameraList.filter(function (item) {
+                                return item !== eventStreamId
+                            });
+                            console.log("Camera turned on for : ", eventStreamId);
+                        } else if (eventTyp == "MIC_MUTED") {
+                            console.log("Microphone muted for : ", eventStreamId);
+                        } else if (eventTyp == "MIC_UNMUTED") {
+                            console.log("Microphone unmuted for : ", eventStreamId);
+                        } else if (eventTyp == "CHAT_MESSAGE") {
+                            $("#all-messages").append("Received: " + notificationEvent.message + "<br>");
+                        }
+                    }
+                } else if (info == "trackList") {
+                    addTrackList(obj.streamId, obj.trackList);
+                }
+            },
+            callbackError: function (error) {
+                //some of the possible errors, NotFoundError, SecurityError,PermissionDeniedError
+
+                console.log("error callback: " + JSON.stringify(error));
+                //alert(JSON.stringify(error));
+                if (error == "no_stream_exist") {
+                    setTimeout(function () {
+                        webRTCAdaptorPlay.play(roomId, "", "", []);
+                        console.log("Retrying Play Stream");
+                    }, 3000);
+                }
+            }
+        });
+
+    </script>
 </body>
+
 </html>
