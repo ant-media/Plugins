@@ -10,20 +10,20 @@
 <div id="players">
 </div>
 
-<div id="canvasContainer">
-</div>
-
 <div id="imageContainer">
 </div>
 
-<video id="localVideo" autoplay muted playsinline height=10></video>
+<video id="localVideo" autoplay controls playsinline></video>
 
 <script type="module">
 
+    import './js/loglevel.min.js';
     import {WebRTCAdaptor} from "./js/webrtc_adaptor.js"
     import {getUrlParameter} from "./js/fetch.stream.js"
     import {SoundMeter} from "./js/soundmeter.js"
     import { generateRandomString, getWebSocketURL, errorHandler } from "./js/utility.js"
+
+    const Logger = window.log;
 
     var roomId = getUrlParameter("roomId");
     var publisherId = getUrlParameter("publisherId");
@@ -33,7 +33,6 @@
 
     let fps = 10;
     let loopRunning = false;
-    let layoutList = [];
 
     let effectCanvas = null;
     let canvasStream = null;
@@ -41,73 +40,299 @@
 
     let cycle = 0;
 
-    function start(canvasWidth, canvasHeight, firstTime)
-    {
-        if (loopRunning)
-        {
-            canvasStream = effectCanvas.captureStream(fps);
-            webRTCAdaptorPublisher.updateVideoTrack(canvasStream, publisherId, null, true);
-            return;
-        }
+    class StreamMerger {
+    /**
+     * 
+     * @param {number} width 
+     * @param {number} height 
+     * @param {boolean} autoMode 
+     * @param {*} aspectRatio 
+     */
+    constructor(width, height, autoMode, aspectRatio) {
+        this.streams = [];
+        this.width = width;
+        this.height = height;
+        const AudioContext = window.AudioContext || window.webkitAudioContext
+        this.audioCtx = new AudioContext();
+        this.audioDestination = this.audioCtx.createMediaStreamDestination()
+        this.autoMode = autoMode;
 
-        if (document.getElementById("canvas") != null) {
-            document.getElementById("canvas").remove();
+        this.aspectRatio = aspectRatio;
+        this.stream_height = height;
+        this.stream_width = width;
+
+        //4:3 portrait mode stream width height
+        this.pwidth = 0
+        this.pheight = 0
+
+        //4:3 vertical mode stream width height
+        this.vwidth = 0
+        this.wheight = 0;
+
+        this.canvas = document.createElement('canvas');
+        this.canvas.setAttribute('width', this.width);
+        this.canvas.setAttribute('height', this.height);
+        this.ctx = this.canvas.getContext('2d');
+
+        this.streamCount = 0;
+        this.frameCount = 0;
+
+        // delay node for video sync
+        this.videoSyncDelayNode = this.audioCtx.createDelay(5.0)
+        this.videoSyncDelayNode.connect(this.audioDestination)
+
+        this.started = false;
+        this.fps = 30;
+    }
+
+    getResult() {
+        return this.result;
+    }
+
+    createImage(id, src) {
+        var image = document.createElement("img");
+        this.getBase64FromUrl(src).then(data => {
+            image.src = data;
+        });
+        image.id = id;
+        image.style.display = "none";
+        document.getElementById("imageContainer").appendChild(image);
+        return image;
+    }
+
+    getBase64FromUrl = async (url) => {
+        const data = await fetch(url);
+        const blob = await data.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+                const base64data = reader.result;
+                resolve(base64data);
+            }
+        });
+    }
+
+    /*
+    * Options
+    * streamId = Id of the stream
+    * width = width of the stream that is being merged
+    * height = height of the stream that is being merged
+    * X = Starting location pixel on canvas horizontal
+    * Y = Starting location pixel on canvas vertical
+    * Xindex = placement index of videos, index 0 means width * 0, index 1 means width * 1 as starting points
+    * Yindex = placement index of videos, index 0 means height * 0, index 1 means height* 1 as starting points
+    * mute = mute stream or not
+    * 
+    */
+    /**
+     * 
+     * @param {MediaStream} mediaStream 
+     * @param {object} options 
+     */
+    addStream(mediaStream, options) {
+        this.streamCount++;
+        const stream = {}
+        this.audioCtx.resume();
+        stream.streamId = options.streamId;
+
+        stream.width = options.width || 150;
+        stream.height = options.height || 150;
+        stream.portrait = false;
+        stream.aspectRatio = 4 / 3;
+        stream.isCameraClosed = false;
+        stream.placeholderImageUrl = options.placeholderImageUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+        stream.placeholderImageElement = this.createImage(options.streamId+"IMG", options.placeholderImageUrl);
+
+        stream.x = options.x || 0;
+        stream.y = options.y || 0;
+
+        //options.x == undefined ? stream.x = (stream.width * stream.Xindex) : stream.x = options.x;
+        //options.x == undefined ? stream.y = (stream.height * stream.Yindex) : stream.y = options.y;
+
+        stream.mute = options.mute || false;
+
+        let videoElement = null
+
+        videoElement = document.createElement('video');
+        videoElement.autoplay = true;
+        videoElement.muted = true;
+        videoElement.srcObject = mediaStream;
+        videoElement.setAttribute('style', 'position:fixed; left: 0px; top:0px; display: none pointer-events: none; opacity:0;');
+        document.body.appendChild(videoElement);
+
+        if (!stream.mute) {
+            stream.audioSource = this.audioCtx.createMediaStreamSource(mediaStream)
+            stream.audioGainNode = this.audioCtx.createGain() // Intermediate gain node
+            stream.audioGainNode.gain.value = 1
+            stream.audioSource.connect(stream.audioGainNode).connect(this.audioDestination) // Default is direct connect
         }
-        effectCanvas = createCanvas(canvasWidth, canvasHeight);
-        ctx = effectCanvas.getContext('2d');
-        canvasStream = effectCanvas.captureStream(fps);
-        if (!firstTime) {
-            try {
-                webRTCAdaptorPublisher.updateVideoTrack(canvasStream, publisherId, null, true)
-            } catch (e) {
-                console.log(e);
+        stream.element = videoElement
+        this.streams.push(stream);
+
+        if (this.autoMode == true) {
+            //this.resizeAndSortV2();
+            /*
+            * To understand the incoming resolution we need to wait until the stream is rendered
+            * If the incoming stream is coming from mobile portrait mode default getUserMedia ratio is 3:4
+            */
+            videoElement.onloadedmetadata = () => {
+                Logger.debug("streamId = " + stream.streamId);
+                var pheight = mediaStream.getVideoTracks()[0].getSettings().height;
+                var pwidth = mediaStream.getVideoTracks()[0].getSettings().width;
+                if (pheight > pwidth) {
+                    Logger.debug("portrait mode");
+                    let xoffset = (stream.width - this.pwidth) / 2;
+                    stream.portrait = true;
+                    stream.x += xoffset;
+                    stream.width = this.pwidth;
+                    stream.height = this.pheight;
+                    Logger.warn("Location offset from metadata x = " + stream.x + " y = " + stream.y);
+                }
             }
         }
-        loopRunning = true;
-        processFrame();
     }
 
-    function createCanvas(width, height)
-    {
-        let canvas = document.createElement('canvas');
-        canvas.id = "canvas";
-        canvas.width = width;
-        canvas.height = height;
-        document.getElementById("canvasContainer").appendChild(canvas);
-        return canvas;
+    requestAnimationFrameV2(callback) {
+        let fired = false
+        const interval = setInterval(() => {
+            if (!fired && document.hidden) {
+                fired = true
+                clearInterval(interval)
+                callback()
+            }
+        }, 1000 / this.fps)
+        requestAnimationFrame(() => {
+            if (!fired) {
+                fired = true
+                clearInterval(interval)
+                callback()
+            }
+        })
     }
 
-    async function processFrame()
-    {
-        drawLayout();
-        if (loopRunning)
-        {
-            setTimeout(()=> {
-                cycle++;
-                processFrame();
-            }, 1000/fps);
+    updateCanvasSize(width, height) {
+        this.width = width;
+        this.height = height;
+        this.canvas.setAttribute('width', this.width);
+        this.canvas.setAttribute('height', this.height);
+    }
+
+    start() {
+        this.started = true
+        this.requestAnimationFrameV2(this.draw.bind(this))
+
+        // Get the result of merged stream canvas
+        this.result = this.canvas.captureStream(this.fps)
+
+        // Remove "dead" audio track
+        const deadTrack = this.result.getAudioTracks()[0]
+        if (deadTrack) this.result.removeTrack(deadTrack)
+
+        // Add audio
+        const audioTracks = this.audioDestination.stream.getAudioTracks()
+        this.result.addTrack(audioTracks[0])
+    }
+
+    draw() {
+        if (!this.started) return;
+        this.frameCount++;
+
+        let awaiting = this.streams.length;
+        const done = () => {
+            awaiting--;
+            if (awaiting <= 0) {
+                this.requestAnimationFrameV2(this.draw.bind(this));
+            }
         }
-    }
+        // clear the previous frame
+        this.ctx.fillStyle = "#000000";
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    function drawLayout() {
-        ctx.save();
-        ctx.clearRect(0, 0, effectCanvas.width, effectCanvas.height);
-        if (layoutList.length == 0) {
-            ctx.fillStyle = "black";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-        for(let i = 0; i < layoutList.length; i++)
-        {
-            let layout = layoutList[i];
-            if(closedCameraList.includes(layout.streamId)) {
-                let image = document.getElementById(layout.streamId + "IMG");
-                ctx.drawImage(image, layout.region.xPos, layout.region.yPos, layout.region.width, layout.region.height);
+        this.streams.forEach((stream) => {
+            // default draw function
+            const width = stream.width;
+            const height = stream.height;
+            if (stream.isCameraClosed === true) {
+                this.ctx.drawImage(stream.placeholderImageElement, stream.x, stream.y, width, height);
             } else {
-                let video = document.getElementById("remoteVideo" + layout.streamId);
-                ctx.drawImage(video, layout.region.xPos, layout.region.yPos, layout.region.width, layout.region.height);
+                this.ctx.drawImage(stream.element, stream.x, stream.y, width, height)
+            }
+            done()
+        })
+
+        if (this.streams.length === 0) done()
+    }
+
+    /**
+     * 
+     * @param {string} streamId 
+     */
+    removeStream(streamId) {
+        let removed = false;
+        for (let i = 0; i < this.streams.length; i++) {
+            const stream = this.streams[i]
+            if (streamId === stream.streamId) {
+                if (stream.element) {
+                    stream.element.remove()
+                }
+                removed = true;
+                this.streams[i] = null
+                this.streams.splice(i, 1)
+                i--
             }
         }
-        ctx.restore();
+        Logger.warn("removed streamId = " + streamId);
+    }
+
+    clearAllStreams() {
+        for (let i = 0; i < this.streams.length; i++) {
+            const stream = this.streams[i]
+            if (stream.element) {
+                stream.element.remove()
+            }
+            this.streams[i] = null
+            this.streams.splice(i, 1)
+            i--
+        }
+    }
+
+    stop() {
+        this.started = false
+
+        this.streams.forEach(stream => {
+            if (stream.element) {
+                stream.element.remove()
+            }
+        })
+        this.streams = []
+        this.audioCtx.close()
+        this.audioCtx = null
+        this.audioDestination = null
+        this.videoSyncDelayNode = null
+
+        this.result.getTracks().forEach((track) => {
+            track.stop()
+        })
+
+        this.result = null
+    }
+
+}
+
+var merger = new StreamMerger(640, 480, false, "4:3");
+    window.merger = merger;
+
+
+    function startMerger() {
+        var delayInMilliseconds = 1500;
+
+		setTimeout(function() {
+			merger.start();
+			var result = merger.getResult();
+			webRTCAdaptorPublisher.mediaManager.gotStream(result);
+            webRTCAdaptorPublisher.publish(publisherId);
+		}, delayInMilliseconds);
     }
 
     function addTrackList(streamId, trackList) {
@@ -119,10 +344,6 @@
 
     function addVideoTrack(trackId) {
         tracks.push(trackId);
-    }
-
-    function enableTrack(trackId) {
-        webRTCAdaptorPlay.enableTrack(streamNameBox.value, trackId, true);
     }
 
     function playVideo(obj) {
@@ -180,29 +401,6 @@
         }
     }
 
-    function createImage(id, src) {
-        var image = document.createElement("img");
-        getBase64FromUrl(src).then(data => {
-            image.src = data;
-        });
-        image.id = id;
-        image.style.display = "none";
-        document.getElementById("imageContainer").appendChild(image);
-    }
-
-    const getBase64FromUrl = async (url) => {
-        const data = await fetch(url);
-        const blob = await data.blob();
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = () => {
-                const base64data = reader.result;
-                resolve(base64data);
-            }
-        });
-    }
-
     function startPlaying() {
         var enabledTracks = [];
         tracks.forEach(function(trackId) {
@@ -219,13 +417,13 @@
     };
 
     var sdpConstraints = {
-        OfferToReceiveAudio : true,
-        OfferToReceiveVideo : true
+        OfferToReceiveAudio : false,
+        OfferToReceiveVideo : false
 
     };
     var mediaConstraints = {
-        video : false,
-        audio : false
+        video : true,
+        audio : true
     };
 
     var websocketURL = getWebSocketURL(location);
@@ -236,14 +434,13 @@
         peerconnection_config : pc_config,
         sdp_constraints : sdpConstraints,
         localVideoId: "localVideo",
+        isPlayMode: true,
         debug : true,
         candidateTypes: ["tcp", "udp"],
         callback : function(info, obj) {
             if (info == "initialized") {
                 console.log("initialized");
-                start(640, 480, true);
-                webRTCAdaptorPublisher.publish(publisherId, "", "", "", "", "");
-                webRTCAdaptorPublisher.updateVideoTrack(canvasStream, publisherId, null, true)
+                startMerger();
             } else if (info == "play_started") {
                 //joined the stream
                 console.log("play started");
@@ -261,20 +458,30 @@
             }
             else if (info == "data_received") {
                 var messageObject = JSON.parse(obj.data);
+
+                if (messageObject == null || typeof messageObject != "object" || messageObject.streamId == null || typeof messageObject.streamId == "undefined" || messageObject.streamId !== publisherId) {
+                    return;
+                }
+
+                console.info("Message received: ", messageObject);
+                merger.clearAllStreams();
                 var layoutOptions = messageObject.layoutOptions;
                 var canvasOptions = layoutOptions.canvas;
+
+                merger.updateCanvasSize(canvasOptions.width, canvasOptions.height);
+
                 var layout = layoutOptions.layout;
-                effectCanvas.width = canvasOptions.width;
-                effectCanvas.height = canvasOptions.height;
-                let localVideoElement = document.getElementById("localVideo");
-                //localVideoElement.width = canvasOptions.width;
-                //localVideoElement.height = canvasOptions.height;
                 loopRunning = false;
-                start(canvasOptions.width, canvasOptions.height, false);
                 layout.forEach(function(item) {
-                    createImage(item.streamId+"IMG", item.placeholderImageUrl);
+                    let video = document.getElementById("remoteVideo"+item.streamId);
+                    if (video != null && typeof video != "undefined" && video.srcObject != null && typeof video.srcObject != "undefined") {
+                        let region = item.region;
+                        merger.addStream(video.srcObject,{ x : region.xPos, y : region.yPos, width : region.width, height : region.height, streamId : item.streamId, placeholderImageUrl : item.placeholderImageUrl});
+                    }
+                    //createImage(item.streamId+"IMG", item.placeholderImageUrl);
                 });
-                layoutList = layout;
+                // removeStream
+                //merger.addStream(obj.stream,{ Xindex : xindex, Yindex : yindex, streamId : obj.streamId});
             }
             else if (info == "bitrateMeasurement") {
             }
@@ -356,39 +563,6 @@
             }
         }
     });
-
-    const event = new Event("updateLayout");
-
-    document.addEventListener(
-        "updateLayout",
-        (e) => {
-            var messageObject = e.detail;
-            var layoutOptions = messageObject.layoutOptions;
-            var canvasOptions = layoutOptions.canvas;
-            var layout = layoutOptions.layout;
-            effectCanvas.width = canvasOptions.width;
-            effectCanvas.height = canvasOptions.height;
-            let localVideoElement = document.getElementById("localVideo");
-            //localVideoElement.width = canvasOptions.width;
-            //localVideoElement.height = canvasOptions.height;
-            loopRunning = false;
-            start(canvasOptions.width, canvasOptions.height, false);
-            layout.forEach(function(item) {
-                createImage(item.streamId+"IMG", item.placeholderImageUrl);
-            });
-            layoutList = layout;
-        },
-        false
-    );
-
-    document.addEventListener(
-        "refreshStream",
-        (e) => {
-            canvasStream = effectCanvas.captureStream(fps);
-            webRTCAdaptorPublisher.updateVideoTrack(canvasStream, publisherId, null, true)
-        },
-        false
-    );
 
 </script>
 </body>
