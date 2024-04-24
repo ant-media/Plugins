@@ -177,14 +177,16 @@ public class FilterGraph {
 				return null;
 			}
 			
-			if(sourceFilter.isFirstFrame) {
+			if(sourceFilter.isFirstFrame && frame != null) {
 				sourceFilter.offset = currentPts - frame.pts();
 				sourceFilter.isFirstFrame = false;
 			}
-			long allignedPts = frame.pts() + sourceFilter.offset;
-			frame.pts(allignedPts);
-			
-			currentPts = Math.max(allignedPts, currentPts);
+			if (frame != null) {
+				long allignedPts = frame.pts() + sourceFilter.offset;
+				frame.pts(allignedPts);
+				
+				currentPts = Math.max(allignedPts, currentPts);
+			}
 			
 			/* push the decoded frame into the filtergraph */
 			if ((ret = av_buffersrc_add_frame_flags(sourceFiltersMap.get(streamId).filterContext, frame, AV_BUFFERSRC_FLAG_PUSH)) < 0) {
