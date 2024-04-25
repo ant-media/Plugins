@@ -75,6 +75,46 @@ public class FilterAdaptorUnitTest {
 		vertx = Vertx.vertx();
 	}
 
+	@Test
+	public void testNullFrame() {
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
+		doReturn(new Result(true)).when(filterAdaptor).update();
+		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
+		FilterConfiguration filterConf = new FilterConfiguration();
+		filterConf.setInputStreams(new ArrayList<>());
+		filterConf.setOutputStreams(new ArrayList<>());
+
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+		when(app.getVertx()).thenReturn(vertx);
+		
+		filterAdaptor.createOrUpdateFilter(filterConf, app);
+		
+
+		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
+		AVFrame frame = new AVFrame();
+		FilterGraph filterGraph = mock(FilterGraph.class);
+
+		filterAdaptor.onVideoFrame(streamId, frame);
+		verify(filterGraph, never()).doFilter(streamId, frame, false);
+		
+		filterAdaptor.setVideoFilterGraphForTest(filterGraph);
+		when(filterGraph.isInitiated()).thenReturn(true);
+		when(filterGraph.getListener()).thenReturn(mock(IFilteredFrameListener.class));
+
+		StreamParametersInfo vsi = new StreamParametersInfo();
+		vsi.setCodecParameters(new AVCodecParameters());
+		vsi.setTimeBase(Utils.TIME_BASE_FOR_MS);
+		filterAdaptor.setVideoStreamInfo(streamId, vsi);
+		
+		filterAdaptor.onVideoFrame(streamId, frame);
+		//check that it's working
+		verify(filterGraph, timeout(3000)).doFilter(eq(streamId), any(), Mockito.anyBoolean());
+		
+		//it should not throw exception
+		filterAdaptor.onVideoFrame(streamId, null);
+		
+		
+	}
 	
 	@Test
 	public void testFilterGraphVideoFeed() {
@@ -299,6 +339,9 @@ public class FilterAdaptorUnitTest {
 			assertNotEquals(filteredFrame, frame);
 			assertEquals(filteredFrame.pts(), frame.pts());
 		}
+		
+		//it should not throw nullpointer exception
+		filterAdaptor.onVideoFrame(streamId, null);
 
 		//for audio
 		for(int i = 0; i < 100; i++) {
@@ -310,5 +353,10 @@ public class FilterAdaptorUnitTest {
 			assertNotEquals(filteredFrame, frame);
 			assertEquals(filteredFrame.pts(), frame.pts());
 		}
+		
+		filterAdaptor.onAudioFrame(streamId, null);
+		
+		
+		
 	}
 }
