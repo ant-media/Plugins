@@ -354,9 +354,18 @@ public class FilterAdaptorUnitTest {
 			assertEquals(filteredFrame.pts(), frame.pts());
 		}
 		
+		//it should not throw exception
 		filterAdaptor.onAudioFrame(streamId, null);
 		
+		//change type 
+		filterConf.setType(FilterConfiguration.ASYNCHRONOUS);
+		//it should not throw exception
+		filterAdaptor.onAudioFrame(streamId, null);
 		
+		//change type 
+		filterConf.setType(FilterConfiguration.LASTPOINT);
+		//it should not throw exception
+		filterAdaptor.onAudioFrame(streamId, null);
 		
 	}
 }
