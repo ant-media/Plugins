@@ -73,8 +73,8 @@ script:
   if [ -e "$MEDIA_PUSH_JAR" ] && [ -s "$MEDIA_PUSH_JAR" ]; then
      echo "$MEDIA_PUSH_JAR exists and is greater than zero bytes.";
    else
-    "File does not exist or is zero bytes.";
-    exit 1;
+     echo "File does not exist or is zero bytes.";
+     exit 1;
   fi
 
 - cd ../FilterPlugin
