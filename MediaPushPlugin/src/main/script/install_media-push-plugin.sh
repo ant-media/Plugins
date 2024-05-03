@@ -57,17 +57,22 @@ if [ $? -ne 0 ]; then
     REDIRECT="snapshots"
 fi
 
-export LATEST_VERSION=$(cat maven-metadata.xml | grep "<version>" | tail -n 1 |  xargs | cut -c 10-23)
+LAST_INDEX=14
+if [ "$REDIRECT" = "snapshots" ]; then
+	LAST_INDEX=23
+fi
 
-
+export LATEST_VERSION=$(cat maven-metadata.xml | grep "<version>" | tail -n 1 |  xargs | cut -c 10-${LAST_INDEX})
 
 wget -O media-push.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar" -q
 
-sudo cp media-push.jar /usr/local/antmedia/plugins/
+sudo mv media-push.jar /usr/local/antmedia/plugins/
 
 # Check if the copy command was successful
 if [ $? -eq 0 ]; then
-    echo "Media Push Plugin is installed successfully. Restart the service to make it effective" 
+	sudo chown antmedia:antmedia /usr/local/antmedia/plugins/media-push.jar
+    echo "Media Push Plugin is installed successfully.Please restart the service to make it effective."
+    echo "Run the command below to restart antmedia"
     echo "sudo service antmedia restart"
 else
     echo "Media Push Plugin cannot be installed. Check the error above."
