@@ -68,7 +68,7 @@ script:
 - sudo ./install_media-push-plugin.sh
 # check media-push.jar is in plugins directory
 - export MEDIA_PUSH_JAR=/usr/local/antmedia/plugins/media-push.jar
--|
+- |
 if [ -e "$MEDIA_PUSH_JAR" ] && [ -s "$MEDIA_PUSH_JAR" ]; then
     echo "$MEDIA_PUSH_JAR exists and is greater than zero bytes."
 else
