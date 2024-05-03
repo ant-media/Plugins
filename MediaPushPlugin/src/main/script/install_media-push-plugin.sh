@@ -1,5 +1,13 @@
 #!/bin/bash
 
+
+# To install latest snapshot version give --snapshot parameter
+# sudo ./install_media-push-plugin.sh  --snapshot
+# To install latest version just call directly
+# sudo ./install_media-push-plugin.sh 
+
+
+
 # Function to install Google Chrome on Debian-based systems
 install_chrome_debian() {
     sudo apt-get update -y
@@ -46,16 +54,32 @@ releaseUrl="https://oss.sonatype.org/service/local/repositories/releases/content
 # Snapshot URL
 snapshotUrl="https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/plugin/media-push/maven-metadata.xml"
 
-REDIRECT="releases"
-# Attempt to download from the release URL
-wget -O maven-metadata.xml $releaseUrl -q
 
-# Check if wget failed (e.g., 404 error)
-if [ $? -ne 0 ]; then
-    echo "Release URL failed (404). Trying the snapshot URL..."
+REDIRECT="releases"
+
+while [[ "$1" != "" ]]; do
+    case $1 in
+        --snapshot) REDIRECT="snapshots" ;;
+        *) echo "Invalid option: $1" ; exit 1 ;;
+    esac
+    shift
+done
+
+if [ "$REDIRECT" = "snapshots" ]; then
+    echo "Installing snapshot version..."
     wget -O maven-metadata.xml $snapshotUrl
-    REDIRECT="snapshots"
+else
+    echo "Installing latest version..."
+    # Attempt to download from the release URL
+    wget -O maven-metadata.xml $releaseUrl -q
+    # Check if wget failed (e.g., 404 error)
+    if [ $? -ne 0 ]; then
+        echo "Release URL failed (404). Trying the snapshot URL..."
+        wget -O maven-metadata.xml $snapshotUrl
+        REDIRECT="snapshots"
+    fi
 fi
+
 
 LAST_INDEX=14
 if [ "$REDIRECT" = "snapshots" ]; then
