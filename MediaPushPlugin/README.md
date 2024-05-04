@@ -62,7 +62,7 @@ Call the REST Method below to let Ant Media Server broadcast the web page. You s
   {"success":true,"message":null,"dataId":"Z8HfjJD1oLnk1707146618681","errorId":0}
   ```
 
-## Stop the broadcast
+### Stop the broadcast
 
 Call the REST Method below to let Ant Media Server with the stream id you specified in the start method.
    ```shell
@@ -100,7 +100,7 @@ Let's assume that there is a conference/call running under streamId: `room1`
 ```shell
 export ANT_MEDIA_SERVER_BASE_URL=https://antmedia.example.com:5443
 export APP_NAME=WebRTCAppEE
-#Pay attention that there is double quote
+#Pay attention that there is double quote and we've muted=false query
 export URL_TO_RECORD="${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/multitrack-play.html?id=room1&muted=false"
 
 curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  {"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4"}
@@ -124,7 +124,7 @@ The command should respond something like below. Pay attention that `dataId` fie
  ```
  
 
-### Optional: How to add Composite Layout 
+## Optional: How to add Composite Layout 
 
 1. Download the composite_layout.html file
   ```
