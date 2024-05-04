@@ -86,7 +86,7 @@ async function startBroadcasting(message) {
     webRTCAdaptorMediaPush = new WebRTCAdaptor({
         websocket_url : message.websocketURL,
         peerconnection_config : pc_config,
-        bandwidth: 2500,
+        bandwidth: 4000,
         localStream: stream,
         callback : (info, obj) => {
             if (info == "initialized") {
