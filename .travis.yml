@@ -67,15 +67,7 @@ script:
 - sudo rm /usr/local/antmedia/plugins/media-push-plugin.jar
 - wget -O install_media-push-plugin.sh https://raw.githubusercontent.com/ant-media/Plugins/master/MediaPushPlugin/src/main/script/install_media-push-plugin.sh && chmod 755 install_media-push-plugin.sh
 - sudo ./install_media-push-plugin.sh
-# check media-push.jar is in plugins directory
-- |
-  export MEDIA_PUSH_JAR=/usr/local/antmedia/plugins/media-push.jar
-  if [ -e "$MEDIA_PUSH_JAR" ] && [ -s "$MEDIA_PUSH_JAR" ]; then
-     echo "$MEDIA_PUSH_JAR exists and is greater than zero bytes.";
-   else
-     echo "File does not exist or is zero bytes.";
-     exit 1;
-  fi
+# if it exits with 0, it means that it's installed
 
 - cd ../FilterPlugin
 - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report

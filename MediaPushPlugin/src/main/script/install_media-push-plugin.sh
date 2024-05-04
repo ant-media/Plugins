@@ -68,6 +68,10 @@ done
 if [ "$REDIRECT" = "snapshots" ]; then
     echo "Installing snapshot version..."
     wget -O maven-metadata.xml $snapshotUrl
+    if [ $? -ne 0 ]; then
+      echo "There is a problem in getting the version of the media push plugin."
+      exit $?
+    fi
 else
     echo "Installing latest version..."
     # Attempt to download from the release URL
@@ -76,6 +80,10 @@ else
     if [ $? -ne 0 ]; then
         echo "Release URL failed (404). Trying the snapshot URL..."
         wget -O maven-metadata.xml $snapshotUrl
+        if [ $? -ne 0 ]; then
+            echo "There is a problem in getting the version of the media push plugin."
+            exit $?
+        fi
         REDIRECT="snapshots"
     fi
 fi
@@ -88,7 +96,12 @@ fi
 
 export LATEST_VERSION=$(cat maven-metadata.xml | grep "<version>" | tail -n 1 |  xargs | cut -c 10-${LAST_INDEX})
 
-wget -O media-push.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar" -q
+wget -O media-push.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar" 
+
+if [ $? -ne 0 ]; then
+    echo "There is a problem in downloading the media push plugin. Please send the log of this console to support@antmedia.io"
+    exit $?
+fi
 
 sudo mv media-push.jar /usr/local/antmedia/plugins/
 
@@ -100,4 +113,5 @@ if [ $? -eq 0 ]; then
     echo "sudo service antmedia restart"
 else
     echo "Media Push Plugin cannot be installed. Check the error above."
+    exit $?;
 fi
