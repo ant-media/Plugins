@@ -92,7 +92,7 @@ This command will instruct the Ant Media Server to stop broadcasting the stream 
 To record the broadcast in addition to streaming, you can include the recordType option in your REST API call. This option specifies the format in which the broadcast should be recorded. Here's how you can modify the previous start broadcast command to include recording:
 
 ```shell
-curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  {"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4"}
+curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  '{"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4"}'
 ```
 This command will initiate the broadcast of the specified URL and simultaneously record it in MP4 format. Ensure to replace "${URL_TO_RECORD}" with the actual URL you want to broadcast and record.
 
@@ -100,7 +100,7 @@ This command will initiate the broadcast of the specified URL and simultaneously
 
 To incorporate extra Chrome switches into your REST API request for broadcasting a web page with the Ant Media Server, specify them in the `extraChromeSwitches` field of your JSON payload. These should be listed in a comma-separated format. Here’s a refined version of your command that includes extra Chrome switches:
 ```shell
-curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  {"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4", "extraChromeSwitches":"--start-fullscreen,--disable-gpu"}
+curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  '{"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4", "extraChromeSwitches":"--start-fullscreen,--disable-gpu"}'
 ```
 This command configures the Chrome instance that captures the web page with the following switches:
 
@@ -138,7 +138,7 @@ export URL_TO_RECORD="${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/multitrack-play.h
 ```
 2. Execute the following cURL command to start recording:
 ```shell
-curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  {"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4"}
+curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  '{"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4"}'
 ```
 Expected Response:
 The response includes the `dataId`, which is the new streamId generated for this recording session.
