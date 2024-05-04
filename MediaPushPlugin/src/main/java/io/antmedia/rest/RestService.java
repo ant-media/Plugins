@@ -60,7 +60,7 @@ public class RestService {
 
 		MediaPushPlugin mediaPushPlugin = getPluginApp();
 
-		return mediaPushPlugin.startMediaPush(streamId, websocketUrl, request.getWidth(), request.getHeight(), request.getUrl(),request.getToken(), request.getRecordType());
+		return mediaPushPlugin.startMediaPush(streamId, websocketUrl, request);
 	}
 
 	/*
