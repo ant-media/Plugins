@@ -88,7 +88,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	public synchronized boolean updateRoomFilter(String roomId) 
 	{
 		DataStore datastore = getApplication().getDataStore();
-		ConferenceRoom room = datastore.getConferenceRoom(roomId);
+		ConferenceRoom room = DataStore.broadcastToConference(datastore.get(roomId));
 		boolean result = false;
 		if(room == null) 
 		{
@@ -156,7 +156,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	private void roomHasChange(String roomId) {
 		DataStore datastore = getApplication().getDataStore();
-		ConferenceRoom room = datastore.getConferenceRoom(roomId);	
+		ConferenceRoom room = DataStore.broadcastToConference(datastore.get(roomId));	
 		if ((room == null || room.getMode().equals(WebSocketConstants.MCU)
 				|| room.getMode().equals(WebSocketConstants.AMCU)
 				|| customRooms.contains(roomId)) 

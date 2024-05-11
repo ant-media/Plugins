@@ -81,7 +81,7 @@ public class MCUManagerUnitTest {
 	
 	
 	@Test
-	public void testRemoveNonZombiRoomFilter() {
+	public void testRemoveNonZombiRoomFilter() throws Exception {
 		String roomId = "room"+RandomUtils.nextInt();
 		MCUManager mcuManager = spy(new MCUManager());
 		FiltersManager filtersManager = spy(new FiltersManager());
@@ -94,11 +94,11 @@ public class MCUManagerUnitTest {
 		doReturn(app).when(mcuManager).getApplication();
 
 		
-		ConferenceRoom room = new ConferenceRoom();
-		room.setRoomId(roomId);
-		room.setMode(WebSocketConstants.MCU);
+		Broadcast room = new Broadcast();
+		room.setStreamId(roomId);
+		room.setConferenceMode(WebSocketConstants.MCU);
 		
-		dataStore.createConferenceRoom(room);
+		dataStore.save(room);
 		
 		mcuManager.updateRoomFilter(roomId);
 		
@@ -108,7 +108,7 @@ public class MCUManagerUnitTest {
 	}
 	
 	@Test
-	public void testMCUWithOtherRooms() {
+	public void testMCUWithOtherRooms() throws Exception {
 		
 		String roomId = "room"+RandomUtils.nextInt();
 		MCUManager mcuManager = spy(new MCUManager());
@@ -135,11 +135,11 @@ public class MCUManagerUnitTest {
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
 		dataStore.save(broadcast);
 		
-		ConferenceRoom room = new ConferenceRoom();
-		room.setRoomId(roomId);
-		room.setMode(WebSocketConstants.LEGACY);
-		room.setRoomStreamList(Arrays.asList(streamId));
-		dataStore.createConferenceRoom(room);
+		Broadcast room = new Broadcast();
+		room.setStreamId(roomId);
+		room.setConferenceMode(WebSocketConstants.LEGACY);
+		room.setSubTrackStreamIds(Arrays.asList(streamId));
+		dataStore.save(room);
 		
 		mcuManager.setApplicationContext(null);
 		
