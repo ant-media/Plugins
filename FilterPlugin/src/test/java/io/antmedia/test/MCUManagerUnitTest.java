@@ -27,7 +27,6 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.datastore.db.types.Broadcast;
-import io.antmedia.datastore.db.types.ConferenceRoom;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
