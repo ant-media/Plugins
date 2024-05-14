@@ -113,7 +113,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 		app.getVertx().executeBlocking(()-> {
 			try {
-				WebDriverManager.chromedriver().driverVersion("120.0.6099.109").setup();				
+				WebDriverManager.chromedriver().setup();
 
 				ClassLoader classLoader = getClass().getClassLoader();
 				File parent = new File("webapps/"+app.getName()+ File.separator + MEDIA_PUSH_FOLDER);					
@@ -408,7 +408,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		logs.enable(LogType.DRIVER, Level.ALL);
 		logs.enable(LogType.CLIENT, Level.ALL);
 		logs.enable(LogType.SERVER, Level.ALL);
-		
+
 		ChromeOptions options = new ChromeOptions();
 		options.setCapability("goog:loggingPrefs", logs);
 		List<String> args = new ArrayList<>(CHROME_DEFAULT_SWITHES);
