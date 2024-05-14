@@ -402,8 +402,15 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 		System.setProperty("webdriver.chrome.verboseLogging", "true");
 
-
+		// Create logging preferences
+		LoggingPreferences logs = new LoggingPreferences();
+		logs.enable(LogType.BROWSER, Level.ALL);
+		logs.enable(LogType.DRIVER, Level.ALL);
+		logs.enable(LogType.CLIENT, Level.ALL);
+		logs.enable(LogType.SERVER, Level.ALL);
+		
 		ChromeOptions options = new ChromeOptions();
+		options.setCapability("goog:loggingPrefs", logs);
 		List<String> args = new ArrayList<>(CHROME_DEFAULT_SWITHES);
 
 		
