@@ -113,7 +113,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 		app.getVertx().executeBlocking(()-> {
 			try {
-				WebDriverManager.chromedriver().setup();
+				WebDriverManager.chromedriver().driverVersion("120.0.6099.109").setup();				
 
 				ClassLoader classLoader = getClass().getClassLoader();
 				File parent = new File("webapps/"+app.getName()+ File.separator + MEDIA_PUSH_FOLDER);					
