@@ -9,10 +9,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
@@ -173,8 +170,12 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		try {
 			WebDriver driver = getDrivers().get(streamId);
 			JavascriptExecutor js = (JavascriptExecutor) driver;
-			js.executeScript(command);
-			return new Result(true, streamId, "Command executed");
+			Object response = js.executeScript(command);
+			Result result = new Result(true, streamId, "Command executed");
+            if(response != null) {
+				result.setDataId(response.toString());
+			}
+            return result;
 		} catch (Exception e) {
 			logger.error("Command cannot be executed: {} " , e.getMessage());
 			return new Result(false, "Command cannot be executed.");
