@@ -174,7 +174,7 @@ This process ensures your conference or video call is recorded and can be manage
   ```
 2. Copy the composite_layout.html file into directory under /usr/local/antmedia/webapps/<your-webapp-name>/
   ```
-  sudo cp media_push.html /usr/local/antmedia/webapps/<your-webapp-name>/composite_layout.html
+  sudo cp composite_layout.html /usr/local/antmedia/webapps/<your-webapp-name>/composite_layout.html
   ```
 
 ### How to use Composite Layout
