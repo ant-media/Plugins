@@ -166,19 +166,28 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	}
 
 	public Result sendCommand(String streamId, String command) {
-		if (!getDrivers().containsKey(streamId)) {
-			logger.warn("Driver is not exists for stream id: {}", streamId);
-			return new Result(false, "Driver is not exists for stream id: " + streamId);
-		}
-		try {
-			WebDriver driver = getDrivers().get(streamId);
-			JavascriptExecutor js = (JavascriptExecutor) driver;
-			js.executeScript(command);
-			return new Result(true, streamId, "Command executed");
-		} catch (Exception e) {
-			logger.error("Command cannot be executed: {} " , e.getMessage());
-			return new Result(false, "Command cannot be executed.");
-		}
+	    if (!getDrivers().containsKey(streamId)) {
+	        logger.warn("Driver does not exist for stream id: {}", streamId);
+	        return new Result(false, "Driver does not exist for stream id: " + streamId);
+	    }
+	    try {
+	        WebDriver driver = getDrivers().get(streamId);
+	        WebDriverWait wait = new WebDriverWait(driver, 10);
+	        
+	        // Switch to the iframe
+	        wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.tagName("iframe")));
+	        
+	        JavascriptExecutor js = (JavascriptExecutor) driver;
+	        js.executeScript(command);
+	        
+	        // Switch back to the default content
+	        driver.switchTo().defaultContent();
+	        
+	        return new Result(true, streamId, "Command executed");
+	    } catch (Exception e) {
+	        logger.error("Command cannot be executed: {} ", e.getMessage());
+	        return new Result(false, "Command cannot be executed: " + e.getMessage());
+	    }
 	}
 
 	public static boolean isValidURL(String urlString) {
