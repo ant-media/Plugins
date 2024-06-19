@@ -19,6 +19,7 @@ import java.util.logging.Level;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.openqa.selenium.By;
 import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.TimeoutException;
@@ -172,18 +173,19 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	    }
 	    try {
 	        WebDriver driver = getDrivers().get(streamId);
-	        WebDriverWait wait = new WebDriverWait(driver, 10);
+	        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 	        
 	        // Switch to the iframe
 	        wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.tagName("iframe")));
 	        
 	        JavascriptExecutor js = (JavascriptExecutor) driver;
-	        js.executeScript(command);
+	        
+	        Object obj = js.executeScript(command);
 	        
 	        // Switch back to the default content
 	        driver.switchTo().defaultContent();
 	        
-	        return new Result(true, streamId, "Command executed");
+	        return new Result(true, streamId, obj != null ? obj.toString() : "");
 	    } catch (Exception e) {
 	        logger.error("Command cannot be executed: {} ", e.getMessage());
 	        return new Result(false, "Command cannot be executed: " + e.getMessage());
@@ -252,26 +254,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			String publisherUrl = getPublisherHTMLURL(websocketUrl);
 
 
-			driver = createDriver(width, height, streamId, extraChromeSwitchList);
-			driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
-			driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
-
-			drivers.put(streamId, driver);
-
-			for (RecordType recordType : RecordType.values()) {
-				if (recordType.toString().equals(recordTypeString)) {
-					recordingMap.put(streamId, recordType);
-					break; // Stop the loop once a match is found
-				}
-			}
-			logger.info("publisherUrl -> {}", publisherUrl);
-			driver.get(publisherUrl);
-
-
-			driver.executeScript(
-					String.format("document.getElementById('media-push-iframe').src='%s'", url)
-					);
-
+			driver = openDriver(width, height, recordTypeString, extraChromeSwitchList, streamId, publisherUrl, url);
 
 			WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 
@@ -303,6 +286,30 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 
 		return result;
+	}
+
+	public RemoteWebDriver openDriver(int width, int height, String recordTypeString,
+			List<String> extraChromeSwitchList, String streamId, String publisherUrl, String targetUrl) throws IOException {
+		RemoteWebDriver driver;
+		driver = createDriver(width, height, streamId, extraChromeSwitchList);
+		driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+		driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+
+		drivers.put(streamId, driver);
+
+		for (RecordType recordType : RecordType.values()) {
+			if (recordType.toString().equals(recordTypeString)) {
+				recordingMap.put(streamId, recordType);
+				break; // Stop the loop once a match is found
+			}
+		}
+		logger.info("publisherUrl -> {}", publisherUrl);
+		driver.get(publisherUrl);
+		
+		driver.executeScript(
+				String.format("document.getElementById('media-push-iframe').src='%s'", targetUrl)
+				);
+		return driver;
 	}
 
 	public String checkAndGetStreamId(String streamId) {

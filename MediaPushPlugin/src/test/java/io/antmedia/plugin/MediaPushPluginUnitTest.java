@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -30,6 +31,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.logging.LogEntries;
+import org.openqa.selenium.logging.LogEntry;
+import org.openqa.selenium.logging.LogType;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -153,6 +157,27 @@ public class MediaPushPluginUnitTest  {
         assertFalse(result.isSuccess());
         assertEquals(expectedResult.getMessage(), result.getMessage());
     }
+    
+    @Test
+	public void testSendCommand() throws IOException {
+		MediaPushPlugin plugin = new MediaPushPlugin();
+
+		File file = new File("src/test/resources/content.html");
+		File mediaPushUrl = new File("src/main/resources/media-push-publisher.html");
+		
+		RemoteWebDriver driver = plugin.openDriver(640, 360, null, null, "streamId", "file://" + mediaPushUrl.getAbsolutePath(),  "file://" + file.getAbsolutePath());
+		
+		
+		Result result = plugin.sendCommand("streamId", "return window.hello");
+		
+		
+		assertEquals("Run Ant Media Run", result.getMessage());
+		
+		assertTrue(result.isSuccess());
+		
+		driver.quit();
+
+	}
 
     @Test
     public void testSendCommand_WhenCommandExecutionFails_ShouldReturnErrorResult() {
@@ -290,6 +315,8 @@ public class MediaPushPluginUnitTest  {
         assertEquals("http://example.antmedia.io/media-push/media-push-publisher.html", url);
         
     }
+    
+    
 
     @Test
     public void testStartMediaPush_WhenExecuteScriptTimeoutOccurs_ShouldReturnErrorResult() throws IOException {
