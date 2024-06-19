@@ -166,6 +166,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return result;
 	}
 
+	
+	@SuppressWarnings("javasecurity:S5334") //because this is Javascript
 	public Result sendCommand(String streamId, String command) {
 	    if (!getDrivers().containsKey(streamId)) {
 	        logger.warn("Driver does not exist for stream id: {}", streamId);
@@ -292,7 +294,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 		return result;
 	}
-
+	@SuppressWarnings("javasecurity:S5334") //because this is Javascript
 	public RemoteWebDriver openDriver(int width, int height, String recordTypeString,
 			List<String> extraChromeSwitchList, String streamId, String publisherUrl, String targetUrl) throws IOException {
 		RemoteWebDriver driver;
