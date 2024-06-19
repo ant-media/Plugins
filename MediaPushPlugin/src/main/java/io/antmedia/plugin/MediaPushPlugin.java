@@ -173,10 +173,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	    }
 	    try {
 	        WebDriver driver = getDrivers().get(streamId);
-	        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 	        
-	        // Switch to the iframe
-	        wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.tagName("iframe")));
+	        waitToBeFrameAvailable(driver);
 	        
 	        JavascriptExecutor js = (JavascriptExecutor) driver;
 	        
@@ -190,6 +188,13 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	        logger.error("Command cannot be executed: {} ", e.getMessage());
 	        return new Result(false, "Command cannot be executed: " + e.getMessage());
 	    }
+	}
+
+	public void waitToBeFrameAvailable(WebDriver driver) {
+		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+		
+		// Switch to the iframe
+		wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.tagName("iframe")));
 	}
 
 	public static boolean isValidURL(String urlString) {
