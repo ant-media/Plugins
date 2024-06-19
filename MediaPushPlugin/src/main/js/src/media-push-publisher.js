@@ -14,8 +14,8 @@ async function startBroadcasting(message) {
     }
 
     let token = "";
-    let width = 1280;
-    let height = 720;
+    let width = screen.width;
+    let height = screen.height;
 
     if(message.token !== undefined) {
         token = message.token;
@@ -32,9 +32,9 @@ async function startBroadcasting(message) {
 		{
 			//min is not allowed in getDisplayMedia
 			video: {
-				frameRate: {
-					max: 30
-				}
+				width: {ideal: screen.width},
+                		height: {ideal: screen.height},
+                		frameRate: {ideal: 30},
 			}, 
 			audio: {
 				channelCount:2,
@@ -59,7 +59,7 @@ async function startBroadcasting(message) {
         		 ideal: width 
         },
         height: { 
-				min: 360, 
+				min: 480, 
 				ideal: height 
 		},
         advanced: [{ width: width, height: height }, { aspectRatio: width/height }],
