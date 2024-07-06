@@ -89,12 +89,7 @@ else
 fi
 
 
-LAST_INDEX=14
-if [ "$REDIRECT" = "snapshots" ]; then
-	LAST_INDEX=23
-fi
-
-export LATEST_VERSION=$(cat maven-metadata.xml | grep "<version>" | tail -n 1 |  xargs | cut -c 10-${LAST_INDEX})
+export LATEST_VERSION=$(grep -o '<version>[^<]*</version>' maven-metadata.xml | tail -n 1 | sed 's/<\/\?version>//g')
 
 wget -O media-push.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar" 
 
