@@ -50,6 +50,11 @@ script:
 - sudo service antmedia restart
 - sleep 20
 
+- wget -O install_media-push-plugin.sh https://raw.githubusercontent.com/ant-media/Plugins/master/MediaPushPlugin/src/main/script/install_media-push-plugin.sh && chmod 755 install_media-push-plugin.sh
+- sudo ./install_media-push-plugin.sh
+# remove the current plugin and check that install script downloads the file
+- sudo rm /usr/local/antmedia/plugins/media-push.jar
+# if it exits with 0, it means that it's installed
 - cd ../MediaPushPlugin
 - rm  src/main/resources/*.js
 - cd src/main/js
@@ -63,11 +68,6 @@ script:
 - sleep 20
 #sonar project key and organization is defined in pom.xml
 - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar -DskipTests=false --settings ../mvn-settings.xml --quiet
-# remove the current plugin and check that install script downloads the file
-- sudo rm /usr/local/antmedia/plugins/media-push-plugin.jar
-- wget -O install_media-push-plugin.sh https://raw.githubusercontent.com/ant-media/Plugins/master/MediaPushPlugin/src/main/script/install_media-push-plugin.sh && chmod 755 install_media-push-plugin.sh
-- sudo ./install_media-push-plugin.sh
-# if it exits with 0, it means that it's installed
 
 - cd ../FilterPlugin
 - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report
