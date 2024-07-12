@@ -53,11 +53,24 @@ public class RestService {
 			return new Result(false, "Bad request");
 		}
 
-		String websocketScheme = ("https".equals(uriInfo.getBaseUri().getScheme())) ? "wss" : "ws";
+		String scheme = request.getHeader("X-Forwarded-Proto");
+		if (scheme == null) {
+		    scheme = uriInfo.getBaseUri().getScheme();
+		}
+		
+		String host = request.getHeader("X-Forwarded-Host");
+		if (host == null) {
+		    host = uriInfo.getBaseUri().getHost();
+		}
+		
+		String portHeader = request.getHeader("X-Forwarded-Port");
+		int port = (portHeader != null) ? Integer.parseInt(portHeader) : uriInfo.getBaseUri().getPort();
+		
+		String websocketScheme = "https".equals(scheme) ? "wss" : "ws";
 		String applicationName = uriInfo.getBaseUri().getPath().split("/")[1];
-
-		String websocketUrl = websocketScheme + "://" + uriInfo.getBaseUri().getHost() + ((uriInfo.getBaseUri().getPort() != -1 ) ? ":" + uriInfo.getBaseUri().getPort() + "/" : "/") + applicationName + "/websocket";
-
+		
+		String websocketUrl = websocketScheme + "://" + host + ((port != -1 ) ? ":" + port + "/" : "/") + applicationName + "/websocket";
+		
 		MediaPushPlugin mediaPushPlugin = getPluginApp();
 
 		return mediaPushPlugin.startMediaPush(streamId, websocketUrl, request);
