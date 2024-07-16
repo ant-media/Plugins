@@ -5,12 +5,11 @@ import static org.junit.Assert.*;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.Before;
 import org.junit.Test;
 import jakarta.ws.rs.core.UriInfo;
 import org.springframework.context.ApplicationContext;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpRequest;
 import org.springframework.web.context.WebApplicationContext;
 
 import java.net.URI;
@@ -19,7 +18,7 @@ import java.net.URISyntaxException;
 public class RestServiceUnitTest {
 
     private RestService restService;
-    private HttpRequest httpRequest;
+    private HttpServletRequest httpRequest;
     private UriInfo uriInfo;
     private URI uri;
     private ServletContext servletContext;
@@ -29,7 +28,7 @@ public class RestServiceUnitTest {
     @Before
     public void setUp() {
         restService = new RestService();
-        httpRequest = mock(HttpRequest.class);
+        httpRequest = mock(HttpServletRequest.class);
         uriInfo = mock(UriInfo.class);
         uri = mock(URI.class);
         servletContext = mock(ServletContext.class);
@@ -45,10 +44,9 @@ public class RestServiceUnitTest {
 
     @Test
     public void shouldReturnCorrectWebsocketUrlWhenHeadersArePresent() {
-        when(httpRequest.getHeaders()).thenReturn(new HttpHeaders());
-        httpRequest.getHeaders().add("X-Forwarded-Proto", "https");
-        httpRequest.getHeaders().add("X-Forwarded-Host", "example.com");
-        httpRequest.getHeaders().add("X-Forwarded-Port", "8080");
+        when(httpRequest.getHeader("X-Forwarded-Proto")).thenReturn("https");
+        when(httpRequest.getHeader("X-Forwarded-Host")).thenReturn("example.com");
+        when(httpRequest.getHeader("X-Forwarded-Port")).thenReturn("8080");
         when(uri.getPath()).thenReturn("example.com:8080/applicationName");
         when(uriInfo.getBaseUri()).thenReturn(uri); // Mocking to return null as it's not used in this scenario
 
@@ -58,7 +56,9 @@ public class RestServiceUnitTest {
 
     @Test
     public void shouldFallbackToUriInfoWhenHeadersAreMissing() throws URISyntaxException {
-        when(httpRequest.getHeaders()).thenReturn(new HttpHeaders()); // No headers added
+        when(httpRequest.getHeader("X-Forwarded-Proto")).thenReturn(null);
+        when(httpRequest.getHeader("X-Forwarded-Host")).thenReturn(null);
+        when(httpRequest.getHeader("X-Forwarded-Port")).thenReturn(null);
         when(uri.getPath()).thenReturn("fallback.com:8080/applicationName");
         when(uriInfo.getBaseUri()).thenReturn(new URI("http://fallback.com:8080/applicationName"));
 
@@ -68,9 +68,8 @@ public class RestServiceUnitTest {
 
     @Test
     public void shouldHandleMissingPortGracefully() {
-        when(httpRequest.getHeaders()).thenReturn(new HttpHeaders());
-        httpRequest.getHeaders().add("X-Forwarded-Proto", "https");
-        httpRequest.getHeaders().add("X-Forwarded-Host", "example.com");
+        when(httpRequest.getHeader("X-Forwarded-Proto")).thenReturn("https");
+        when(httpRequest.getHeader("X-Forwarded-Host")).thenReturn("example.com");
         when(uri.getPath()).thenReturn("example.com/applicationName");
         // No port header added
         when(uriInfo.getBaseUri()).thenReturn(null); // Mocking to return null as it's not used in this scenario
