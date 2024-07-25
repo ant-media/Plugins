@@ -43,5 +43,4 @@ public interface IMediaPushPlugin {
 	 * @return
 	 */
 	public Result stopMediaPush(String streamId);
-
 }
