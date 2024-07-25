@@ -94,17 +94,31 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		AVFrame filterOutputFrame = null;
 		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) {
 			//copy the input frame then return it immediately
-			filterInputframe = av_frame_clone(audioFrame);
+			if (audioFrame != null) {
+				filterInputframe = av_frame_clone(audioFrame);
+			}
+			else {
+				filterInputframe = null;
+			}
 
 			vertx.executeBlocking(a->{
 				audioFilterGraph.doFilter(streamId, filterInputframe, false);
-				av_frame_free(filterInputframe);
+				
+				if (filterInputframe != null) 
+				{
+					av_frame_free(filterInputframe);
+				}
 			},b->{});
 			filterOutputFrame = audioFrame;
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) 
 		{
-			filterInputframe = audioFrame;
+			if (audioFrame != null) {
+				filterInputframe = audioFrame;
+			}
+			else {
+				filterInputframe = null;
+			}
 			vertx.executeBlocking(a->{
 				audioFilterGraph.doFilter(streamId, filterInputframe, false);
 			},b->{});
@@ -113,8 +127,15 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS))
 		{
-			filterInputframe = audioFrame;
-			long orgPts = filterInputframe.pts();
+			long orgPts = 0;
+			if (audioFrame != null) {
+				filterInputframe = audioFrame;
+				orgPts = filterInputframe.pts();
+			}
+			else {
+				filterInputframe = null;
+			}
+		
 			filterOutputFrame = audioFilterGraph.doFilter(streamId, filterInputframe, true);
 			if(filterOutputFrame != null) 
 			{
@@ -135,12 +156,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			return videoFrame;
 		}
 
-		AVFrame filterInputframe;
+		AVFrame filterInputframe;	
 		AVFrame filterOutputFrame = null;
 
 		StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
 
-		if(videoFrame.width() != videoStreamParams.getCodecParameters().width()
+		//videoFrame can be null
+		if(videoFrame != null && videoFrame.width() != videoStreamParams.getCodecParameters().width()
 				&& videoFrame.height() != videoStreamParams.getCodecParameters().height()) {
 
 			videoStreamParams.getCodecParameters().width(videoFrame.width());
@@ -152,9 +174,14 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) 
 		{
 			//copy the input frame then refilteredVideoFramesturn it immediately
-			filterInputframe = av_frame_clone(videoFrame);
-			rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
-
+			if (videoFrame != null) {
+				filterInputframe = av_frame_clone(videoFrame);
+				rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
+			}
+			else {
+				filterInputframe = null;
+			}
+			
 			vertx.executeBlocking(a->{
 				videoFilterGraph.doFilter(streamId, filterInputframe, false);
 				av_frame_free(filterInputframe);
@@ -163,8 +190,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.LASTPOINT)) 
 		{
-			filterInputframe = av_frame_clone(videoFrame);
-			rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
+			if (videoFrame != null) {
+				filterInputframe = av_frame_clone(videoFrame);
+				rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
+			}
+			else {
+				filterInputframe = null;
+			}
 
 			filterOutputFrame = null; //lastpoint
 
@@ -175,10 +207,16 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		else if(filterConfiguration.getType().equals(FilterConfiguration.SYNCHRONOUS))
 		{
-			filterInputframe = videoFrame;
-			long orgPts = filterInputframe.pts();
-
-			rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
+			long orgPts = 0;
+			if (videoFrame != null) 
+			{
+				filterInputframe = videoFrame;
+				orgPts = filterInputframe.pts();
+				rescaleFramePtsToMs(filterInputframe, videoStreamParams.getTimeBase());
+			}
+			else {
+				filterInputframe = null;
+			}
 
 			filterOutputFrame = videoFilterGraph.doFilter(streamId, filterInputframe, true);
 

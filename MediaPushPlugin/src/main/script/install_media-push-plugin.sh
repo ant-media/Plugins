@@ -1,5 +1,13 @@
 #!/bin/bash
 
+
+# To install latest snapshot version give --snapshot parameter
+# sudo ./install_media-push-plugin.sh  --snapshot
+# To install latest version just call directly
+# sudo ./install_media-push-plugin.sh 
+
+
+
 # Function to install Google Chrome on Debian-based systems
 install_chrome_debian() {
     sudo apt-get update -y
@@ -46,29 +54,59 @@ releaseUrl="https://oss.sonatype.org/service/local/repositories/releases/content
 # Snapshot URL
 snapshotUrl="https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/plugin/media-push/maven-metadata.xml"
 
-REDIRECT="releases"
-# Attempt to download from the release URL
-wget -O maven-metadata.xml $releaseUrl -q
 
-# Check if wget failed (e.g., 404 error)
-if [ $? -ne 0 ]; then
-    echo "Release URL failed (404). Trying the snapshot URL..."
+REDIRECT="releases"
+
+while [[ "$1" != "" ]]; do
+    case $1 in
+        --snapshot) REDIRECT="snapshots" ;;
+        *) echo "Invalid option: $1" ; exit 1 ;;
+    esac
+    shift
+done
+
+if [ "$REDIRECT" = "snapshots" ]; then
+    echo "Installing snapshot version..."
     wget -O maven-metadata.xml $snapshotUrl
-    REDIRECT="snapshots"
+    if [ $? -ne 0 ]; then
+      echo "There is a problem in getting the version of the media push plugin."
+      exit $?
+    fi
+else
+    echo "Installing latest version..."
+    # Attempt to download from the release URL
+    wget -O maven-metadata.xml $releaseUrl -q
+    # Check if wget failed (e.g., 404 error)
+    if [ $? -ne 0 ]; then
+        echo "Release URL failed (404). Trying the snapshot URL..."
+        wget -O maven-metadata.xml $snapshotUrl
+        if [ $? -ne 0 ]; then
+            echo "There is a problem in getting the version of the media push plugin."
+            exit $?
+        fi
+        REDIRECT="snapshots"
+    fi
 fi
 
-export LATEST_VERSION=$(cat maven-metadata.xml | grep "<version>" | tail -n 1 |  xargs | cut -c 10-23)
 
+export LATEST_VERSION=$(grep -o '<version>[^<]*</version>' maven-metadata.xml | tail -n 1 | sed 's/<\/\?version>//g')
 
+wget -O media-push.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar" 
 
-wget -O media-push.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar" -q
+if [ $? -ne 0 ]; then
+    echo "There is a problem in downloading the media push plugin. Please send the log of this console to support@antmedia.io"
+    exit $?
+fi
 
-sudo cp media-push.jar /usr/local/antmedia/plugins/
+sudo mv media-push.jar /usr/local/antmedia/plugins/
 
 # Check if the copy command was successful
 if [ $? -eq 0 ]; then
-    echo "Media Push Plugin is installed successfully. Restart the service to make it effective" 
+	sudo chown antmedia:antmedia /usr/local/antmedia/plugins/media-push.jar
+    echo "Media Push Plugin is installed successfully.Please restart the service to make it effective."
+    echo "Run the command below to restart antmedia"
     echo "sudo service antmedia restart"
 else
     echo "Media Push Plugin cannot be installed. Check the error above."
+    exit $?;
 fi

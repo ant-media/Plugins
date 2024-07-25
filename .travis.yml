@@ -34,7 +34,7 @@ before_install:
 script:
 # get latest snapshot
 - wget -O maven-metadata.xml https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/ant-media-server/maven-metadata.xml
-- export LATEST_SNAPSHOT=$(cat maven-metadata.xml | grep "<version>" | tail -n 1 |  xargs | cut -c 10-23)
+- export LATEST_SNAPSHOT=$(grep -o '<version>[^<]*</version>' maven-metadata.xml | tail -n 1 | sed 's/<\/\?version>//g')
 - wget -O ant-media-server-community.zip "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.antmedia&a=ant-media-server&v=${LATEST_SNAPSHOT}&c=community&e=zip";
 #install script     
 - wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh -O install_ant-media-server.sh  && chmod 755 install_ant-media-server.sh
@@ -50,6 +50,11 @@ script:
 - sudo service antmedia restart
 - sleep 20
 
+- wget -O install_media-push-plugin.sh https://raw.githubusercontent.com/ant-media/Plugins/master/MediaPushPlugin/src/main/script/install_media-push-plugin.sh && chmod 755 install_media-push-plugin.sh
+- sudo ./install_media-push-plugin.sh
+# remove the current plugin and check that install script downloads the file
+- sudo rm /usr/local/antmedia/plugins/media-push.jar
+# if it exits with 0, it means that it's installed
 - cd ../MediaPushPlugin
 - rm  src/main/resources/*.js
 - cd src/main/js
@@ -71,6 +76,10 @@ script:
 
 - cd ../TensorflowPlugin
 - mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+
+- cd ../ID3Converter
+- mvn clean install -Dgpg.skip=true
+
 
 after_script:
 - ls

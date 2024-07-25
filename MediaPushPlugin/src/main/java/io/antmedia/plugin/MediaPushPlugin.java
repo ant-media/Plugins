@@ -20,6 +20,7 @@ import io.antmedia.muxer.RecordMuxer;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.openqa.selenium.By;
 import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.TimeoutException;
@@ -94,7 +95,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 					"--disable-gpu-vsync",
 					"--disable-audio-output",
 					"--disable-background-timer-throttling",
-					"--headless=new");
+					"--headless=new",
+					"--start-fullscreen");
 
 	public static final int TIMEOUT_IN_SECONDS = 30;
 
@@ -164,20 +166,37 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return result;
 	}
 
+	
+	@SuppressWarnings("javasecurity:S5334") //because this is Javascript
 	public Result sendCommand(String streamId, String command) {
-		if (!getDrivers().containsKey(streamId)) {
-			logger.warn("Driver is not exists for stream id: {}", streamId);
-			return new Result(false, "Driver is not exists for stream id: " + streamId);
-		}
-		try {
-			WebDriver driver = getDrivers().get(streamId);
-			JavascriptExecutor js = (JavascriptExecutor) driver;
-			js.executeScript(command);
-			return new Result(true, streamId, "Command executed");
-		} catch (Exception e) {
-			logger.error("Command cannot be executed: {} " , e.getMessage());
-			return new Result(false, "Command cannot be executed.");
-		}
+	    if (!getDrivers().containsKey(streamId)) {
+	        logger.warn("Driver does not exist for stream id: {}", streamId);
+	        return new Result(false, "Driver does not exist for stream id: " + streamId);
+	    }
+	    try {
+	        WebDriver driver = getDrivers().get(streamId);
+	        
+	        waitToBeFrameAvailable(driver);
+	        
+	        JavascriptExecutor js = (JavascriptExecutor) driver;
+	        
+	        Object obj = js.executeScript(command);
+	        
+	        // Switch back to the default content
+	        driver.switchTo().defaultContent();
+	        
+	        return new Result(true, streamId, obj != null ? obj.toString() : "");
+	    } catch (Exception e) {
+	        logger.error("Command cannot be executed: {} ", e.getMessage());
+	        return new Result(false, "Command cannot be executed: " + e.getMessage());
+	    }
+	}
+
+	public void waitToBeFrameAvailable(WebDriver driver) {
+		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+		
+		// Switch to the iframe
+		wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.tagName("iframe")));
 	}
 
 	public static boolean isValidURL(String urlString) {
@@ -242,26 +261,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			String publisherUrl = getPublisherHTMLURL(websocketUrl);
 
 
-			driver = createDriver(width, height, streamId, extraChromeSwitchList);
-			driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
-			driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
-
-			drivers.put(streamId, driver);
-
-			for (RecordType recordType : RecordType.values()) {
-				if (recordType.toString().equals(recordTypeString)) {
-					recordingMap.put(streamId, recordType);
-					break; // Stop the loop once a match is found
-				}
-			}
-			logger.info("publisherUrl -> {}", publisherUrl);
-			driver.get(publisherUrl);
-
-
-			driver.executeScript(
-					String.format("document.getElementById('media-push-iframe').src='%s'", url)
-					);
-
+			driver = openDriver(width, height, recordTypeString, extraChromeSwitchList, streamId, publisherUrl, url);
 
 			WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 
@@ -293,6 +293,30 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 
 		return result;
+	}
+	@SuppressWarnings("javasecurity:S5334") //because this is Javascript
+	public RemoteWebDriver openDriver(int width, int height, String recordTypeString,
+			List<String> extraChromeSwitchList, String streamId, String publisherUrl, String targetUrl) throws IOException {
+		RemoteWebDriver driver;
+		driver = createDriver(width, height, streamId, extraChromeSwitchList);
+		driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+		driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+
+		drivers.put(streamId, driver);
+
+		for (RecordType recordType : RecordType.values()) {
+			if (recordType.toString().equals(recordTypeString)) {
+				recordingMap.put(streamId, recordType);
+				break; // Stop the loop once a match is found
+			}
+		}
+		logger.info("publisherUrl -> {}", publisherUrl);
+		driver.get(publisherUrl);
+		
+		driver.executeScript(
+				String.format("document.getElementById('media-push-iframe').src='%s'", targetUrl)
+				);
+		return driver;
 	}
 
 	public String checkAndGetStreamId(String streamId) {

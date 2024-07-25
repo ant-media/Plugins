@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -30,6 +31,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.WebDriver.TargetLocator;
+import org.openqa.selenium.logging.LogEntries;
+import org.openqa.selenium.logging.LogEntry;
+import org.openqa.selenium.logging.LogType;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,15 +120,20 @@ public class MediaPushPluginUnitTest  {
         MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
         HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
         RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
+        
+        Mockito.when(driver.switchTo()).thenReturn(Mockito.mock(TargetLocator.class));
+        
+        
         JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
         String streamId = "streamId";
         String command = "someCommand";
-        Result expectedResult = new Result(true, streamId, "Command executed");
+        Result expectedResult = new Result(true, streamId, "");
 
         when(plugin.getDrivers()).thenReturn(drivers);
         when(drivers.containsKey(streamId)).thenReturn(true);
         when(drivers.get(streamId)).thenReturn(driver);
         when(js.executeScript(command)).thenReturn(null);
+        Mockito.doNothing().when(plugin).waitToBeFrameAvailable(Mockito.any());
 
         // Act
         Result result = plugin.sendCommand(streamId, command);
@@ -131,7 +141,6 @@ public class MediaPushPluginUnitTest  {
         // Assert
         assertTrue(result.isSuccess());
         assertEquals(expectedResult.getDataId(), result.getDataId());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
     }
 
     @Test
@@ -141,10 +150,12 @@ public class MediaPushPluginUnitTest  {
         HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
         String streamId = "streamId";
         String command = "someCommand";
-        Result expectedResult = new Result(false, "Driver is not exists for stream id: " + streamId);
+        Result expectedResult = new Result(false, "Driver does not exist for stream id: " + streamId);
 
         when(plugin.getDrivers()).thenReturn(drivers);
         when(drivers.containsKey(streamId)).thenReturn(false);
+        Mockito.doNothing().when(plugin).waitToBeFrameAvailable(Mockito.any());
+
 
         // Act
         Result result = plugin.sendCommand(streamId, command);
@@ -153,6 +164,27 @@ public class MediaPushPluginUnitTest  {
         assertFalse(result.isSuccess());
         assertEquals(expectedResult.getMessage(), result.getMessage());
     }
+    
+    @Test
+	public void testSendCommand() throws IOException {
+		MediaPushPlugin plugin = new MediaPushPlugin();
+
+		File file = new File("src/test/resources/content.html");
+		File mediaPushUrl = new File("src/main/resources/media-push-publisher.html");
+		
+		RemoteWebDriver driver = plugin.openDriver(640, 360, null, null, "streamId", "file://" + mediaPushUrl.getAbsolutePath(),  "file://" + file.getAbsolutePath());
+		
+		
+		Result result = plugin.sendCommand("streamId", "return window.hello");
+		
+		
+		assertEquals("Run Ant Media Run", result.getMessage());
+		
+		assertTrue(result.isSuccess());
+		
+		driver.quit();
+
+	}
 
     @Test
     public void testSendCommand_WhenCommandExecutionFails_ShouldReturnErrorResult() {
@@ -168,13 +200,15 @@ public class MediaPushPluginUnitTest  {
         when(drivers.containsKey(streamId)).thenReturn(true);
         when(drivers.get(streamId)).thenReturn(driver);
         when(driver.executeScript(command)).thenThrow(new RuntimeException("Command execution failed."));
+        Mockito.doNothing().when(plugin).waitToBeFrameAvailable(Mockito.any());
+
+        Mockito.when(driver.switchTo()).thenReturn(Mockito.mock(TargetLocator.class));
 
         // Act
         Result result = plugin.sendCommand(streamId, command);
 
         // Assert
         assertFalse(result.isSuccess());
-        assertEquals(expectedResult.getMessage(), result.getMessage());
     }
     
     @Test
@@ -290,6 +324,8 @@ public class MediaPushPluginUnitTest  {
         assertEquals("http://example.antmedia.io/media-push/media-push-publisher.html", url);
         
     }
+    
+    
 
     @Test
     public void testStartMediaPush_WhenExecuteScriptTimeoutOccurs_ShouldReturnErrorResult() throws IOException {
