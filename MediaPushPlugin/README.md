@@ -177,6 +177,8 @@ This process ensures your conference or video call is recorded and can be manage
   sudo cp composite_layout.html /usr/local/antmedia/webapps/<your-webapp-name>/composite_layout.html
   ```
 
+Note: There is also a sample composite layout file which provides the current layout as a feedback by SEI or ID3 metadata. Its name is composite_layout_with_feedback.html
+
 ### How to use Composite Layout
 
 * Start the Composite Layout
