@@ -48,13 +48,13 @@ import static org.junit.Assert.*;
 
 public class ClipCreatorPluginIntegrationTest {
 
-   // public static String ffmpegPath = "/usr/bin/ffmpeg";
+    public static String ffmpegPath = "/usr/bin/ffmpeg";
     public static String appName = "LiveApp";
     private Gson gson = new Gson();
     public static String ffprobePath = "/usr/bin/ffprobe";
     private static Process tmpExec;
     public static Logger logger = LoggerFactory.getLogger(ClipCreatorPluginIntegrationTest.class);
-    public static String ffmpegPath = "/usr/local/bin/ffmpeg";
+    //public static String ffmpegPath = "/usr/local/bin/ffmpeg";
     public static String SERVER_ADDR;
     public static int OS_TYPE;
     public static final int MAC_OS_X = 0;
