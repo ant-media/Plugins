@@ -75,7 +75,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
     public void loadSettings() {
         Object clipCreatorSettingsString = appSettings.getCustomSetting("plugin."+ClipCreatorPlugin.PLUGIN_KEY);
 
-        if (clipCreatorSettings == null) {
+        if (clipCreatorSettingsString == null) {
             logger.error("Clip Creator plugin: Using default settings for Clip Creator because no Clip Creator settings in the AppSettings for app:{} ", appName);
             clipCreatorSettings = new ClipCreatorSettings();
         } else {
