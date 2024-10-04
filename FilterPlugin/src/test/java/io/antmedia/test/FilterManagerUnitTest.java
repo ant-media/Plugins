@@ -462,6 +462,9 @@ public class FilterManagerUnitTest {
 			Awaitility.await().atMost(5, TimeUnit.SECONDS).until(() -> callCount == 2);
 			//it was failing before the fix
 			assertEquals(inputPts, pts);
+			
+			//it should not throw exception
+			filterAdaptor.onVideoFrame("stream1", null);
 
 
 			filterAdaptor.close(app);

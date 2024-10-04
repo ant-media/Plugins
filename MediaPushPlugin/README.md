@@ -1,78 +1,172 @@
 # Media Push Plugin
 
-Media Push Plugin can stream everything on the given web page with video and audio in realtime.
+The Media Push Plugin is an excellent tool for customizing video views, such as adding animations, overlays, and recording features for video calls and conferences. It works by capturing audio and video from a URL and publishing it to the Ant Media Server. This means that all activities, including emojis, comments, and overlays, can be delivered to large audiences in real-time (WebRTC) or with low latency (HLS).
+
+## Use cases
+<img width="640" alt="video call, ant media server"  src="https://github.com/ant-media/Plugins/assets/3456251/5b4c6a9d-23a3-4c8f-86ad-f8a3fb4b8562">
+<br/>
+Conference Recording
+<br/><br/><br/>
+<img width="640" alt="video overlay, ant media server" src="https://github.com/ant-media/Plugins/assets/3456251/b4df2134-ffab-426f-9d0d-fbb835210c8d">
+<br/>
+Live Overlays
+<br/><br/><br/>
+<img width="640" alt="player kill, ant media server" src="https://github.com/ant-media/Plugins/assets/3456251/f0cfef63-ba52-4dfc-a92c-4d677fa1caee">
+<br/>
+Advance Scenarios such as Player Kill
+<br/><br/><br/>
+
 
 ## Features
+### 1. Broadcast the URL
+Broadcast the URL, including all animations and overlays, by capturing the view and audio in real time.
 
-### 1. Broadcast the whole web page
+### 2. Record All Activities in the URL
+Record the streams from the URL.
 
-You can broadcast the whole web page with video and audio in realtime.
+### 3. Play the Stream
+Play the stream in real-time (WebRTC) or with low latency (HLS, DASH, CMAF).
 
-### 2. Record the broadcast if needed
-
-You can record the broadcast if needed. But you need to start the recording manually with REST Api or on Ant Media Server Dashboard.
 
 ## How to Install 
 
-### Install Google Chrome 108
+1. Connect to your Ant Media Server instance via terminal.
 
-1. Remove your existing Google Chrome installation
+2. Download the installation script:
+  ```shell
+  wget -O install_media-push-plugin.sh https://raw.githubusercontent.com/ant-media/Plugins/master/MediaPushPlugin/src/main/script/install_media-push-plugin.sh && chmod 755 install_media-push-plugin.sh
   ```
-  sudo apt-get purge google-chrome-stable
+3. Execute the installation script:
+  ```shell
+  sudo ./install_media-push-plugin.sh
   ```
-2. Media Push Plugin uses Google Chrome 108 to broadcast the web page. So you need to install Google Chrome 108 to your server. You can install it on Ubuntu with the following commands.
-  ```
-  wget --no-verbose -O /tmp/chrome.deb http://trusty-packages.scrutinizer-ci.com/google/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_108.0.5359.71-1_amd64.deb
-  ```
-  ```
-  sudo apt install -y /tmp/chrome.deb
-  ```
-  ```
-  rm /tmp/chrome.deb
-  ```
-3. Disable Google Chrome auto update
-  ```
-  sudo apt-mark hold google-chrome-stable
-  ```
-4. Download the pre-built `media-push-plugin.jar` file
-  ```
-  wget https://github.com/ant-media/Plugins/raw/master/MediaPushPlugin/build/media-push-plugin.jar
-  ```
-5. Copy the `webpage-recording-plugin.jar` file to `plugins` directory under `/usr/local/antmedia`
-  ```
-  sudo cp media-push-plugin.jar /usr/local/antmedia/plugins
-  ```
-6. Restart the service
-  ```
+3. Restart the service:
+  ```shell
   sudo service antmedia restart
   ```
 
 ## How to Use
 
-Media Push Plugin have REST API to control the plugin. 
+The Media Push Plugin includes a REST API that allows you to control the plugin remotely. This API can be used to manage settings, initiate broadcasts, and interact with other features provided by the plugin programmatically.
 
-* Start the broadcast
+### Start the broadcast
 
-Call the REST Method below to let Ant Media Server broadcast the web page. You should pass the url of the web page and can pass streamId as query parameter you wanted to use as a parameter.
+To have the Ant Media Server broadcast a web page, use the REST method described below. You must pass the URL of the web page you wish to broadcast. Optionally, you can specify a streamId by including it as a query parameter.
+1. Set the necessary environment variables for your server configuration:
+```shell
+   export ANT_MEDIA_SERVER_BASE_URL=https://antmedia.example.com:5443
+   export APP_NAME=WebRTCAppEE
+   export URL_TO_RECORD=https://antmedia.example.com/WebRTCAppEE/play.html?id=stream1
+ ```
+2. Broadcast Command
+Use the following cURL command to initiate the broadcast:
+ ```shell
+  curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d '{"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720}'
    ```
-   curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/start" -d '{"url": "http://example.com", "width": 1280, "height": 720}'
-   ```
+Expected Response
+Upon successful execution, the server should respond as follows. Note that the dataId field represents the generated streamId.
+  ```
+  HTTP/1.1 200 
+  Content-Type: Application/json
+  Content-Length: 80
+  Date: Mon, 05 Feb 2024 15:23:42 GMT
 
-* Stop the broadcast
+  {"success":true,"message":null,"dataId":"Z8HfjJD1oLnk1707146618681","errorId":0}
+  ```
+This output confirms that the broadcast has started, and provides the streamId (dataId), which can be used for further operations related to this stream.
 
-Call the REST Method below to let Ant Media Server with the stream id you specified in the start method.
+### Stop the broadcast
+To stop a broadcast on the Ant Media Server using a specified streamId, use the REST method as outlined below. Ensure you have the streamId from a previous broadcast session to correctly identify the stream you wish to stop.
+1. Set the streamId of the broadcast you want to stop:
+   ```shell
+   export STREAM_ID=Z8HfjJD1oLnk1707146618681
    ```
-   curl -i -X POST -H "Accept: Application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/stop/{streamId}"
-   ```
+2. Use the following cURL command to send a request to stop the broadcast:
 
-* Send javascript command to a webpage with given stream id
-
-Call the REST Method below to let Ant Media Server with the stream id you specified in the start method. You should pass the javascript command in the body.
+   ```shell
+   curl -i -X POST -H "Accept: Application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/stop/${STREAM_ID}"
    ```
+This command will instruct the Ant Media Server to stop broadcasting the stream associated with the provided streamId. Make sure the STREAM_ID matches the one you obtained when initiating the broadcast.
+
+### Record the broadcast
+To record the broadcast in addition to streaming, you can include the recordType option in your REST API call. This option specifies the format in which the broadcast should be recorded. Here's how you can modify the previous start broadcast command to include recording:
+
+```shell
+curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  '{"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4"}'
+```
+This command will initiate the broadcast of the specified URL and simultaneously record it in MP4 format. Ensure to replace "${URL_TO_RECORD}" with the actual URL you want to broadcast and record.
+
+### Add Chrome Switches
+
+To incorporate extra Chrome switches into your REST API request for broadcasting a web page with the Ant Media Server, specify them in the `extraChromeSwitches` field of your JSON payload. These should be listed in a comma-separated format. Here’s a refined version of your command that includes extra Chrome switches:
+```shell
+curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  '{"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4", "extraChromeSwitches":"--start-fullscreen,--disable-gpu"}'
+```
+This command configures the Chrome instance that captures the web page with the following switches:
+
+- `--start-fullscreen`: Starts Chrome in fullscreen mode.
+- `--disable-gpu`: Disables GPU hardware acceleration.
+These switches can help optimize the browser environment for specific server configurations or broadcasting needs.
+
+
+For the default Chrome switches used by the Media Push Plugin, you can refer to the MediaPushPlugin.java file and look for the `CHROME_DEFAULT_SWITCHES` field. This will provide you with the preset configurations applied to the Chrome instance by the plugin.
+
+Additionally, a comprehensive list of all available Chrome command-line switches can be found on the following website: [Chromium Command Line Switches](https://peter.sh/experiments/chromium-command-line-switches/). This resource is valuable for understanding the full range of options you can utilize to customize the behavior of Chrome through the Media Push Plugin.
+
+
+
+### Run Javascript in the URL
+
+To send a JavaScript command to a specific stream on the Ant Media Server using the stream ID provided in the start method, use the following REST API call. Replace placeholders with your actual server domain, web application name, stream ID, and the JavaScript command you wish to execute.
+
+```shell
    curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "https://<ant-media-server-domain>/<your-webapp-name>/rest/v1/media-push/send-command?streamId={streamId}"  -d '{"jsCommand": "{javascript_command_which_is_executed}"}'
-   ```
+```
 
-### Optional: How to add Composite Layout 
+## Use-case: Conference Recording
+The Media Push Plugin is ideal for recording conferences or video calls. A simple player, [multitrack-play.html](https://github.com/ant-media/StreamApp/blob/master/src/main/webapp/multitrack-play.html), is implemented to play video conferences or calls. You can easily customize this player and add overlays to enhance your recordings.
+
+### Start Recording
+To start recording a conference or call currently active under streamId: `room1`, follow these steps:
+
+1. Set the necessary environment variables:
+```shell
+export ANT_MEDIA_SERVER_BASE_URL=https://antmedia.example.com:5443
+export APP_NAME=WebRTCAppEE
+#Pay attention that there is double quote and we've muted=false query
+export URL_TO_RECORD="${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/multitrack-play.html?id=room1&muted=false"
+```
+2. Execute the following cURL command to start recording:
+```shell
+curl -i -X POST -H "Accept: Application/json" -H "Content-Type: application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/start" -d  '{"url": "'"${URL_TO_RECORD}"'", "width": 1280, "height": 720, "recordType":"mp4"}'
+```
+Expected Response:
+The response includes the `dataId`, which is the new streamId generated for this recording session.
+```
+  HTTP/1.1 200 
+  Content-Type: Application/json
+  Content-Length: 80
+  Date: Mon, 05 Feb 2024 15:23:42 GMT
+
+  {"success":true,"message":null,"dataId":"Z8HfjJD1oLnk1707146618681","errorId":0}
+```
+
+### Stop Recording
+To stop the recording, use the streamId (dataId) generated from the start command:
+1. Set the streamId:
+ ```shell
+  export STREAM_ID=Z8HfjJD1oLnk1707146618681
+ ```
+2. Send a cURL request to stop the recording:
+
+ ```shell
+ curl -i -X POST -H "Accept: Application/json" "${ANT_MEDIA_SERVER_BASE_URL}/${APP_NAME}/rest/v1/media-push/stop/${STREAM_ID}"
+ ```
+This process ensures your conference or video call is recorded and can be managed directly via REST API commands, providing flexibility and control over your media content on the Ant Media Server.
+
+ 
+
+## Optional: How to add Composite Layout 
 
 1. Download the composite_layout.html file
   ```
@@ -80,7 +174,7 @@ Call the REST Method below to let Ant Media Server with the stream id you specif
   ```
 2. Copy the composite_layout.html file into directory under /usr/local/antmedia/webapps/<your-webapp-name>/
   ```
-  sudo cp media_push.html /usr/local/antmedia/webapps/<your-webapp-name>/composite_layout.html
+  sudo cp composite_layout.html /usr/local/antmedia/webapps/<your-webapp-name>/composite_layout.html
   ```
 
 ### How to use Composite Layout
@@ -109,27 +203,6 @@ Call the REST Method below to update the layout on the fly.
    
 ## How to Build from Source Code
 
-- Media Push Plugin uses Google Chrome 108 to broadcast the web page. So you need to install Google Chrome 108 to your server. You can install it on Ubuntu with the following commands.
-
-  ```
-  sudo apt-get purge google-chrome-stable
-  ```
-
-  ```
-  wget --no-verbose -O /tmp/chrome.deb http://trusty-packages.scrutinizer-ci.com/google/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_108.0.5359.71-1_amd64.deb
-  ```
-
-  ```
-  sudo apt install -y /tmp/chrome.deb
-  ```
-
-  ```
-  rm /tmp/chrome.deb
-  ```
-
-  ```
-  sudo apt-mark hold google-chrome-stable
-  ```
 
 - Clone the repository
 
