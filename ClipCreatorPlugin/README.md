@@ -18,6 +18,9 @@ hlsPlayListType must be set as "event" through app settings.
 
 "hlsPlayListType":"event"
 
+Fffmpeg must be installed in the system. 
+Install ffmpeg on ubuntu with:
+`sudo apt install ffmpeg`
 
 
 ## Usage
