@@ -10,7 +10,6 @@ import io.antmedia.plugin.ClipCreatorSettings;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
-import io.lindstrom.m3u8.parser.PlaylistParserException;
 import io.vertx.core.Vertx;
 import org.junit.Test;
 import org.mockito.MockedStatic;
@@ -121,8 +120,8 @@ public class ClipCreatorPluginTest {
 
         try (MockedStatic<ClipCreatorConverter> mockedStatic = mockStatic(ClipCreatorConverter.class)) {
             mockedStatic.when(() -> ClipCreatorConverter.createMp4(any(), anyString())).thenReturn(true);
-            File mp4File = plugin.convertHlsStreamsToMp4(20);
-            assertNotNull(mp4File);
+            plugin.convertHlsStreamsToMp4(20);
+            assertEquals(1, plugin.getCreatedMp4Count());
         }
 
     }

@@ -52,6 +52,8 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
 
     private long periodicCreateTimerId = 0;
 
+    private int createdMp4Count = 0;
+
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
@@ -89,7 +91,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
         }
     }
 
-    public File convertHlsStreamsToMp4(int mp4CreationIntervalSeconds) {
+    public void convertHlsStreamsToMp4(int mp4CreationIntervalSeconds) {
 
         ArrayList<File> m3u8FileList = getM3u8FileList();
         if (!m3u8FileList.isEmpty()) {
@@ -104,12 +106,10 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
                     File mp4File = convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
                     if (mp4File != null) {
                         logger.info("Clip Creator plugin: MP4 file created successfully from HLS playlist {}", mp4File.getAbsolutePath());
-                        return mp4File;
                     }
                 }
             }
         }
-        return null;
     }
 
     public MediaPlaylist readPlaylist(File m3u8File) {
@@ -147,6 +147,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
                         mp4FilePath,
                         vodId
                 );
+                createdMp4Count++;
                 return mp4File;
             } else {
                 logger.info("Clip Creator plugin: Could not create MP4 from HLS for stream {}", streamId);
@@ -332,6 +333,10 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
 
     public void setStreamsFolder(String streamsFolder) {
         this.streamsFolder = streamsFolder;
+    }
+
+    public int getCreatedMp4Count() {
+        return createdMp4Count;
     }
 
 }
