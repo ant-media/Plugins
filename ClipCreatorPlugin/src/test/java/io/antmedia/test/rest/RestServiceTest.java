@@ -2,6 +2,7 @@ package io.antmedia.test.rest;
 
 import io.antmedia.plugin.ClipCreatorPlugin;
 import io.antmedia.plugin.ClipCreatorSettings;
+import io.antmedia.plugin.CreateMp4Response;
 import io.antmedia.rest.RestService;
 import io.antmedia.rest.model.Result;
 import io.lindstrom.m3u8.model.MediaPlaylist;
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -53,10 +55,10 @@ public class RestServiceTest {
 
         when(clipCreatorPlugin.getM3u8File(streamId)).thenReturn(null);
 
-        Response response = restService.createMp4(streamId);
+        Response response = restService.createMp4(streamId, true);
 
         assertEquals(Response.Status.EXPECTATION_FAILED.getStatusCode(), response.getStatus());
-        assertEquals("No m3u8 HLS playlist exists for stream " + streamId, response.getEntity());
+        assertEquals("No m3u8 HLS playlist exists for stream " + streamId, ((Result)response.getEntity()).getMessage());
     }
 
     @Test
@@ -70,10 +72,10 @@ public class RestServiceTest {
         when(clipCreatorPlugin.getSegmentFilesWithinTimeRange(any(MediaPlaylist.class), anyLong(), anyLong(), eq(m3u8File)))
                 .thenReturn(new ArrayList<>());
 
-        Response response = restService.createMp4(streamId);
+        Response response = restService.createMp4(streamId, true);
 
         assertEquals(Response.Status.EXPECTATION_FAILED.getStatusCode(), response.getStatus());
-        assertEquals("No HLS playlist segment exists for stream " + streamId + " in this interval.", response.getEntity());
+        assertEquals("No HLS playlist segment exists for stream " + streamId + " in this interval.", ((Result)response.getEntity()).getMessage());
     }
 
     @Test
@@ -90,10 +92,10 @@ public class RestServiceTest {
                 .thenReturn(tsFilesToMerge);
         when(clipCreatorPlugin.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId)).thenReturn(null);
 
-        Response response = restService.createMp4(streamId);
+        Response response = restService.createMp4(streamId, true);
 
         assertEquals(Response.Status.EXPECTATION_FAILED.getStatusCode(), response.getStatus());
-        assertEquals("Could not create MP4 for " + streamId, response.getEntity());
+        assertEquals("Could not create MP4 for " + streamId, ((Result)response.getEntity()).getMessage());
     }
 
     @Test
@@ -101,6 +103,9 @@ public class RestServiceTest {
         String streamId = "testStream";
         File m3u8File = new File("test.m3u8");
         File mp4File = new File("output.mp4");
+        CreateMp4Response createMp4Response = mock(CreateMp4Response.class);
+        when(createMp4Response.getFile()).thenReturn(mp4File);
+
         ArrayList<File> tsFilesToMerge = new ArrayList<>();
         tsFilesToMerge.add(new File("segment1.ts"));
 
@@ -109,12 +114,14 @@ public class RestServiceTest {
         when(clipCreatorPlugin.readPlaylist(m3u8File)).thenReturn(mock(MediaPlaylist.class));
         when(clipCreatorPlugin.getSegmentFilesWithinTimeRange(any(MediaPlaylist.class), anyLong(), eq(m3u8File)))
                 .thenReturn(tsFilesToMerge);
-        when(clipCreatorPlugin.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId)).thenReturn(mp4File);
+        when(clipCreatorPlugin.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId)).thenReturn(createMp4Response);
 
-        Response response = restService.createMp4(streamId);
+        Response response = restService.createMp4(streamId, true);
 
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
         assertEquals("attachment; filename=\"" + mp4File.getName() + "\"", response.getHeaderString("Content-Disposition"));
+
+
 
         Map<String,Long> mp4CreateTimeForStreamMap = new HashMap<>();
         mp4CreateTimeForStreamMap.put(streamId, System.currentTimeMillis());
@@ -123,11 +130,14 @@ public class RestServiceTest {
         when(clipCreatorPlugin.getSegmentFilesWithinTimeRange(any(MediaPlaylist.class), anyLong(), anyLong(), eq(m3u8File)))
                 .thenReturn(tsFilesToMerge);
 
-        response = restService.createMp4(streamId);
+        response = restService.createMp4(streamId, true);
 
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
         assertEquals("attachment; filename=\"" + mp4File.getName() + "\"", response.getHeaderString("Content-Disposition"));
 
+        response = restService.createMp4(streamId, false);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertTrue(((Result) response.getEntity()).isSuccess());
     }
 
     @Test

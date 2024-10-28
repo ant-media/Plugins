@@ -7,6 +7,7 @@ import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.plugin.ClipCreatorConverter;
 import io.antmedia.plugin.ClipCreatorPlugin;
 import io.antmedia.plugin.ClipCreatorSettings;
+import io.antmedia.plugin.CreateMp4Response;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
@@ -140,10 +141,10 @@ public class ClipCreatorPluginTest {
 
         doReturn(mockApplication).when(plugin).getApplication();
         doNothing().when(mockApplication).muxingFinished(anyString(), any(), anyLong(), anyLong(), anyInt(), anyString(), anyString());
-        File mp4File = plugin.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
-        assertNotNull(mp4File);
-        assertTrue(mp4File.getTotalSpace() > 0);
-        assertTrue(mp4File.delete());
+        CreateMp4Response createMp4Response = plugin.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
+        assertNotNull(createMp4Response.getFile());
+        assertTrue(createMp4Response.getFile().getTotalSpace() > 0);
+        assertTrue(createMp4Response.getFile().delete());
 
     }
 

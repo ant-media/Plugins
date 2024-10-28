@@ -33,7 +33,16 @@ Send a `POST` request to:
 
 `https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/mp4/{STREAM_ID}`
 
-This endpoint will create a MP4 immediately and return file content as response.
+Query parameter: `returnFile` by default false
+
+Example:
+`https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/mp4/{STREAM_ID}?returFile=true`
+
+
+This endpoint will create a MP4 immediately and return file content as response if `returnFile=true`.
+
+If `returnFile=false` it will return a JSON response body indicating vod creation is success or not. If it is success response dataId field will contain created vodId.
+
 If there is an MP4 created by plugin since boot, it returns the mp4 clip from last mp4 creation time to the time of calling this REST endpoint.
 For example if last MP4 is generated at 14:00 and method is called at 14:05, duration of clip should be 5 minutes.
 

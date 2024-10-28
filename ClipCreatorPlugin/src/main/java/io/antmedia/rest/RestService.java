@@ -1,14 +1,11 @@
 package io.antmedia.rest;
 
 import io.antmedia.plugin.ClipCreatorPlugin;
+import io.antmedia.plugin.CreateMp4Response;
 import io.antmedia.rest.model.Result;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import jakarta.servlet.ServletContext;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -30,21 +27,22 @@ public class RestService {
 
 	@POST
 	@Path("/mp4/{streamId}")
-	@Produces(MediaType.APPLICATION_OCTET_STREAM)
-	@Consumes(MediaType.APPLICATION_JSON)
-	public Response createMp4(@PathParam("streamId") String streamId) {
+	@Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_OCTET_STREAM})
+	public Response createMp4(
+			@PathParam("streamId") String streamId,
+			@QueryParam("returnFile") @DefaultValue("false") boolean returnFile) {
+
 		ClipCreatorPlugin app = getPluginApp();
 		File m3u8File = app.getM3u8File(streamId);
 
 		if (m3u8File == null) {
 			return Response.status(Status.EXPECTATION_FAILED)
-					.entity("No m3u8 HLS playlist exists for stream " + streamId)
+					.entity(new Result(false, "No m3u8 HLS playlist exists for stream " + streamId))
 					.build();
 		}
 
 		Long lastMp4CreateTime = app.getLastMp4CreateTimeForStream().get(streamId);
 		long now = System.currentTimeMillis();
-
 		MediaPlaylist playList = app.readPlaylist(m3u8File);
 		ArrayList<File> tsFilesToMerge = new ArrayList<>();
 
@@ -63,20 +61,29 @@ public class RestService {
 
 		if (tsFilesToMerge.isEmpty()) {
 			return Response.status(Status.EXPECTATION_FAILED)
-					.entity("No HLS playlist segment exists for stream " + streamId + " in this interval.")
+					.entity(new Result(false, "No HLS playlist segment exists for stream " + streamId + " in this interval."))
 					.build();
 		}
 
-		File mp4File = app.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
-		if (mp4File == null) {
+		CreateMp4Response createMp4Response = app.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
+		if (createMp4Response == null) {
 			return Response.status(Status.EXPECTATION_FAILED)
-					.entity("Could not create MP4 for " + streamId)
+					.entity(new Result(false, "Could not create MP4 for " + streamId))
 					.build();
 		}
 
-		return Response.ok(mp4File)
-				.header("Content-Disposition", "attachment; filename=\"" + mp4File.getName() + "\"")
-				.build();
+		if (returnFile) {
+			return Response.ok(createMp4Response.getFile())
+					.header("Content-Disposition", "attachment; filename=\"" + createMp4Response.getFile().getName() + "\"")
+					.header("X-vodId", createMp4Response.getVodId())
+					.build();
+		} else {
+			Result result = new Result(true,  "MP4 created successfully for stream " + streamId);
+			result.setDataId(createMp4Response.getVodId());
+			return Response.ok(result)
+					.build();
+		}
+
 	}
 
 	@POST

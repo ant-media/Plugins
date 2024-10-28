@@ -9,6 +9,7 @@ import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.checkerframework.checker.units.qual.C;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -103,9 +104,9 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
                         AntMediaApplicationAdapter.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus())) {
                     MediaPlaylist playList = readPlaylist(m3u8File);
                     ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, mp4CreationIntervalSeconds, m3u8File);
-                    File mp4File = convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
-                    if (mp4File != null) {
-                        logger.info("Clip Creator plugin: MP4 file created successfully from HLS playlist {}", mp4File.getAbsolutePath());
+                    CreateMp4Response createMp4Response = convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
+                    if (createMp4Response.getFile() != null) {
+                        logger.info("Clip Creator plugin: MP4 file created successfully from HLS playlist {}", createMp4Response.getFile().getAbsolutePath());
                     }
                 }
             }
@@ -122,7 +123,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
         return null;
     }
 
-    public File convertHlsToMp4(File m3u8File, ArrayList<File> tsFilesToMerge, String streamId) {
+    public CreateMp4Response convertHlsToMp4(File m3u8File, ArrayList<File> tsFilesToMerge, String streamId) {
         try {
             File tsFileList = writeTsFilePathsToTxt(m3u8File, tsFilesToMerge);
 
@@ -148,7 +149,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
                         vodId
                 );
                 createdMp4Count++;
-                return mp4File;
+                return new CreateMp4Response(mp4File, vodId);
             } else {
                 logger.info("Clip Creator plugin: Could not create MP4 from HLS for stream {}", streamId);
                 return null;
