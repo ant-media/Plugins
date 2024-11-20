@@ -20,7 +20,7 @@ import java.util.ArrayList;
 
 @Component
 @Path("/clip-creator")
-public class RestService {
+public class ClipCreatorRestService {
 
 	@Context
 	protected ServletContext servletContext;
