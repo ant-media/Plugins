@@ -27,9 +27,9 @@ import jakarta.ws.rs.core.UriInfo;
 
 @Component
 @Path("/v1/media-push")
-public class RestService {
+public class MediaPushRestService {
 
-	static Logger log = LoggerFactory.getLogger(RestService.class);
+	static Logger log = LoggerFactory.getLogger(MediaPushRestService.class);
 
 	@Context
 	protected ServletContext servletContext;
