@@ -105,7 +105,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
                     MediaPlaylist playList = readPlaylist(m3u8File);
                     ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, mp4CreationIntervalSeconds, m3u8File);
                     CreateMp4Response createMp4Response = convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
-                    if (createMp4Response.getFile() != null) {
+                    if (createMp4Response != null && createMp4Response.getFile() != null) {
                         logger.info("Clip Creator plugin: MP4 file created successfully from HLS playlist {}", createMp4Response.getFile().getAbsolutePath());
                     }
                 }

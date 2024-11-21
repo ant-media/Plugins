@@ -3,7 +3,7 @@ package io.antmedia.test.rest;
 import io.antmedia.plugin.ClipCreatorPlugin;
 import io.antmedia.plugin.ClipCreatorSettings;
 import io.antmedia.plugin.CreateMp4Response;
-import io.antmedia.rest.RestService;
+import io.antmedia.rest.ClipCreatorRestService;
 import io.antmedia.rest.model.Result;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import jakarta.servlet.ServletContext;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 
 public class RestServiceTest {
 
-    private RestService restService;
+    private ClipCreatorRestService restService;
     private ClipCreatorPlugin clipCreatorPlugin;
     private ServletContext servletContext;
     private ApplicationContext applicationContext;
@@ -45,7 +45,7 @@ public class RestServiceTest {
 
         when(applicationContext.getBean("plugin."+ClipCreatorPlugin.PLUGIN_KEY)).thenReturn(clipCreatorPlugin);
 
-        restService = new RestService();
+        restService = new ClipCreatorRestService();
         restService.setServletContext(servletContext);
     }
 
