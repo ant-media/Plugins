@@ -5,9 +5,12 @@ import io.antmedia.AppSettings;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.RecordMuxer;
+import io.antmedia.plugin.api.IStreamListener;
+import io.antmedia.rest.model.Result;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
+import jakarta.ws.rs.core.Response;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.checkerframework.checker.units.qual.C;
 import org.slf4j.Logger;
@@ -30,7 +33,7 @@ import java.time.OffsetDateTime;
 import java.util.*;
 
 @Component(value = "plugin.clip-creator")
-public class ClipCreatorPlugin implements ApplicationContextAware {
+public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListener {
 
     protected static Logger logger = LoggerFactory.getLogger(ClipCreatorPlugin.class);
 
@@ -66,6 +69,8 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
         dataStore = app.getDataStore();
         appName = app.getScope().getName();
         streamsFolder = IAntMediaStreamHandler.WEBAPPS_PATH + appName + File.separator + "streams";
+
+        app.addStreamListener(this);
 
         loadSettings();
 
@@ -340,4 +345,52 @@ public class ClipCreatorPlugin implements ApplicationContextAware {
         return createdMp4Count;
     }
 
+    @Override
+    public void streamStarted(String streamId) {
+
+    }
+
+    @Override
+    public void streamFinished(String streamId) {
+        File m3u8File = getM3u8File(streamId);
+
+        if (m3u8File == null) {
+            return;
+        }
+
+        Long lastMp4CreateTime = getLastMp4CreateTimeForStream().get(streamId);
+        long now = System.currentTimeMillis();
+        MediaPlaylist playList = readPlaylist(m3u8File);
+        ArrayList<File> tsFilesToMerge = new ArrayList<>();
+
+        if (lastMp4CreateTime == null) {
+            tsFilesToMerge.addAll(getSegmentFilesWithinTimeRange(
+                    playList,
+                    getClipCreatorSettings().getMp4CreationIntervalSeconds(),
+                    m3u8File));
+        } else {
+            tsFilesToMerge.addAll(getSegmentFilesWithinTimeRange(
+                    playList,
+                    lastMp4CreateTime,
+                    now,
+                    m3u8File));
+        }
+
+        if (tsFilesToMerge.isEmpty()) {
+            return;
+        }
+
+       convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
+
+    }
+
+    @Override
+    public void joinedTheRoom(String roomId, String streamId) {
+
+    }
+
+    @Override
+    public void leftTheRoom(String roomId, String streamId) {
+
+    }
 }
