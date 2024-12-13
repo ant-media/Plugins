@@ -1,0 +1,120 @@
+
+name: Ant Media Server Community Edition Test
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'ams-v*'
+  pull_request:
+    branches:
+      - '**'
+  
+env:
+  RUNNER: ubuntu-22.04      
+
+jobs:
+  run-test:
+    runs-on: ubuntu-22.04
+    env:
+      GPG_TTY: ${{ secrets.GPG_TTY }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: https://sonarcloud.io     
+      CI_DEPLOY_USERNAME: ${{ secrets.CI_DEPLOY_USERNAME }}
+      CI_DEPLOY_PASSWORD: ${{ secrets.CI_DEPLOY_PASSWORD }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      
+    steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+            
+        - name: Set up JDK 17
+          uses: actions/setup-java@v4
+          with:
+            distribution: 'adopt' #openjdk
+            java-version: '17'
+            cache: 'maven'
+            gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+
+        - run: sudo apt-get update -qq
+        - run: sudo apt-get install ffmpeg -qq -y
+
+        - name: Build Ant Media Server Parent project
+          run: |
+            git clone --depth=1 -b ${{ github.ref_name }} https://github.com/ant-media/ant-media-server-parent.git || git clone --depth=1 https://github.com/ant-media/ant-media-server-parent.git
+            cd ant-media-server-parent
+            mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
+            cd ..
+
+        - name: Build Ant Media Server project
+          run: |
+             git clone --depth=1 -b ${{ github.ref_name }} https://github.com/ant-media/Ant-Media-Server.git || git clone --depth=1 https://github.com/ant-media/Ant-Media-Server.git
+             cd Ant-Media-Server
+             mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
+             cd ..
+        
+        - name: Get latest snapshot
+          run: | 
+            wget -O maven-metadata.xml https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/ant-media-server/maven-metadata.xml
+            export LATEST_SNAPSHOT=$(grep -o '<version>[^<]*</version>' maven-metadata.xml | tail -n 1 | sed 's/<\/\?version>//g')
+            wget -O ant-media-server-community.zip "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.antmedia&a=ant-media-server&v=${LATEST_SNAPSHOT}&c=community&e=zip"
+
+        - name: Install Ant Media Server
+          run: |
+            wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh -O install_ant-media-server.sh  && chmod 755 install_ant-media-server.sh
+            sudo ./install_ant-media-server.sh -i ant-media-server-community.zip
+            sudo sed -i "/server.cpu_limit=/c\server.cpu_limit=100" /usr/local/antmedia/conf/red5.properties
+            sudo sed -i "/server.memory_limit_percentage=/c\server.memory_limit_percentage=100" /usr/local/antmedia/conf/red5.properties
+            sudo service antmedia restart
+
+        - name: Build and Test Sample Plugin
+          run: |
+            cd SamplePlugin
+            mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+            sudo cp target/PluginApp.jar /usr/local/antmedia/plugins
+            ls /usr/local/antmedia/plugins
+            sudo service antmedia restart
+            sleep 20
+            cd ..
+        
+        - name: Build and Test Media Push Plugin
+          run: |
+            wget -O install_media-push-plugin.sh https://raw.githubusercontent.com/ant-media/Plugins/master/MediaPushPlugin/src/main/script/install_media-push-plugin.sh && chmod 755 install_media-push-plugin.sh
+            sudo ./install_media-push-plugin.sh
+            # remove the current plugin and check that install script downloads the file
+            sudo rm /usr/local/antmedia/plugins/media-push.jar
+            # if it exits with 0, it means that it's installed
+            cd MediaPushPlugin
+            rm  src/main/resources/*.js
+            cd src/main/js
+            npm install
+            npm run build
+            cd ../../..
+            mvn clean install -DskipTests -Dgpg.skip=true --quiet
+            sudo cp target/media-push-plugin.jar /usr/local/antmedia/plugins/
+            ls /usr/local/antmedia/plugins/
+            sudo service antmedia restart
+            sleep 20
+            cat /usr/local/antmedia/log/ant-media-server.log 
+            #sonar project key and organization is defined in pom.xml
+            mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar -DskipTests=false --settings ../mvn-settings.xml --quiet
+            cd ..
+
+        - name: Build and Test Filter Plugin
+          run: |
+            cd FilterPlugin
+            mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar -Dsonar.projectKey=ant-media_plugins --settings ../mvn-settings.xml --quiet
+            cd ..
+        - name: Build and Test Tensorflow Plugin
+          run: |
+            cd TensorflowPlugin
+            mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+            cd ..
+
+        - name: Build and Test ID3 Converter
+          run: |
+                cd ID3Converter
+                mvn clean install -Dgpg.skip=true
+                cd ..
+
