@@ -14,6 +14,8 @@
 	<properties>
         <skipTests>false</skipTests>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<sonar.projectKey>ant-media_plugins</sonar.projectKey>
+		<sonar.organization>ant-media-plugins</sonar.organization>
 	</properties>
 	<developers>
     		<developer>

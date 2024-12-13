@@ -104,7 +104,7 @@ jobs:
         - name: Build and Test Filter Plugin
           run: |
             cd FilterPlugin
-            mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar -Dsonar.projectKey=ant-media_plugins --settings ../mvn-settings.xml --quiet
+            mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar --settings ../mvn-settings.xml --quiet
             cd ..
         - name: Build and Test Tensorflow Plugin
           run: |
