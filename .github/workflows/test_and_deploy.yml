@@ -1,5 +1,5 @@
 
-name: Ant Media Server Community Edition Test
+name:  Plugins Test
 
 on:
   push:
