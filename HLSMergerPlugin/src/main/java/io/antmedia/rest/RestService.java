@@ -37,6 +37,23 @@ public class RestService {
 		}
 		return Response.status(Status.INTERNAL_SERVER_ERROR).entity("").build();
 	}
+	
+	@POST
+	@Path("/addMultipleAudioStreamsTo/{videoStreamId}/{fileName}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Response addMultipleAudio(@PathParam("fileName") String fileName, 
+									  @PathParam("videoStreamId") String videoStreamId, 
+	                                  @Parameter(description = "Audio Stream Ids", required = true) String[] audioStreamIds) {
+	    HLSMergerPlugin app = getPluginApp();
+	    boolean result = app.addMultipleAudioStreams(fileName, videoStreamId, audioStreamIds);
+
+	    if (result) {
+	        return Response.status(Status.OK).entity("").build();
+	    }
+	    return Response.status(Status.INTERNAL_SERVER_ERROR).entity("").build();
+	}
+
 
 	@POST
 	@Path("/stop/{fileName}")

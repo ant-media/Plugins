@@ -100,26 +100,7 @@ public class HLSMergerPlugin implements ApplicationContextAware{
 			}
 		}
 
-		IScope scope = getApplication().getScope();
-		File mergedHLSFile = Muxer.getRecordFile(scope, fileName, ".m3u8.tmp", subfolder);
-		PrintWriter out = null;
-		try {
-			out = new PrintWriter(mergedHLSFile);
-		} catch (FileNotFoundException e) {
-			logger.error(e.getMessage());
-		}
-
-		out.println(streamIdBuilder.toString());
-
-		out.flush();
-		out.close();
-
-		File originalFile = Muxer.getRecordFile(scope, fileName, ".m3u8", subfolder);
-        try {
-            Files.move(mergedHLSFile.toPath(), originalFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-		} catch (IOException e) {
-			logger.error(e.getMessage());
-        }
+		writeHLSFile(fileName, streamIdBuilder.toString(), subfolder);
     }
 
 	public boolean stopMerge(String fileName) {
@@ -129,5 +110,72 @@ public class HLSMergerPlugin implements ApplicationContextAware{
 			mergeTimers.remove(fileName);
 		}
 		return true;
+	}
+
+	public boolean addMultipleAudioStreams(String fileName, String videoStreamId, String[] audioStreamIds) {
+		long hlsMergedFileUpdate = vertx.setPeriodic(5000,h -> addMultipleAudioInternal(fileName, videoStreamId, audioStreamIds));
+		mergeTimers.put(fileName, hlsMergedFileUpdate);
+		return true;
+	}
+	
+	public void addMultipleAudioInternal(String fileName, String videoStreamId, String[] audioStreamIds) {
+		StringBuilder streamBuilder = new StringBuilder();
+		String subfolder = "";
+		streamBuilder.append("#EXTM3U\n");
+
+		// Add audio streams
+		for (String audioStreamId : audioStreamIds) {
+			MuxAdaptor muxAdaptor = getMuxAdaptor(audioStreamId);
+			if (muxAdaptor != null) {
+				subfolder = muxAdaptor.getBroadcast().getSubFolder();
+				streamBuilder.append("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"")
+					.append(audioStreamId)
+					.append("\",DEFAULT=NO,AUTOSELECT=YES,URI=\"")
+					.append(audioStreamId).append(".m3u8\"\n");
+			}
+		}
+
+		// Add video stream with reference to audio group
+		MuxAdaptor videoMuxAdaptor = getMuxAdaptor(videoStreamId);
+		if (videoMuxAdaptor != null) {
+			long bitrate = 0;
+			for (Muxer muxer : videoMuxAdaptor.getMuxerList()) {
+				if (muxer instanceof HLSMuxer) {
+					HLSMuxer hlsMuxer = (HLSMuxer) muxer;
+					bitrate = hlsMuxer.getAverageBitrate();
+				}
+			}
+			int width = videoMuxAdaptor.getWidth();
+			int height = videoMuxAdaptor.getHeight();
+			streamBuilder.append("#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=")
+				.append(bitrate)
+				.append(",RESOLUTION=").append(width).append("x").append(height)
+				.append(",CODECS=\"avc1.42e00a,mp4a.40.2\",AUDIO=\"audio\"\n");
+			streamBuilder.append(videoStreamId).append(".m3u8\n");
+		}
+
+		writeHLSFile(fileName, streamBuilder.toString(), subfolder);
+	}
+
+	public void writeHLSFile(String fileName, String content, String subfolder) {
+		IScope scope = getApplication().getScope();
+		File audioHLSFile = Muxer.getRecordFile(scope, fileName, ".m3u8.tmp", subfolder);
+
+		try (PrintWriter out = new PrintWriter(audioHLSFile)) {
+			out.println(content);
+		} catch (FileNotFoundException e) {
+			logger.error(e.getMessage());
+		}
+
+		File originalFile = Muxer.getRecordFile(scope, fileName, ".m3u8", subfolder);
+		try {
+			Files.move(audioHLSFile.toPath(), originalFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+		} catch (IOException e) {
+			logger.error(e.getMessage());
+		}
+	}
+
+	public ConcurrentHashMap<String, Long> getMergeTimers() {
+		return mergeTimers;
 	}
 }
