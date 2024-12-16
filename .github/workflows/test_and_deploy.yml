@@ -117,4 +117,10 @@ jobs:
                 cd ID3Converter
                 mvn clean install -Dgpg.skip=true
                 cd ..
+                
+        - name: Build and Test HLS Merger
+          run: |
+                cd HLSMergerPlugin
+                mvn clean install -Dgpg.skip=true
+                cd ..
 
