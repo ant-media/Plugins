@@ -65,7 +65,8 @@ script:
 - sudo cp target/media-push-plugin.jar /usr/local/antmedia/plugins/
 - ls /usr/local/antmedia/plugins/
 - sudo service antmedia restart
-- sleep 20
+- sleep 40
+- cat /usr/local/antmedia/log/ant-media-server.log 
 #sonar project key and organization is defined in pom.xml
 - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar -DskipTests=false --settings ../mvn-settings.xml --quiet
 

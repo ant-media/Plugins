@@ -312,11 +312,17 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 				String channelLayoutName = new String(channelLayoutData, 0, length);
 
-				String audioFilterArgs = "channel_layout="+ channelLayoutName +":"
-						+ "sample_fmt="+audioStreamParams.getCodecParameters().format()+":"
+				//When we use channel_layout first in the string, it throws error and I've encountered this problem upgrading to the ffmpeg 7.1.2-1.5.11-SNAPSHOT
+				//I've changed the order of the arguments and it worked. 
+				//I don't have time to understand the cause of this problem. It's at least ok for me if they passed the tests at this stage
+				//I'm just proceeding to handle the other things(spaceport viewer) - mekya - Sep 9, 2024
+				String audioFilterArgs =
+						 "sample_fmt="+audioStreamParams.getCodecParameters().format()+":"
 						+ "time_base="+audioStreamParams.getTimeBase().num()+"/"+audioStreamParams.getTimeBase().den()+":"
-						+ "sample_rate="+audioStreamParams.getCodecParameters().sample_rate();
+						+ "sample_rate="+audioStreamParams.getCodecParameters().sample_rate() + ":"
+						+ "channel_layout="+ channelLayoutName;
 
+				
 				logger.info("Input audio arguments is \"{}\" for filter:{}", audioFilterArgs, filterId);
 
 				if(filterConfiguration.getAudioFilter().contains("["+"in"+i+"]")) {
