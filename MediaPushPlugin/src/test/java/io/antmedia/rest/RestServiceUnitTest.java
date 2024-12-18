@@ -17,7 +17,7 @@ import java.net.URISyntaxException;
 
 public class RestServiceUnitTest {
 
-    private RestService restService;
+    private MediaPushRestService restService;
     private HttpServletRequest httpRequest;
     private UriInfo uriInfo;
     private URI uri;
@@ -27,7 +27,7 @@ public class RestServiceUnitTest {
 
     @Before
     public void setUp() {
-        restService = new RestService();
+        restService = new MediaPushRestService();
         httpRequest = mock(HttpServletRequest.class);
         uriInfo = mock(UriInfo.class);
         uri = mock(URI.class);
