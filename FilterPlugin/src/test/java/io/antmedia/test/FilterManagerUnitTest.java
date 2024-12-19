@@ -10,12 +10,14 @@ import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
 import static org.bytedeco.ffmpeg.global.avutil.av_image_fill_arrays;
 import static org.bytedeco.ffmpeg.global.avutil.av_malloc;
+import static org.bytedeco.ffmpeg.global.avutil.avutil_configuration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
@@ -47,6 +49,7 @@ import com.google.gson.Gson;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.AppSettings;
 import io.antmedia.EncoderSettings;
+import io.antmedia.FFmpegUtilities;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.datastore.db.types.Broadcast;
@@ -59,6 +62,8 @@ import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
 import io.antmedia.rest.model.Result;
 import io.vertx.core.Vertx;
+
+
 
 public class FilterManagerUnitTest {
 
@@ -140,8 +145,8 @@ public class FilterManagerUnitTest {
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
 		dataStore.save(broadcast);
 
-		when(app.createCustomBroadcast("stream2")).thenReturn(Mockito.mock(IFrameListener.class));
-		when(app.createCustomBroadcast("stream3")).thenReturn(Mockito.mock(IFrameListener.class));
+		when(app.createCustomBroadcast("stream2", 720, 1500)).thenReturn(Mockito.mock(IFrameListener.class));
+		when(app.createCustomBroadcast("stream3", 720, 1500)).thenReturn(Mockito.mock(IFrameListener.class));
 		FilterAdaptor filterAdaptor = Mockito.mock(FilterAdaptor.class);
 		Mockito.doReturn(filterAdaptor).when(filtersManager).getFilterAdaptor(Mockito.anyString(), Mockito.anyBoolean());
 		Mockito.when(filterAdaptor.createOrUpdateFilter(Mockito.any(), Mockito.any())).thenReturn(new Result(true));
@@ -168,8 +173,19 @@ public class FilterManagerUnitTest {
 	@Test
 	public void testVirtualBackground() 
 	{
+		//BytePointer conf = avfilter_configuration();
+		//System.out.println(conf.getString());
+		
+		
 		//movie=src/test/resources/background.jpeg[background];[background][in0]chromakey=0x6de61b:0.1:0.2[transparent];
-		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png[background];[in0]chromakey=0x6de61b:0.1:0.2[transparent];[background][transparent]overlay[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
+		
+		//SW
+		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png[background];[in0]chromakey=0x6de61b:1/10:2/10[transparent];[background][transparent]overlay[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
+		
+		//HW - run this on a machine with CUDA
+		//String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png,format=yuv420p[background];[background]hwupload_cuda,scale_npp=w=1280:h=720:format=yuv420p[mask];[in0]hwupload_cuda,scale_npp=w=1280:h=720:format=yuva420p,chromakey_cuda=0x6de61b:1/10:2/10[greenOut];[mask][greenOut]overlay_cuda[overlayed];[overlayed]hwdownload[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
+		
+		 
 		String rawFile = "src/test/resources/green_screen_1280x720.yuv";
 
 		testBugVideoFilterNotWorking(filterString, rawFile, 1280, 720, 100);
@@ -381,7 +397,7 @@ public class FilterManagerUnitTest {
 			}
 		};
 
-		when(app.createCustomBroadcast(Mockito.anyString())).thenReturn(frameListener);
+		when(app.createCustomBroadcast(Mockito.anyString(), anyInt(), anyInt())).thenReturn(frameListener);
 
 		FilterAdaptor filterAdaptor = new FilterAdaptor("filter1", false);
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
@@ -535,7 +551,7 @@ public class FilterManagerUnitTest {
 			}
 		};
 
-		when(app.createCustomBroadcast(Mockito.anyString())).thenReturn(frameListener);
+		when(app.createCustomBroadcast(Mockito.anyString(), anyInt(), anyInt())).thenReturn(frameListener);
 		//async filter
 		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream2\"],\"videoFilter\":\"[in0]vflip[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"asynchronous\"}";
 		Gson gson = new Gson();
