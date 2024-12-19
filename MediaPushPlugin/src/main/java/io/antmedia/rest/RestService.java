@@ -68,6 +68,7 @@ public class RestService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Result stopMediaPush(@PathParam("id") String id) {
 		MediaPushPlugin app = getPluginApp();
+
 		return app.stopMediaPush(id);
 	}
 
