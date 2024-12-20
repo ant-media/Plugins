@@ -1,7 +1,8 @@
 package io.antmedia.rest;
 
+import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.plugin.ClipCreatorPlugin;
-import io.antmedia.plugin.CreateMp4Response;
+import io.antmedia.plugin.Mp4CreationResponse;
 import io.antmedia.rest.model.Result;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import jakarta.servlet.ServletContext;
@@ -30,7 +31,8 @@ public class ClipCreatorRestService {
 	@Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_OCTET_STREAM})
 	public Response createMp4(
 			@PathParam("streamId") String streamId,
-			@QueryParam("returnFile") @DefaultValue("false") boolean returnFile) {
+			@QueryParam("returnFile") @DefaultValue("false") boolean returnFile) 
+	{
 
 		ClipCreatorPlugin app = getPluginApp();
 		File m3u8File = app.getM3u8File(streamId);
@@ -41,31 +43,13 @@ public class ClipCreatorRestService {
 					.build();
 		}
 
-		Long lastMp4CreateTime = app.getLastMp4CreateTimeForStream().get(streamId);
-		long now = System.currentTimeMillis();
-		MediaPlaylist playList = app.readPlaylist(m3u8File);
-		ArrayList<File> tsFilesToMerge = new ArrayList<>();
-
-		if (lastMp4CreateTime == null) {
-			tsFilesToMerge.addAll(app.getSegmentFilesWithinTimeRange(
-					playList,
-					app.getClipCreatorSettings().getMp4CreationIntervalSeconds(),
-					m3u8File));
-		} else {
-			tsFilesToMerge.addAll(app.getSegmentFilesWithinTimeRange(
-					playList,
-					lastMp4CreateTime,
-					now,
-					m3u8File));
-		}
-
-		if (tsFilesToMerge.isEmpty()) {
+		Broadcast broadcast = app.getDataStore().get(streamId);
+		if (broadcast == null) {
 			return Response.status(Status.EXPECTATION_FAILED)
-					.entity(new Result(false, "No HLS playlist segment exists for stream " + streamId + " in this interval."))
-					.build();
+					.entity(new Result(false, "No broadcast exists for stream " + streamId)).build();
 		}
 
-		CreateMp4Response createMp4Response = app.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
+		Mp4CreationResponse createMp4Response = app.convertHlsToMp4(broadcast, false);
 		if (createMp4Response == null) {
 			return Response.status(Status.EXPECTATION_FAILED)
 					.entity(new Result(false, "Could not create MP4 for " + streamId))
@@ -84,33 +68,6 @@ public class ClipCreatorRestService {
 					.build();
 		}
 
-	}
-
-	@POST
-	@Path("/start/{mp4CreationIntervalSeconds}")
-	@Produces(MediaType.APPLICATION_JSON)
-	public Response startPeriodicCreation(@PathParam("mp4CreationIntervalSeconds") int mp4CreationIntervalSeconds) {
-		ClipCreatorPlugin app = getPluginApp();
-		app.startPeriodicCreationTimer(mp4CreationIntervalSeconds);
-		return Response.ok(new Result(true)).build();
-	}
-
-	@POST
-	@Path("/stop")
-	@Produces(MediaType.APPLICATION_JSON)
-	public Response stopPeriodicCreation() {
-		ClipCreatorPlugin app = getPluginApp();
-		app.stopPeriodicCreationTimer();
-		return Response.ok(new Result(true)).build();
-	}
-
-	@POST
-	@Path("/reload")
-	@Produces(MediaType.APPLICATION_JSON)
-	public Response reloadSettings() {
-		ClipCreatorPlugin app = getPluginApp();
-		app.reloadSettings();
-		return Response.ok(new Result(true)).build();
 	}
 
 	private ClipCreatorPlugin getPluginApp() {

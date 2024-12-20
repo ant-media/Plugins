@@ -3,11 +3,12 @@ package io.antmedia.test.plugin;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.AppSettings;
 import io.antmedia.datastore.db.DataStore;
+import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.plugin.ClipCreatorConverter;
 import io.antmedia.plugin.ClipCreatorPlugin;
 import io.antmedia.plugin.ClipCreatorSettings;
-import io.antmedia.plugin.CreateMp4Response;
+import io.antmedia.plugin.Mp4CreationResponse;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
@@ -34,7 +35,8 @@ import static org.mockito.Mockito.*;
 public class ClipCreatorPluginTest {
 
     @Test
-    public void testCreateMp4Periodicly() throws Exception {
+    public void testCreateMp4Periodicly() throws Exception 
+    {
         ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
 
         ApplicationContext context = Mockito.mock(ApplicationContext.class);
@@ -55,93 +57,48 @@ public class ClipCreatorPluginTest {
 
         plugin.setApplicationContext(context);
 
-        verify(plugin, times(1)).loadSettings();
-        verify(plugin, times(1)).startPeriodicCreationTimer(new ClipCreatorSettings().getMp4CreationIntervalSeconds());
-        verify(vertx, times(1)).setPeriodic(anyLong(), any());
-
+        verify(plugin, times(1)).getClipCreatorSettings(appSettings);
+        
+        
         String streamId = "testStream";
 
-        ArrayList<File> m3u8FileList = new ArrayList<>();
+        Broadcast broadcast = new Broadcast();
+        broadcast.setStreamId(streamId);
+        plugin.streamStarted(broadcast);
+        verify(vertx, times(1)).setPeriodic(anyLong(), any());
 
-        File m3u8File = mock(File.class);
+        
+        assertNotNull(plugin.getStreamRecoderTimer().get(streamId));
 
-        when(m3u8File.getPath()).thenReturn("path");
+        
+        plugin.streamFinished(broadcast);
+        
+        
+        verify(vertx, times(1)).cancelTimer(anyLong());
 
-        when(m3u8File.getName()).thenReturn("testStream.m3u8");
-
-        m3u8FileList.add(m3u8File);
-
-        when(plugin.getM3u8FileList()).thenReturn(m3u8FileList);
-
-        Broadcast broadcast = mock(Broadcast.class);
-
-        when(dataStore.get(streamId)).thenReturn(broadcast);
-        when(broadcast.getStatus()).thenReturn(AntMediaApplicationAdapter.BROADCAST_STATUS_BROADCASTING);
-
-        File tsFile = mock(File.class);
-        Path segmentPath = mock(Path.class);
-        when(segmentPath.toFile()).thenReturn(tsFile);
-
-        Path mockPath = mock(Path.class);
-        File parentFile = mock(File.class);
-        MediaPlaylist mockPlaylist = mock(MediaPlaylist.class);
-
-        when(mockPath.resolve(anyString())).thenReturn(segmentPath);
-
-        MediaSegment mockSegment1 = mock(MediaSegment.class);
-        MediaSegment mockSegment2 = mock(MediaSegment.class);
-
-        when(m3u8File.getParentFile()).thenReturn(parentFile);
-        when(parentFile.toPath()).thenReturn(mockPath);
-
-        List<MediaSegment> mediaSegments = new ArrayList<>();
-        mediaSegments.add(mockSegment1);
-        mediaSegments.add(mockSegment2);
-
-        OffsetDateTime now = OffsetDateTime.now();
-        OffsetDateTime pastTime = now.minusSeconds(10);
-
-        when(mockSegment1.programDateTime()).thenReturn(Optional.of(now));
-        when(mockSegment2.programDateTime()).thenReturn(Optional.of(pastTime));
-        when(mockSegment1.uri()).thenReturn("segment1.ts");
-        when(mockSegment2.uri()).thenReturn("segment2.ts");
-
-        when(mockPlaylist.mediaSegments()).thenReturn(mediaSegments);
-
-        when(mockPlaylist.mediaSegments().get(1).programDateTime()).thenReturn(Optional.of(now));
-
-        MediaPlaylistParser mockParser = mock(MediaPlaylistParser.class);
-        plugin.setM3u8Parser(mockParser);  // Set the mock parser directly
-
-        when(plugin.readPlaylist(m3u8File)).thenReturn(mockPlaylist);
-        when(mockParser.readPlaylist(any(Path.class))).thenReturn(mockPlaylist);
-
-
-        when(m3u8File.getAbsolutePath()).thenReturn("testStream.m3u8");
-
-        try (MockedStatic<ClipCreatorConverter> mockedStatic = mockStatic(ClipCreatorConverter.class)) {
-            mockedStatic.when(() -> ClipCreatorConverter.createMp4(any(), anyString())).thenReturn(true);
-            plugin.convertHlsStreamsToMp4(20);
-            assertEquals(1, plugin.getCreatedMp4Count());
-        }
+        
+        verify(vertx, times(1)).setPeriodic(anyLong(), any());
+        assertNull(plugin.getStreamRecoderTimer().get(streamId));
 
     }
 
     @Test
-    public void testConvertHlsToMp4() {
+    public void testConvertHlsToMp4() throws Exception {
         String streamId = "testStream";
         ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
-        File m3u8File = new File("src/test/resources/testStream.m3u8");
-        ArrayList<File> tsFilesToMerge = new ArrayList<>();
-        tsFilesToMerge.add(new File("src/test/resources/testStream000000000.ts"));
-        tsFilesToMerge.add(new File("src/test/resources/testStream000000001.ts"));
-        tsFilesToMerge.add(new File("src/test/resources/testStream000000002.ts"));
-        tsFilesToMerge.add(new File("src/test/resources/testStream000000003.ts"));
+        DataStore dataStore = new InMemoryDataStore("db");
+        plugin.setDataStore(dataStore);
+     
         AntMediaApplicationAdapter mockApplication = mock(AntMediaApplicationAdapter.class);
 
         doReturn(mockApplication).when(plugin).getApplication();
-        doNothing().when(mockApplication).muxingFinished(anyString(), any(), anyLong(), anyLong(), anyInt(), anyString(), anyString());
-        CreateMp4Response createMp4Response = plugin.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId);
+        doNothing().when(mockApplication).muxingFinished(any(), any(), any(), anyLong(), anyLong(), anyInt(), anyString(), anyString());
+        
+        Broadcast broadcast = new Broadcast();
+        broadcast.setStreamId("testStream");
+        plugin.setStreamsFolder("src/test/resources");
+        
+        Mp4CreationResponse createMp4Response = plugin.convertHlsToMp4(broadcast, true);
         assertNotNull(createMp4Response.getFile());
         assertTrue(createMp4Response.getFile().getTotalSpace() > 0);
         assertTrue(createMp4Response.getFile().delete());
@@ -160,16 +117,6 @@ public class ClipCreatorPluginTest {
         assertEquals(3, fileArrayList.size());
     }
 
-    @Test
-    public void testGetSegmentFilesWithinInterval() throws IOException {
-        ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
-        MediaPlaylistParser parser = new MediaPlaylistParser();
-        File m3u8File = new File("src/test/resources/testStream.m3u8");
-        MediaPlaylist mediaPlaylist = parser.readPlaylist(m3u8File.toPath());
-        int intervalSeconds = 3;
-        ArrayList<File> fileArrayList = plugin.getSegmentFilesWithinTimeRange(mediaPlaylist, intervalSeconds, m3u8File);
-        assertEquals(1, fileArrayList.size());
-    }
 
     @Test
     public void testGetM3u8File_Success(){
@@ -190,11 +137,4 @@ public class ClipCreatorPluginTest {
         assertNull(m3u8File);
     }
 
-    @Test
-    public void testGetM3u8FileList(){
-        ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
-        plugin.setStreamsFolder("src/test/resources");
-        ArrayList<File> m3u8FileList = plugin.getM3u8FileList();
-        assertEquals(1, m3u8FileList.size());
-    }
 }

@@ -6,6 +6,7 @@ import io.antmedia.AppSettings;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.User;
 import io.antmedia.datastore.db.types.VoD;
+import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.ClipCreatorPlugin;
 import io.antmedia.plugin.ClipCreatorSettings;
@@ -29,6 +30,7 @@ import org.bytedeco.ffmpeg.avformat.AVFormatContext;
 import org.bytedeco.ffmpeg.avutil.AVDictionary;
 import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.ffmpeg.global.avformat;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -51,6 +53,7 @@ public class ClipCreatorPluginIntegrationTest {
     public static String ffmpegPath = "/usr/bin/ffmpeg";
     public static String appName = "LiveApp";
     private Gson gson = new Gson();
+	private Process rtmpSendingProcess;
     public static String ffprobePath = "/usr/bin/ffprobe";
     private static Process tmpExec;
     public static Logger logger = LoggerFactory.getLogger(ClipCreatorPluginIntegrationTest.class);
@@ -104,6 +107,13 @@ public class ClipCreatorPluginIntegrationTest {
 
 
     }
+    
+    @After
+    public void after() {
+    	if (rtmpSendingProcess != null && rtmpSendingProcess.isAlive()) {
+    		rtmpSendingProcess.destroy();
+    	}
+    }
 
 
     static {
@@ -131,61 +141,74 @@ public class ClipCreatorPluginIntegrationTest {
 
     @Test
     public void testPeriodicMp4Creation() throws Exception {
-        List<VoD> currVoDList = callGetVoDList(0,50);
-        if(!currVoDList.isEmpty()){
+        
+    	//delete all VoDs
+    	List<VoD> currVoDList = callGetVoDList(0,50);
+        while (!currVoDList.isEmpty())
+        {
             String voDIds = currVoDList.stream()
                     .map(VoD::getVodId)
                     .collect(Collectors.joining(","));
             assertTrue(callDeleteVodBulk(voDIds).isSuccess());
+            currVoDList = callGetVoDList(0,50);
         }
-
+        
+        
+        currVoDList = callGetVoDList(0,50);
+        assertTrue(currVoDList.isEmpty());
+        
+        //change settings to event
         AppSettings appSettings = callGetAppSettings(appName);
         appSettings.setHlsPlayListType("event");
+        
+        int mp4CreationIntervalSeconds = 20;
+
+        ClipCreatorSettings clipCreatorSettings = new ClipCreatorSettings();
+        clipCreatorSettings.setMp4CreationIntervalSeconds(mp4CreationIntervalSeconds);
+        appSettings.getCustomSettings().put("plugin."+ClipCreatorPlugin.PLUGIN_KEY, clipCreatorSettings);
 
         assertTrue(callSetAppSettings(appName, appSettings).isSuccess());
+        
 
-
+        //send the stream
         String streamId = "testStream" + RandomStringUtils.randomAlphanumeric(5);
-        Process rtmpSendingProcess = execute(ffmpegPath
+        rtmpSendingProcess = execute(ffmpegPath
                 + " -re -i src/test/resources/test_video_360p.flv  -codec copy -f flv rtmp://localhost/LiveApp/"
                 + streamId);
 
+        //check that it's publishing
         Awaitility.await().atMost(15, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(() -> {
                     Broadcast broadcast = getBroadcast(streamId);
-                    return broadcast != null
-                            && broadcast.getStreamId() != null
-                            && broadcast.getStreamId().contentEquals(streamId);
+                    return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+                           
                 });
 
+        //check that there is a playback url
         Awaitility.await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
             return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + streamId + ".m3u8", 0, false);
         });
 
-        Awaitility.await().atMost(70, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
-            return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + streamId + "000000020.ts", 0, false);
-        });
-
-        int mp4CreationIntervalSeconds = 20;
-        assertTrue(callStartPeriodicCreationTimer(mp4CreationIntervalSeconds).isSuccess());
-
-        Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
+        Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
             List<VoD> voDList = callGetVoDList(0,50);
+            logger.info("VoD List size: {}", voDList.size());
             return voDList != null && voDList.size() == 1;
         });
 
         List<VoD> voDList = callGetVoDList(0,50);
 
         VoD createdMp4VoD = voDList.get(0);
-        long upperBoundary = (mp4CreationIntervalSeconds+7)*1000;
+        long upperBoundary = (mp4CreationIntervalSeconds+5)*1000;
         long lowerBoundary = (mp4CreationIntervalSeconds-5)*1000;
         assertEquals(createdMp4VoD.getStreamId(), streamId);
+        
+        logger.info("duration:{} upperBoundary:{} lower boundary:{} ", createdMp4VoD.getDuration(), upperBoundary, lowerBoundary);
         assertTrue(createdMp4VoD.getDuration() > lowerBoundary && createdMp4VoD.getDuration() < upperBoundary);
         assertTrue(createdMp4VoD.getFileSize() > 0);
 
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
             List<VoD> voDList2 = callGetVoDList(0,50);
             return voDList2 != null && voDList2.size() == 2;
         });
@@ -219,13 +242,19 @@ public class ClipCreatorPluginIntegrationTest {
     public void testRestMp4Creation() throws Exception {
         int mp4CreationIntervalSeconds = 20;
 
-        List<VoD> currVoDList = callGetVoDList(0,50);
-        if(!currVoDList.isEmpty()){
+    	List<VoD> currVoDList = callGetVoDList(0,50);
+        while (!currVoDList.isEmpty())
+        {
             String voDIds = currVoDList.stream()
                     .map(VoD::getVodId)
                     .collect(Collectors.joining(","));
             assertTrue(callDeleteVodBulk(voDIds).isSuccess());
+            currVoDList = callGetVoDList(0,50);
         }
+        
+        
+        currVoDList = callGetVoDList(0,50);
+        assertTrue(currVoDList.isEmpty());
 
         ClipCreatorSettings clipCreatorSettings = new ClipCreatorSettings();
         clipCreatorSettings.setMp4CreationIntervalSeconds(mp4CreationIntervalSeconds);
@@ -235,13 +264,13 @@ public class ClipCreatorPluginIntegrationTest {
         appSettings.setCustomSetting("plugin."+ ClipCreatorPlugin.PLUGIN_KEY, gson.toJson(clipCreatorSettings, ClipCreatorSettings.class));
 
         assertTrue(callSetAppSettings(appName, appSettings).isSuccess());
-        assertTrue(callReloadPluginSettings().isSuccess());
 
         String streamId = "testStream" + RandomStringUtils.randomAlphanumeric(5);
-        Process rtmpSendingProcess = execute(ffmpegPath
+        rtmpSendingProcess = execute(ffmpegPath
                 + " -re -i src/test/resources/test_video_360p.flv  -codec copy -f flv rtmp://localhost/LiveApp/"
                 + streamId);
 
+        long startTime = System.currentTimeMillis();
         Awaitility.await().atMost(15, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(() -> {
@@ -251,6 +280,7 @@ public class ClipCreatorPluginIntegrationTest {
                             && broadcast.getStreamId().contentEquals(streamId);
                 });
 
+       
         Awaitility.await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
             return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + streamId + ".m3u8", 0, false);
         });
@@ -259,18 +289,30 @@ public class ClipCreatorPluginIntegrationTest {
             return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + streamId + "000000020.ts", 0, false);
         });
 
-        File mp4File = callCreateMp4(streamId);
+        long endTime = System.currentTimeMillis();
+        
+        long duration = (endTime - startTime);
+        long expectedDuration = duration %  (mp4CreationIntervalSeconds * 1000);
 
-        assertTrue(mp4File.getTotalSpace() > 0);
+        
+        logger.info("duration:{} last segment expected duration: {}", duration, expectedDuration);
+        File mp4File = callCreateMp4(streamId);
+        
+        
+        assertTrue(testFile(mp4File.getAbsolutePath(), (int)expectedDuration, true));
 
         assertTrue(mp4File.delete());
 
-        List<VoD> voDList = callGetVoDList(0,50);
-
-        VoD createdMp4VoD = voDList.get(0);
-        long upperBoundary = (mp4CreationIntervalSeconds+7)*1000;
-        long lowerBoundary = (mp4CreationIntervalSeconds-5)*1000;
+        List<VoD> voDList = callGetVoDList(0, 50);
+        
+        //get the latest one
+        VoD createdMp4VoD = voDList.get(voDList.size()-1);
+        long upperBoundary = expectedDuration + 2000;
+        long lowerBoundary = expectedDuration - 2000;
         assertEquals(createdMp4VoD.getStreamId(), streamId);
+        
+        logger.info("last mp4 duration:{} and expected duration:{}ms", createdMp4VoD.getDuration(), expectedDuration);
+
         assertTrue(createdMp4VoD.getDuration() > lowerBoundary && createdMp4VoD.getDuration() < upperBoundary);
         assertTrue(createdMp4VoD.getFileSize() > 0);
 
@@ -583,64 +625,8 @@ public class ClipCreatorPluginIntegrationTest {
 
     }
 
-    public static Result callStartPeriodicCreationTimer(int mp4CreationIntervalSeconds) throws Exception {
-        String url = ROOT_SERVICE_URL + "/clip-creator/start/"+ mp4CreationIntervalSeconds ;
-        try (CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy())
-                .setDefaultCookieStore(httpCookieStore).build())
-        {
-            Gson gson = new Gson();
-
-            HttpUriRequest post = RequestBuilder.post().setUri(url).setHeader(HttpHeaders.CONTENT_TYPE, "application/json").build();
-
-            try (CloseableHttpResponse response = client.execute(post)) {
-
-                StringBuffer result = readResponse(response);
-
-                if (response.getStatusLine().getStatusCode() != 200) {
-                    return new Result(false);
-                }
-                logger.info("result string: " + result.toString());
-                Result tmp = gson.fromJson(result.toString(), Result.class);
-                assertNotNull(tmp);
-                return tmp;
-            }catch (Exception e){
-                e.printStackTrace();
-            }
-            return new Result(false);
-        }
-
-    }
-
-    public static Result callReloadPluginSettings() throws Exception {
-        String url = ROOT_SERVICE_URL + "/clip-creator/reload/";
-        try (CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy())
-                .setDefaultCookieStore(httpCookieStore).build())
-        {
-            Gson gson = new Gson();
-
-            HttpUriRequest post = RequestBuilder.post().setUri(url).setHeader(HttpHeaders.CONTENT_TYPE, "application/json").build();
-
-            try (CloseableHttpResponse response = client.execute(post)) {
-
-                StringBuffer result = readResponse(response);
-
-                if (response.getStatusLine().getStatusCode() != 200) {
-                    return new Result(false);
-                }
-                logger.info("result string: " + result.toString());
-                Result tmp = gson.fromJson(result.toString(), Result.class);
-                assertNotNull(tmp);
-                return tmp;
-            }catch (Exception e){
-                e.printStackTrace();
-            }
-            return new Result(false);
-        }
-
-    }
-
     public static File callCreateMp4(String streamId) throws Exception {
-        String url = ROOT_SERVICE_URL + "/clip-creator/mp4/" + streamId;
+        String url = ROOT_SERVICE_URL + "/clip-creator/mp4/" + streamId + "?returnFile=true";
 
         try (CloseableHttpClient client = HttpClients.custom()
                 .setRedirectStrategy(new LaxRedirectStrategy())
@@ -713,7 +699,7 @@ public class ClipCreatorPluginIntegrationTest {
     public static List<VoD> callGetVoDList(int offset, int size) {
         try {
 
-            String url = ROOT_SERVICE_URL + "/v2/vods/list/"+offset+"/" + size;
+            String url = ROOT_SERVICE_URL + "/v2/vods/list/"+offset+"/" + size + "?sort_by=date&order_by=asc";
 
             CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
 

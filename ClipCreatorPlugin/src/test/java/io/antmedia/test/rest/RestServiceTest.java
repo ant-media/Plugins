@@ -2,7 +2,7 @@ package io.antmedia.test.rest;
 
 import io.antmedia.plugin.ClipCreatorPlugin;
 import io.antmedia.plugin.ClipCreatorSettings;
-import io.antmedia.plugin.CreateMp4Response;
+import io.antmedia.plugin.Mp4CreationResponse;
 import io.antmedia.rest.ClipCreatorRestService;
 import io.antmedia.rest.model.Result;
 import io.lindstrom.m3u8.model.MediaPlaylist;
@@ -88,9 +88,9 @@ public class RestServiceTest {
         when(clipCreatorPlugin.getM3u8File(streamId)).thenReturn(m3u8File);
         when(clipCreatorPlugin.getLastMp4CreateTimeForStream()).thenReturn(new HashMap<>());
         when(clipCreatorPlugin.readPlaylist(m3u8File)).thenReturn(mock(MediaPlaylist.class));
-        when(clipCreatorPlugin.getSegmentFilesWithinTimeRange(any(MediaPlaylist.class), anyLong(), eq(m3u8File)))
+        when(clipCreatorPlugin.getSegmentFilesWithinTimeRange(any(MediaPlaylist.class), anyLong(), anyLong(), eq(m3u8File)))
                 .thenReturn(tsFilesToMerge);
-        when(clipCreatorPlugin.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId)).thenReturn(null);
+        when(clipCreatorPlugin.convertHlsToMp4(any(), anyBoolean())).thenReturn(null);
 
         Response response = restService.createMp4(streamId, true);
 
@@ -103,7 +103,7 @@ public class RestServiceTest {
         String streamId = "testStream";
         File m3u8File = new File("test.m3u8");
         File mp4File = new File("output.mp4");
-        CreateMp4Response createMp4Response = mock(CreateMp4Response.class);
+        Mp4CreationResponse createMp4Response = mock(Mp4CreationResponse.class);
         when(createMp4Response.getFile()).thenReturn(mp4File);
 
         ArrayList<File> tsFilesToMerge = new ArrayList<>();
@@ -112,9 +112,9 @@ public class RestServiceTest {
         when(clipCreatorPlugin.getM3u8File(streamId)).thenReturn(m3u8File);
         when(clipCreatorPlugin.getLastMp4CreateTimeForStream()).thenReturn(new HashMap<>());
         when(clipCreatorPlugin.readPlaylist(m3u8File)).thenReturn(mock(MediaPlaylist.class));
-        when(clipCreatorPlugin.getSegmentFilesWithinTimeRange(any(MediaPlaylist.class), anyLong(), eq(m3u8File)))
+        when(clipCreatorPlugin.getSegmentFilesWithinTimeRange(any(MediaPlaylist.class), anyLong(), anyLong(), eq(m3u8File)))
                 .thenReturn(tsFilesToMerge);
-        when(clipCreatorPlugin.convertHlsToMp4(m3u8File, tsFilesToMerge, streamId)).thenReturn(createMp4Response);
+        when(clipCreatorPlugin.convertHlsToMp4(any(), anyBoolean())).thenReturn(createMp4Response);
 
         Response response = restService.createMp4(streamId, true);
 
@@ -138,28 +138,6 @@ public class RestServiceTest {
         response = restService.createMp4(streamId, false);
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
         assertTrue(((Result) response.getEntity()).isSuccess());
-    }
-
-    @Test
-    public void testStartPeriodicCreation() {
-        int mp4CreationIntervalSeconds = 300;
-        Response response = restService.startPeriodicCreation(mp4CreationIntervalSeconds);
-        verify(clipCreatorPlugin, times(1)).startPeriodicCreationTimer(mp4CreationIntervalSeconds);
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-    }
-
-    @Test
-    public void testStopPeriodicCreation() {
-        Response response = restService.stopPeriodicCreation();
-        verify(clipCreatorPlugin, times(1)).stopPeriodicCreationTimer();
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-    }
-
-    @Test
-    public void testReloadSettings() {
-        Response response = restService.reloadSettings();
-        verify(clipCreatorPlugin, times(1)).reloadSettings();
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     }
 
 }

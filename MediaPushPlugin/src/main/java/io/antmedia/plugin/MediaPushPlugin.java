@@ -140,7 +140,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 			}
 			return null;
-		});
+		}, false);
 	}
 
 	private boolean extractFile(ClassLoader classLoader, File parent, String fileName) {

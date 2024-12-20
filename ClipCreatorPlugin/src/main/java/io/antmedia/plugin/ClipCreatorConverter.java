@@ -20,95 +20,106 @@ import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 
 public class ClipCreatorConverter {
 
-    protected static Logger logger = LoggerFactory.getLogger(ClipCreatorConverter.class);
+	public static String ffmpegPath = "ffmpeg";
+	static {
+		String osName = System.getProperty("os.name", "").toLowerCase();
+		if (osName.startsWith("mac os x") || osName.startsWith("darwin")) {
+			ffmpegPath = "/usr/local/bin/ffmpeg";
+		} 
+	}
 
-    public static boolean runCommand(String command) {
+	protected static Logger logger = LoggerFactory.getLogger(ClipCreatorConverter.class);
 
-        boolean result = false;
-        try {
-            Process process = new ProcessBuilder("bash", "-c", command).start();
-            new Thread(() -> {
-                InputStream inputStream = process.getInputStream();
-                byte[] data = new byte[1024];
-                int length;
-                try {
-                    while ((length = inputStream.read(data, 0, data.length)) > 0) {
-                        logger.info(new String(data, 0, length));
-                    }
-                } catch (IOException e) {
-                    logger.error(ExceptionUtils.getStackTrace(e));
-                }
-            }).start();
+	public static boolean runCommand(String command) {
 
-            result = process.waitFor() == 0;
-        } catch (IOException e) {
-            logger.error(ExceptionUtils.getStackTrace(e));
-        } catch (InterruptedException e) {
-            logger.error(ExceptionUtils.getStackTrace(e));
-            Thread.currentThread().interrupt();
-        }
-        return result;
-    }
+		boolean result = false;
 
-    public static void deleteFile(File file) {
-        try {
-            Files.delete(file.toPath());
-        } catch (IOException e) {
-            logger.error(ExceptionUtils.getStackTrace(e));
-        }
-    }
+		try {
+			Process processFinal = new ProcessBuilder("bash", "-c", command).start();
+			new Thread(() -> {
+				InputStream inputStream = processFinal.getErrorStream();
+				byte[] data = new byte[1024];
+				int length;
+				try {
+					while ((length = inputStream.read(data, 0, data.length)) > 0) {
+						logger.info(new String(data, 0, length));
+					}
+				} catch (IOException e) {
+					logger.error(ExceptionUtils.getStackTrace(e));
+				}
+			}).start();
 
-    public static boolean createMp4(File tsFileList, String outputFilePath) {
-        String command = String.format(
-                "ffmpeg -f concat -safe 0 -i %s -c copy -bsf:a aac_adtstoasc %s",
-                tsFileList.getAbsolutePath(),
-                outputFilePath
-        );
+			result = processFinal.waitFor() == 0;
+		} catch (IOException e) {
+			logger.error(ExceptionUtils.getStackTrace(e));
+		} catch (InterruptedException e) {
+			logger.error(ExceptionUtils.getStackTrace(e));
+			Thread.currentThread().interrupt();
+		} 
+		
+		return result;
+	}
 
-        boolean success = runCommand(command);
-        if (success) {
-            deleteFile(tsFileList);
-            return true;
-        }
-        return false;
-    }
+	public static void deleteFile(File file) {
+		try {
+			Files.delete(file.toPath());
+		} catch (IOException e) {
+			logger.error(ExceptionUtils.getStackTrace(e));
+		}
+	}
 
-    public static int getResolutionHeight(String filePath) {
-        AVFormatContext inputFormatContext = avformat.avformat_alloc_context();
+	public static boolean createMp4(File tsFileList, String outputFilePath) {
+		String command = String.format(
+				"%s -f concat -safe 0 -i %s -c copy -bsf:a aac_adtstoasc %s",
+				ffmpegPath,
+				tsFileList.getAbsolutePath(),
+				outputFilePath
+				);
 
-        if (avformat_open_input(inputFormatContext, filePath, null, null) != 0) {
-            logger.error("Failed to open video file {}", filePath);
-            return 0;
-        }
+		boolean success = runCommand(command);
+		if (success) {
+			deleteFile(tsFileList);
+			return true;
+		}
+		return false;
+	}
 
-        if (avformat_find_stream_info(inputFormatContext, (AVDictionary) null) < 0) {
-            logger.error("Failed to retrieve stream info for: {}", filePath);
-            return 0;
-        }
+	public static int getResolutionHeight(String filePath) {
+		AVFormatContext inputFormatContext = avformat.avformat_alloc_context();
 
-        AVCodecContext codecContext = null;
-        int videoStreamIndex = -1;
-        for (int i = 0; i < inputFormatContext.nb_streams(); i++) {
-            AVStream stream = inputFormatContext.streams(i);
-            AVCodec codec = avcodec.avcodec_find_decoder(stream.codecpar().codec_id());
-            if (codec != null && stream.codecpar().codec_type() == AVMEDIA_TYPE_VIDEO) {
-                videoStreamIndex = i;
-                codecContext = avcodec.avcodec_alloc_context3(codec);
-                avcodec.avcodec_parameters_to_context(codecContext, stream.codecpar());
-                break;
-            }
-        }
+		if (avformat_open_input(inputFormatContext, filePath, null, null) != 0) {
+			logger.error("Failed to open video file {}", filePath);
+			return 0;
+		}
 
-        if (videoStreamIndex == -1 || codecContext == null) {
-            logger.error("No video stream found in file {}", filePath);
-            return 0;
-        }
+		if (avformat_find_stream_info(inputFormatContext, (AVDictionary) null) < 0) {
+			logger.error("Failed to retrieve stream info for: {}", filePath);
+			return 0;
+		}
 
-        int height = codecContext.height();
+		AVCodecContext codecContext = null;
+		int videoStreamIndex = -1;
+		for (int i = 0; i < inputFormatContext.nb_streams(); i++) {
+			AVStream stream = inputFormatContext.streams(i);
+			AVCodec codec = avcodec.avcodec_find_decoder(stream.codecpar().codec_id());
+			if (codec != null && stream.codecpar().codec_type() == AVMEDIA_TYPE_VIDEO) {
+				videoStreamIndex = i;
+				codecContext = avcodec.avcodec_alloc_context3(codec);
+				avcodec.avcodec_parameters_to_context(codecContext, stream.codecpar());
+				break;
+			}
+		}
 
-        avformat.avformat_close_input(inputFormatContext);
+		if (videoStreamIndex == -1 || codecContext == null) {
+			logger.error("No video stream found in file {}", filePath);
+			return 0;
+		}
 
-        return height;
-    }
+		int height = codecContext.height();
+
+		avformat.avformat_close_input(inputFormatContext);
+
+		return height;
+	}
 
 }
