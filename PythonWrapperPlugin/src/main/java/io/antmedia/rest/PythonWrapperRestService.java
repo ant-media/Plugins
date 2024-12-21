@@ -18,7 +18,7 @@ import jakarta.ws.rs.core.Response.Status;
 
 @Component
 @Path("/v1/python-wrapper-plugin")
-public class RestService {
+public class PythonWrapperRestService {
 
 	@Context
 	protected ServletContext servletContext;
