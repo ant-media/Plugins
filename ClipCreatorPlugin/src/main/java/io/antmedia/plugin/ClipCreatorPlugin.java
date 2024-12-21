@@ -163,7 +163,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			return getM3u8Parser().readPlaylist(m3u8File.toPath());
 
 		} catch (IOException e) {
-			logger.error("Clip Creator plugin: Could not read playlist file.");
+			logger.error("Could not read playlist file {}", m3u8File.getAbsolutePath());
 		}
 		return null;
 	}
@@ -173,7 +173,16 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		String streamId = broadcast.getStreamId();
 
 		File m3u8File = getM3u8File(streamId);
+		if (m3u8File == null) {
+			logger.error("No m3u8 file found for stream {}", streamId);
+			return null;
+		}
 		MediaPlaylist playList = readPlaylist(m3u8File);
+		
+		if (playList == null) {
+			logger.error("No HLS playlist found for stream {} from the file:{}", streamId, m3u8File.getAbsolutePath());
+			return null;
+		}
 
 		Long startTime = getLastMp4CreateTimeForStream().get(streamId);
 		long endTime = System.currentTimeMillis();
@@ -205,7 +214,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 				if (upateLastMp4CreateTime) {
 					lastMp4CreateTimeMSForStream.put(streamId, endTime);
 				}
-				
 
 				getApplication().muxingFinished(
 						broadcast,
@@ -381,7 +389,10 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		String streamId = broadcast.getStreamId();
 
 		Long timerId = streamRecoderTimer.remove(streamId);
-		vertx.cancelTimer(timerId);
+		if (timerId != null) {
+			//timerId can be null if stream is stopped before it's started
+			vertx.cancelTimer(timerId);
+		}
 		
 		vertx.executeBlocking(() -> {
 			convertHlsToMp4(broadcast, true);
