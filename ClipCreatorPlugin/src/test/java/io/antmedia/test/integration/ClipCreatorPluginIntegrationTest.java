@@ -144,18 +144,18 @@ public class ClipCreatorPluginIntegrationTest {
     public void testPeriodicMp4Creation() throws Exception {
         
     	//delete all VoDs
-    	List<VoD> currVoDList = callGetVoDList(0,50);
+    	List<VoD> currVoDList = callGetVoDList(0,50, null);
         while (!currVoDList.isEmpty())
         {
             String voDIds = currVoDList.stream()
                     .map(VoD::getVodId)
                     .collect(Collectors.joining(","));
             assertTrue(callDeleteVodBulk(voDIds).isSuccess());
-            currVoDList = callGetVoDList(0,50);
+            currVoDList = callGetVoDList(0,50, null);
         }
         
         
-        currVoDList = callGetVoDList(0,50);
+        currVoDList = callGetVoDList(0,50, null);
         assertTrue(currVoDList.isEmpty());
         
         //change settings to event
@@ -202,12 +202,12 @@ public class ClipCreatorPluginIntegrationTest {
         assertTrue(result.isSuccess());
 
         Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
-            List<VoD> voDList = callGetVoDList(0,50);
+            List<VoD> voDList = callGetVoDList(0,50, streamId);
             logger.info("VoD List size: {}", voDList.size());
             return voDList != null && voDList.size() == 1;
         });
 
-        List<VoD> voDList = callGetVoDList(0,50);
+        List<VoD> voDList = callGetVoDList(0,50, streamId);
 
         VoD createdMp4VoD = voDList.get(0);
         long upperBoundary = (mp4CreationIntervalSeconds+5)*1000;
@@ -236,11 +236,11 @@ public class ClipCreatorPluginIntegrationTest {
 
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
-            List<VoD> voDList2 = callGetVoDList(0,50);
+            List<VoD> voDList2 = callGetVoDList(0,50, streamId);
             return voDList2 != null && voDList2.size() == 2;
         });
 
-        voDList = callGetVoDList(0,50);
+        voDList = callGetVoDList(0,50, streamId);
 
         createdMp4VoD = voDList.get(1);
 
@@ -255,11 +255,11 @@ public class ClipCreatorPluginIntegrationTest {
         assertEquals(metadata, createdMp4VoD.getMetadata());
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
-            List<VoD> voDList2 = callGetVoDList(0,50);
+            List<VoD> voDList2 = callGetVoDList(0,50, streamId);
             return voDList2 != null && voDList2.size() == 3;
         });
 
-        voDList = callGetVoDList(0,50);
+        voDList = callGetVoDList(0,50, streamId);
 
         createdMp4VoD = voDList.get(2);
 
@@ -272,7 +272,7 @@ public class ClipCreatorPluginIntegrationTest {
         rtmpSendingProcess.destroy();
         
         Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
-            List<VoD> voDList2 = callGetVoDList(0,50);
+            List<VoD> voDList2 = callGetVoDList(0,50, streamId);
             return voDList2 != null && voDList2.size() == vodListSize + 1;
         });
         
@@ -283,18 +283,18 @@ public class ClipCreatorPluginIntegrationTest {
     public void testRestMp4Creation() throws Exception {
         int mp4CreationIntervalSeconds = 15;
 
-    	List<VoD> currVoDList = callGetVoDList(0,50);
+    	List<VoD> currVoDList = callGetVoDList(0,50, null);
         while (!currVoDList.isEmpty())
         {
             String voDIds = currVoDList.stream()
                     .map(VoD::getVodId)
                     .collect(Collectors.joining(","));
             assertTrue(callDeleteVodBulk(voDIds).isSuccess());
-            currVoDList = callGetVoDList(0,50);
+            currVoDList = callGetVoDList(0,50, null);
         }
         
         
-        currVoDList = callGetVoDList(0,50);
+        currVoDList = callGetVoDList(0,50, null);
         assertTrue(currVoDList.isEmpty());
 
         ClipCreatorSettings clipCreatorSettings = new ClipCreatorSettings();
@@ -349,12 +349,12 @@ public class ClipCreatorPluginIntegrationTest {
         });
 
         Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
-            List<VoD> voDList = callGetVoDList(0,50);
+            List<VoD> voDList = callGetVoDList(0,50, streamId);
             logger.info("VoD List size: {}", voDList.size());
             return voDList != null && voDList.size() == 1;
         });
         
-        List<VoD> voDList = callGetVoDList(0,50);
+        List<VoD> voDList = callGetVoDList(0,50, streamId);
 
         VoD createdMp4VoD = voDList.get(0);
 
@@ -372,7 +372,7 @@ public class ClipCreatorPluginIntegrationTest {
         assertEquals(metadata, createdMp4VoD.getMetadata());
         
         Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
-            List<VoD> voDListLocal = callGetVoDList(0,50);
+            List<VoD> voDListLocal = callGetVoDList(0,50, streamId);
             logger.info("VoD List size: {}", voDListLocal.size());
             return voDListLocal != null && voDListLocal.size() == 2;
         });
@@ -392,7 +392,7 @@ public class ClipCreatorPluginIntegrationTest {
 
         assertTrue(mp4File.delete());
 
-       voDList = callGetVoDList(0, 50);
+       voDList = callGetVoDList(0, 50, streamId);
        
        
         
@@ -431,12 +431,12 @@ public class ClipCreatorPluginIntegrationTest {
         
         
         Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
-            List<VoD> voDListLocal = callGetVoDList(0,50);
+            List<VoD> voDListLocal = callGetVoDList(0,50, streamId);
             logger.info("VoD List size: {}", voDListLocal.size());
             return voDListLocal != null && voDListLocal.size() == lastVoDCount + 1;
         });
         
-        voDList = callGetVoDList(0, 50);
+        voDList = callGetVoDList(0, 50, streamId);
         
         //get the latest one
         createdMp4VoD = voDList.get(voDList.size()-1);
@@ -825,10 +825,10 @@ public class ClipCreatorPluginIntegrationTest {
     }
 
 
-    public static List<VoD> callGetVoDList(int offset, int size) {
+    public static List<VoD> callGetVoDList(int offset, int size, String streamId) {
         try {
 
-            String url = ROOT_SERVICE_URL + "/v2/vods/list/"+offset+"/" + size + "?sort_by=date&order_by=asc";
+            String url = ROOT_SERVICE_URL + "/v2/vods/list/"+offset+"/" + size + "?sort_by=date&order_by=asc" + (streamId != null ? "&streamId=" : "");
 
             CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
 
