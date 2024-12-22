@@ -281,7 +281,7 @@ public class ClipCreatorPluginIntegrationTest {
 
     @Test
     public void testRestMp4Creation() throws Exception {
-        int mp4CreationIntervalSeconds = 15;
+        int mp4CreationIntervalSeconds = 12;
 
     	List<VoD> currVoDList = callGetVoDList(0,50, null);
         while (!currVoDList.isEmpty())
