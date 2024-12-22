@@ -117,7 +117,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 					filterConfiguration.setOutputStreams(outputStreams);
 					filterConfiguration.setVideoFilter(MCUFilterTextGenerator.createVideoFilter(streams.size()));
 					filterConfiguration.setAudioFilter(MCUFilterTextGenerator.createAudioFilter(streams.size()));
-					filterConfiguration.setVideoEnabled(!room.getConferenceMode().equals(WebSocketConstants.AMCU));
+					filterConfiguration.setVideoEnabled(!WebSocketConstants.AMCU.equals(room.getConferenceMode()));
 					filterConfiguration.setAudioEnabled(true);
 					filterConfiguration.setType(pluginType);
 	
@@ -155,15 +155,17 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	private void roomHasChange(String roomId) {
 		DataStore datastore = getApplication().getDataStore();
-		Broadcast room = datastore.get(roomId);	
-		if ((room == null || room.getConferenceMode().equals(WebSocketConstants.MCU)
-				|| room.getConferenceMode().equals(WebSocketConstants.AMCU)
-				|| customRooms.contains(roomId)) 
-				&& !conferenceRoomsUpdated.contains(roomId)) 
+		Broadcast room = datastore.get(roomId);
+
+		if ((room == null || WebSocketConstants.MCU.equals(room.getConferenceMode())
+				|| WebSocketConstants.AMCU.equals(room.getConferenceMode())
+				|| customRooms.contains(roomId))
+				&& !conferenceRoomsUpdated.contains(roomId))
 		{
-			conferenceRoomsUpdated.add(roomId); 
+			conferenceRoomsUpdated.add(roomId);
 		}
 	}
+
 
 	@Override
 	public void joinedTheRoom(String roomId, String streamId) {
