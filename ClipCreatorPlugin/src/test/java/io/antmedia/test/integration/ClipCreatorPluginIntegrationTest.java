@@ -267,8 +267,16 @@ public class ClipCreatorPluginIntegrationTest {
         assertTrue(createdMp4VoD.getDuration() > lowerBoundary && createdMp4VoD.getDuration() < upperBoundary);
         assertTrue(createdMp4VoD.getFileSize() > 0);
 
+        long vodListSize = voDList.size();
 
         rtmpSendingProcess.destroy();
+        
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
+            List<VoD> voDList2 = callGetVoDList(0,50);
+            return voDList2 != null && voDList2.size() == vodListSize + 1;
+        });
+        
+        
     }
 
     @Test
