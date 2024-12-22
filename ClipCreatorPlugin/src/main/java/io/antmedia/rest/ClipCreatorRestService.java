@@ -34,36 +34,30 @@ public class ClipCreatorRestService {
 			@QueryParam("returnFile") @DefaultValue("false") boolean returnFile) 
 	{
 
-		ClipCreatorPlugin app = getPluginApp();
-		File m3u8File = app.getM3u8File(streamId);
+		
+		ClipCreatorPlugin clipCreator = getPluginApp();
 
-		if (m3u8File == null) {
-			return Response.status(Status.EXPECTATION_FAILED)
-					.entity(new Result(false, "No m3u8 HLS playlist exists for stream " + streamId))
-					.build();
-		}
-
-		Broadcast broadcast = app.getDataStore().get(streamId);
+		Broadcast broadcast = clipCreator.getDataStore().get(streamId);
 		if (broadcast == null) {
 			return Response.status(Status.EXPECTATION_FAILED)
 					.entity(new Result(false, "No broadcast exists for stream " + streamId)).build();
 		}
 
-		Mp4CreationResponse createMp4Response = app.convertHlsToMp4(broadcast, false);
-		if (createMp4Response == null) {
+		Mp4CreationResponse response = clipCreator.convertHlsToMp4(broadcast, false);
+		if (response == null || !response.isSuccess()) {
 			return Response.status(Status.EXPECTATION_FAILED)
-					.entity(new Result(false, "Could not create MP4 for " + streamId))
+					.entity(new Result(false, response != null ? response.getMessage() : "Mp4 creation failed"))
 					.build();
 		}
 
 		if (returnFile) {
-			return Response.ok(createMp4Response.getFile())
-					.header("Content-Disposition", "attachment; filename=\"" + createMp4Response.getFile().getName() + "\"")
-					.header("X-vodId", createMp4Response.getVodId())
+			return Response.ok(response.getFile())
+					.header("Content-Disposition", "attachment; filename=\"" + response.getFile().getName() + "\"")
+					.header("X-vodId", response.getVodId())
 					.build();
 		} else {
 			Result result = new Result(true,  "MP4 created successfully for stream " + streamId);
-			result.setDataId(createMp4Response.getVodId());
+			result.setDataId(response.getVodId());
 			return Response.ok(result)
 					.build();
 		}

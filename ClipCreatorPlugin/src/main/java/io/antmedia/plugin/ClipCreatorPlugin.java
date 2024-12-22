@@ -12,6 +12,8 @@ import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
 import jakarta.ws.rs.core.Response;
+
+import org.apache.commons.collections.functors.NullIsExceptionPredicate;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.checkerframework.checker.units.qual.C;
 import org.slf4j.Logger;
@@ -170,18 +172,22 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 	public Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean upateLastMp4CreateTime) {
 
+		Mp4CreationResponse response = new Mp4CreationResponse();
 		String streamId = broadcast.getStreamId();
 
 		File m3u8File = getM3u8File(streamId);
 		if (m3u8File == null) {
 			logger.error("No m3u8 file found for stream {}", streamId);
-			return null;
+			response.setMessage("No m3u8 file found for stream " + streamId);
+			return response;
 		}
 		MediaPlaylist playList = readPlaylist(m3u8File);
 		
 		if (playList == null) {
 			logger.error("No HLS playlist found for stream {} from the file:{}", streamId, m3u8File.getAbsolutePath());
-			return null;
+			
+			response.setMessage("No HLS playlist found for stream " + streamId);
+			return response;
 		}
 
 		Long startTime = getLastMp4CreateTimeForStream().get(streamId);
@@ -191,10 +197,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			startTime = 0L;
 		}
 		
-		ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, startTime, endTime, m3u8File);
-
-		Mp4CreationResponse response = null;
-		
+		ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, startTime, endTime, m3u8File);		
 		
 		try {
 			File tsFileListTextFile = writeTsFilePathsToTxt(m3u8File, tsFilesToMerge);
@@ -227,11 +230,15 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 						);
 				createdMp4Count++;
 				response = new Mp4CreationResponse(mp4File, vodId);
+				response.setSuccess(true);
 			} else {
 				logger.info("Could not create MP4 from HLS for stream {}", streamId);
+				response.setMessage("Could not create MP4 from HLS for stream " + streamId);
+
 			}
 		} catch (IOException e) {
 			logger.error("Error occurred while converting Clip Creator for stream {}: {}", streamId, e.getMessage());
+			response.setMessage("Error occurred while converting Clip Creator for stream " + streamId);
 		}
 
 		return response;
