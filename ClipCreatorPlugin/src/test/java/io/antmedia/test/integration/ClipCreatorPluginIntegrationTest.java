@@ -6,6 +6,7 @@ import io.antmedia.AppSettings;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.User;
 import io.antmedia.datastore.db.types.VoD;
+import io.antmedia.datastore.db.types.Broadcast.PlayListItem;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.ClipCreatorPlugin;
@@ -189,6 +190,16 @@ public class ClipCreatorPluginIntegrationTest {
         Awaitility.await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
             return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + streamId + ".m3u8", 0, false);
         });
+        
+        String name = "testStream";
+        String description = "testDescription";
+        String latidue = "41.0825";
+        String longitude = "29.0093";
+        String altitude = "100";
+        String metadata = "metadata";
+        
+        Result result = callUpdateBroadcast(streamId,  name, description, latidue, longitude, altitude, metadata);
+        assertTrue(result.isSuccess());
 
         Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
             List<VoD> voDList = callGetVoDList(0,50);
@@ -206,6 +217,22 @@ public class ClipCreatorPluginIntegrationTest {
         logger.info("duration:{} upperBoundary:{} lower boundary:{} ", createdMp4VoD.getDuration(), upperBoundary, lowerBoundary);
         assertTrue(createdMp4VoD.getDuration() > lowerBoundary && createdMp4VoD.getDuration() < upperBoundary);
         assertTrue(createdMp4VoD.getFileSize() > 0);
+        assertTrue(createdMp4VoD.getStreamName().startsWith(name));
+        assertEquals(description, createdMp4VoD.getDescription());
+        assertEquals(latidue, createdMp4VoD.getLatitude());
+        assertEquals(longitude, createdMp4VoD.getLongitude());
+        assertEquals(altitude, createdMp4VoD.getAltitude());
+        assertEquals(metadata, createdMp4VoD.getMetadata());
+        
+        name = "testStreamUpdate";
+        description = "testDescriptiontestStreamUpdate";
+        latidue = "41.0825testStreamUpdate";
+        longitude = "29.0093testStreamUpdate";
+        altitude = "100testStreamUpdate";
+        metadata = "metadatatestStreamUpdate";
+        
+        result = callUpdateBroadcast(streamId,  name, description, latidue, longitude, altitude, metadata);
+        assertTrue(result.isSuccess());
 
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
@@ -220,6 +247,12 @@ public class ClipCreatorPluginIntegrationTest {
         assertEquals(createdMp4VoD.getStreamId(), streamId);
         assertTrue(createdMp4VoD.getDuration() > lowerBoundary && createdMp4VoD.getDuration() < upperBoundary);
         assertTrue(createdMp4VoD.getFileSize() > 0);
+        assertTrue(createdMp4VoD.getStreamName().startsWith(name));
+        assertEquals(description, createdMp4VoD.getDescription());
+        assertEquals(latidue, createdMp4VoD.getLatitude());
+        assertEquals(longitude, createdMp4VoD.getLongitude());
+        assertEquals(altitude, createdMp4VoD.getAltitude());
+        assertEquals(metadata, createdMp4VoD.getMetadata());
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
             List<VoD> voDList2 = callGetVoDList(0,50);
@@ -240,7 +273,7 @@ public class ClipCreatorPluginIntegrationTest {
 
     @Test
     public void testRestMp4Creation() throws Exception {
-        int mp4CreationIntervalSeconds = 20;
+        int mp4CreationIntervalSeconds = 15;
 
     	List<VoD> currVoDList = callGetVoDList(0,50);
         while (!currVoDList.isEmpty())
@@ -264,8 +297,30 @@ public class ClipCreatorPluginIntegrationTest {
         appSettings.setCustomSetting("plugin."+ ClipCreatorPlugin.PLUGIN_KEY, gson.toJson(clipCreatorSettings, ClipCreatorSettings.class));
 
         assertTrue(callSetAppSettings(appName, appSettings).isSuccess());
-
         String streamId = "testStream" + RandomStringUtils.randomAlphanumeric(5);
+
+        Broadcast broadcast = new Broadcast();
+        broadcast.setStreamId(streamId);
+        
+        String name = "testStream";
+        String description = "testDescription";
+        String latidue = "41.0825";
+        String longitude = "29.0093";
+        String altitude = "100";
+        String metadata = "metadata";
+        
+        broadcast.setName(name);
+        broadcast.setDescription(description);
+        broadcast.setLatitude(latidue);
+        broadcast.setLongitude(longitude);
+        broadcast.setAltitude(altitude);
+        broadcast.setMetaData(metadata);
+        
+        
+        Broadcast callCreateBroadcast = callCreateBroadcast(broadcast);
+        assertNotNull(callCreateBroadcast);
+
+        
         rtmpSendingProcess = execute(ffmpegPath
                 + " -re -i src/test/resources/test_video_360p.flv  -codec copy -f flv rtmp://localhost/LiveApp/"
                 + streamId);
@@ -274,10 +329,10 @@ public class ClipCreatorPluginIntegrationTest {
         Awaitility.await().atMost(15, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(() -> {
-                    Broadcast broadcast = getBroadcast(streamId);
-                    return broadcast != null
-                            && broadcast.getStreamId() != null
-                            && broadcast.getStreamId().contentEquals(streamId);
+                    Broadcast broadcastLocal = getBroadcast(streamId);
+                    return broadcastLocal != null
+                            && broadcastLocal.getStreamId() != null
+                            && broadcastLocal.getStreamId().contentEquals(streamId);
                 });
 
        
@@ -285,9 +340,35 @@ public class ClipCreatorPluginIntegrationTest {
             return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + streamId + ".m3u8", 0, false);
         });
 
-        Awaitility.await().atMost(70, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
-            return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + streamId + "000000020.ts", 0, false);
+        Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
+            List<VoD> voDList = callGetVoDList(0,50);
+            logger.info("VoD List size: {}", voDList.size());
+            return voDList != null && voDList.size() == 1;
         });
+        
+        List<VoD> voDList = callGetVoDList(0,50);
+
+        VoD createdMp4VoD = voDList.get(0);
+
+        long upperBoundary = mp4CreationIntervalSeconds * 1000 + 2000;
+        long lowerBoundary = mp4CreationIntervalSeconds * 1000 - 2000;
+        
+        assertEquals(createdMp4VoD.getStreamId(), streamId);
+        assertTrue(createdMp4VoD.getDuration() > lowerBoundary && createdMp4VoD.getDuration() < upperBoundary);
+        assertTrue(createdMp4VoD.getFileSize() > 0);
+        assertTrue(createdMp4VoD.getStreamName().startsWith(name));
+        assertEquals(description, createdMp4VoD.getDescription());
+        assertEquals(latidue, createdMp4VoD.getLatitude());
+        assertEquals(longitude, createdMp4VoD.getLongitude());
+        assertEquals(altitude, createdMp4VoD.getAltitude());
+        assertEquals(metadata, createdMp4VoD.getMetadata());
+        
+        Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(10, TimeUnit.SECONDS).until(() -> {
+            List<VoD> voDListLocal = callGetVoDList(0,50);
+            logger.info("VoD List size: {}", voDListLocal.size());
+            return voDListLocal != null && voDListLocal.size() == 2;
+        });
+        
 
         long endTime = System.currentTimeMillis();
         
@@ -303,20 +384,60 @@ public class ClipCreatorPluginIntegrationTest {
 
         assertTrue(mp4File.delete());
 
-        List<VoD> voDList = callGetVoDList(0, 50);
+       voDList = callGetVoDList(0, 50);
+       
+       
         
         //get the latest one
-        VoD createdMp4VoD = voDList.get(voDList.size()-1);
-        long upperBoundary = expectedDuration + 2000;
-        long lowerBoundary = expectedDuration - 2000;
+        createdMp4VoD = voDList.get(voDList.size()-1);
+        upperBoundary = expectedDuration + 2000;
+        lowerBoundary = expectedDuration - 2000;
         assertEquals(createdMp4VoD.getStreamId(), streamId);
         
         logger.info("last mp4 duration:{} and expected duration:{}ms", createdMp4VoD.getDuration(), expectedDuration);
 
         assertTrue(createdMp4VoD.getDuration() > lowerBoundary && createdMp4VoD.getDuration() < upperBoundary);
         assertTrue(createdMp4VoD.getFileSize() > 0);
+        assertTrue(createdMp4VoD.getStreamName().startsWith(name));
+        assertEquals(description, createdMp4VoD.getDescription());
+        assertEquals(latidue, createdMp4VoD.getLatitude());
+        assertEquals(longitude, createdMp4VoD.getLongitude());
+        assertEquals(altitude, createdMp4VoD.getAltitude());
+        assertEquals(metadata, createdMp4VoD.getMetadata());
 
+        
+        
+        name = "testStreamUpdate";
+        description = "testDescriptiontestStreamUpdate";
+        latidue = "41.0825testStreamUpdate";
+        longitude = "29.0093testStreamUpdate";
+        altitude = "100testStreamUpdate";
+        metadata = "metadatatestStreamUpdate";
+        
+        Result result = callUpdateBroadcast(streamId,  name, description, latidue, longitude, altitude, metadata);
+        assertTrue(result.isSuccess());
+        
+        int lastVoDCount = voDList.size();
+        
         rtmpSendingProcess.destroy();
+        
+        
+        Awaitility.await().atMost(40, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
+            List<VoD> voDListLocal = callGetVoDList(0,50);
+            logger.info("VoD List size: {}", voDListLocal.size());
+            return voDListLocal != null && voDListLocal.size() == lastVoDCount + 1;
+        });
+        
+        voDList = callGetVoDList(0, 50);
+        
+        //get the latest one
+        createdMp4VoD = voDList.get(voDList.size()-1);
+        assertEquals(description, createdMp4VoD.getDescription());
+        assertEquals(latidue, createdMp4VoD.getLatitude());
+        assertEquals(longitude, createdMp4VoD.getLongitude());
+        assertEquals(altitude, createdMp4VoD.getAltitude());
+        assertEquals(metadata, createdMp4VoD.getMetadata());
+
 
 
     }
@@ -726,6 +847,75 @@ public class ClipCreatorPluginIntegrationTest {
         }
         return null;
     }
+    
+    public static Result callUpdateBroadcast(String id, String name, String description, String lat, String longitude, String altidue, String metadata) {
+		String url = ROOT_SERVICE_URL + "/v2/broadcasts/" + id;
+
+		HttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
+		Broadcast broadcast = new Broadcast();
+		try {
+			broadcast.setStreamId(id);
+		} catch (Exception e1) {
+			e1.printStackTrace();
+			fail(e1.getMessage());
+		}
+		broadcast.setName(name);
+		broadcast.setDescription(description);
+		broadcast.setLatitude(lat);
+		broadcast.setLongitude(longitude);
+		broadcast.setAltitude(altidue);
+		broadcast.setMetaData(metadata);
+		
+
+		try {
+			Gson gson = new Gson();
+			HttpUriRequest post = RequestBuilder.put().setUri(url)
+					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+					.setEntity(new StringEntity(gson.toJson(broadcast))).build();
+
+			HttpResponse response = client.execute(post);
+
+			StringBuffer result = readResponse(response);
+
+			if (response.getStatusLine().getStatusCode() != 200) {
+				throw new Exception(result.toString());
+			}
+			System.out.println("result string: " + result.toString());
+			Result tmp = gson.fromJson(result.toString(), Result.class);
+
+			return tmp;
+		} catch (Exception e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+		}
+		return null;
+	}
+    
+    public static Broadcast callCreateBroadcast(Broadcast broadcast) throws Exception {
+
+		String url = ROOT_SERVICE_URL + "/v2/broadcasts/create";
+
+		HttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
+		Gson gson = new Gson();
+
+		HttpUriRequest post = RequestBuilder.post().setUri(url).setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+				.setEntity(new StringEntity(gson.toJson(broadcast))).build();
+
+		HttpResponse response = client.execute(post);
+
+		StringBuffer result = readResponse(response);
+
+		if (response.getStatusLine().getStatusCode() != 200) {
+			throw new Exception(result.toString());
+		}
+		System.out.println("result string: " + result.toString());
+		Broadcast tmp = gson.fromJson(result.toString(), Broadcast.class);
+		assertNotNull(tmp);
+		assertNotSame(0L, tmp.getDate());
+
+		return tmp;
+
+	}
 
 
 }
