@@ -43,6 +43,7 @@ import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.RecordType;
+import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.model.Endpoint;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
@@ -467,6 +468,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	}
 
 	@Override
+	@SuppressWarnings("java:S5738")
 	public void streamStarted(String streamId) 
 	{
 		if (recordingMap.containsKey(streamId)) 
@@ -474,8 +476,10 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			getApplication().getMuxAdaptor(streamId).startRecording(recordingMap.get(streamId), 0);
 		}
 	}
+		
 
 	@Override
+	@SuppressWarnings("java:S5738")
 	public void streamFinished(String streamId) {
 		WebDriver driver = drivers.remove(streamId);
 		recordingMap.remove(streamId);
