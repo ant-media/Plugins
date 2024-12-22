@@ -85,7 +85,7 @@ jobs:
             sudo cp target/clip-creator.jar /usr/local/antmedia/plugins
             ls /usr/local/antmedia/plugins
             sudo service antmedia restart
-            mvn test 
+            mvn test -DskipTests=false --quiet
             popd
         
         - name: Build and Test Media Push Plugin
