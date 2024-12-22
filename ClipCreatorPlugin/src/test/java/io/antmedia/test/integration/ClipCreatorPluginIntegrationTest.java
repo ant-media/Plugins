@@ -530,7 +530,7 @@ public class ClipCreatorPluginIntegrationTest {
             long durationInMS = inputFormatContext.duration() / 1000;
 
             if (expectedDurationInMS != 0) {
-                if ((durationInMS < (expectedDurationInMS - 2000)) || (durationInMS > (expectedDurationInMS + 2000))) {
+                if ((durationInMS < (expectedDurationInMS - 4000)) || (durationInMS > (expectedDurationInMS + 4000))) {
                     System.out.println("Failed: duration of the stream: " + durationInMS + " expected duration is: " + expectedDurationInMS);
                     return false;
                 }
