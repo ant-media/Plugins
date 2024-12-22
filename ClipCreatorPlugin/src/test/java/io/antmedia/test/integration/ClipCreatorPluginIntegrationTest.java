@@ -281,7 +281,7 @@ public class ClipCreatorPluginIntegrationTest {
 
     @Test
     public void testRestMp4Creation() throws Exception {
-        int mp4CreationIntervalSeconds = 12;
+        int mp4CreationIntervalSeconds = 25;
 
     	List<VoD> currVoDList = callGetVoDList(0,50, null);
         while (!currVoDList.isEmpty())
@@ -377,7 +377,9 @@ public class ClipCreatorPluginIntegrationTest {
             return voDListLocal != null && voDListLocal.size() == 2;
         });
         
-
+        
+        Awaitility.await().atMost(6, TimeUnit.SECONDS).pollDelay(5, TimeUnit.SECONDS).until(() -> true);
+        
         long endTime = System.currentTimeMillis();
         
         long duration = (endTime - startTime);

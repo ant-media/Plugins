@@ -197,9 +197,18 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			startTime = 0L;
 		}
 		
-		ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, startTime, endTime, m3u8File);		
+		ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, startTime, endTime, m3u8File);
+		
+		if (tsFilesToMerge.size() == 0) {
+			logger.info("No segment file found for stream {} between {} and {}", streamId,
+					dateFormat.format(new Date(startTime)), dateFormat.format(new Date(endTime)));
+			response.setMessage("No segment file found for stream " + streamId + " between "
+					+ dateFormat.format(new Date(startTime)) + " and " + dateFormat.format(new Date(endTime)));
+			return response;
+		}
 		
 		try {
+			logger.info("number of ts files: {} for streamId:{}", tsFilesToMerge.size(), streamId);
 			File tsFileListTextFile = writeTsFilePathsToTxt(m3u8File, tsFilesToMerge);
 
 			String vodId = RandomStringUtils.randomNumeric(24);
