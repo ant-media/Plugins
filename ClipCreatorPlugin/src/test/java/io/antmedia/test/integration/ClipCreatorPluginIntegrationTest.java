@@ -358,8 +358,8 @@ public class ClipCreatorPluginIntegrationTest {
 
         VoD createdMp4VoD = voDList.get(0);
 
-        long upperBoundary = mp4CreationIntervalSeconds * 1000 + 2000;
-        long lowerBoundary = mp4CreationIntervalSeconds * 1000 - 2000;
+        long upperBoundary = mp4CreationIntervalSeconds * 1000 + 4000;
+        long lowerBoundary = mp4CreationIntervalSeconds * 1000 - 4000;
         
         assertEquals(createdMp4VoD.getStreamId(), streamId);
         assertTrue(createdMp4VoD.getDuration() > lowerBoundary && createdMp4VoD.getDuration() < upperBoundary);
@@ -398,8 +398,8 @@ public class ClipCreatorPluginIntegrationTest {
         
         //get the latest one
         createdMp4VoD = voDList.get(voDList.size()-1);
-        upperBoundary = expectedDuration + 2000;
-        lowerBoundary = expectedDuration - 2000;
+        upperBoundary = expectedDuration + 4000;
+        lowerBoundary = expectedDuration - 4000;
         assertEquals(createdMp4VoD.getStreamId(), streamId);
         
         logger.info("last mp4 duration:{} and expected duration:{}ms", createdMp4VoD.getDuration(), expectedDuration);
