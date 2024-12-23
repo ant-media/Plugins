@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
+import io.antmedia.muxer.RecordMuxer;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -48,8 +49,6 @@ import io.antmedia.model.Endpoint;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.Response.Status;
 
 
 @Component(value=IMediaPushPlugin.BEAN_NAME)
@@ -66,6 +65,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	private Map<String, RecordType> recordingMap = new ConcurrentHashMap<>();
 
+	public Map<String, String> recordingFileNameMap = new ConcurrentHashMap<>();
 
 	private boolean initialized = false;
 	private ApplicationContext applicationContext;
@@ -385,8 +385,11 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			return result;
 		}
 
+		result.setDataId(recordingFileNameMap.get(streamId));
+
 		RemoteWebDriver driver = drivers.remove(streamId);
 		recordingMap.remove(streamId);
+		recordingFileNameMap.remove(streamId);
 
 		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 
@@ -402,12 +405,13 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 		catch(TimeoutException e) {
 			logger.error(ExceptionUtils.getStackTrace(e));
-			result.setMessage("Timeoutexception occured in stopping the stream. Fortunately, it'll quit the session to stop completely. Error message is " + e.getMessage());
+			result.setMessage("Timeout exception occurred in stopping the stream. Fortunately, it'll quit the session to stop completely. Error message is " + e.getMessage());
 
 		}
 		finally {
 			driver.quit();
 		}
+
 		return result;
 	}
 	
@@ -473,7 +477,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	{
 		if (recordingMap.containsKey(streamId)) 
 		{
-			getApplication().getMuxAdaptor(streamId).startRecording(recordingMap.get(streamId), 0);
+			RecordMuxer recordMuxer = getApplication().getMuxAdaptor(streamId).startRecording(recordingMap.get(streamId), 0);
+			recordingFileNameMap.put(streamId,recordMuxer.getFileName());
 		}
 	}
 		
@@ -483,6 +488,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	public void streamFinished(String streamId) {
 		WebDriver driver = drivers.remove(streamId);
 		recordingMap.remove(streamId);
+		recordingFileNameMap.remove(streamId);
 		if (driver != null) {
 			driver.quit();
 		}
