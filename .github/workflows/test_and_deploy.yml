@@ -122,5 +122,10 @@ jobs:
           run: |
                 cd HLSMergerPlugin
                 mvn clean install -Dgpg.skip=true
+                sudo cp target/HLSMergerPlugin.jar /usr/local/antmedia/plugins
+                ls /usr/local/antmedia/plugins
+                sudo service antmedia restart
+                sleep 20
+                #run integration test
                 cd ..
 
