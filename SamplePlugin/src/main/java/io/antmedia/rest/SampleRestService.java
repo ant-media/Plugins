@@ -22,7 +22,7 @@ import io.antmedia.plugin.SamplePlugin;
 
 @Component
 @Path("/sample-plugin")
-public class RestService {
+public class SampleRestService {
 
 	@Context
 	protected ServletContext servletContext;

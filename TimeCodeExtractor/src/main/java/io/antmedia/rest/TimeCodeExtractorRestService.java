@@ -21,7 +21,7 @@ import io.antmedia.plugin.TimecodeExtractorPlugin;
 
 @Component
 @Path("/timecode-extractor")
-public class RestService {
+public class TimeCodeExtractorRestService {
 
 	@Context
 	protected ServletContext servletContext;

@@ -21,7 +21,7 @@ import jakarta.ws.rs.core.Response.Status;
 
 @Component
 @Path("/v2/tensorflow")
-public class RestService {
+public class TensorflowRestService {
 
 	@Context
 	protected ServletContext servletContext;

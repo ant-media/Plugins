@@ -27,9 +27,9 @@ import jakarta.ws.rs.core.UriInfo;
 
 @Component
 @Path("/v1/media-push")
-public class RestService {
+public class MediaPushRestService {
 
-	static Logger log = LoggerFactory.getLogger(RestService.class);
+	static Logger log = LoggerFactory.getLogger(MediaPushRestService.class);
 
 	@Context
 	protected ServletContext servletContext;
@@ -116,7 +116,7 @@ public class RestService {
         return websocketScheme + "://" + host + ((port != -1 ) ? ":" + port + "/" : "/") + applicationName + "/websocket";
 	}
 
-	private MediaPushPlugin getPluginApp() {
+	public MediaPushPlugin getPluginApp() {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
 		return (MediaPushPlugin) appCtx.getBean("plugin.mediaPushPlugin");
 	}
