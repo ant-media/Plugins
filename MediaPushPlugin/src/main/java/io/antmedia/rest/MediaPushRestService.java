@@ -116,7 +116,7 @@ public class MediaPushRestService {
         return websocketScheme + "://" + host + ((port != -1 ) ? ":" + port + "/" : "/") + applicationName + "/websocket";
 	}
 
-	private MediaPushPlugin getPluginApp() {
+	public MediaPushPlugin getPluginApp() {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
 		return (MediaPushPlugin) appCtx.getBean("plugin.mediaPushPlugin");
 	}
