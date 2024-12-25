@@ -131,11 +131,11 @@ jobs:
         - name: Build and Test HLS Merger
           run: |
                 cd HLSMergerPlugin
-                mvn clean install -Dgpg.skip=true
-                sudo cp target/HLSMergerPlugin.jar /usr/local/antmedia/plugins
+            	mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+                sudo cp target/HLSMerger.jar /usr/local/antmedia/plugins
                 ls /usr/local/antmedia/plugins
                 sudo service antmedia restart
-                sleep 20
-                #run integration test
+                sleep 10
+            	mvn test -DskipTests=false --quiet
                 cd ..
 
