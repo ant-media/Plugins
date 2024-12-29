@@ -4,6 +4,8 @@ import static org.mockito.Mockito.*;
 import static org.junit.Assert.*;
 
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.model.Endpoint;
+import io.antmedia.plugin.MediaPushPlugin;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.Before;
@@ -17,7 +19,7 @@ import java.net.URISyntaxException;
 
 public class RestServiceUnitTest {
 
-    private RestService restService;
+    private MediaPushRestService restService;
     private HttpServletRequest httpRequest;
     private UriInfo uriInfo;
     private URI uri;
@@ -27,7 +29,7 @@ public class RestServiceUnitTest {
 
     @Before
     public void setUp() {
-        restService = new RestService();
+        restService = spy(new MediaPushRestService());
         httpRequest = mock(HttpServletRequest.class);
         uriInfo = mock(UriInfo.class);
         uri = mock(URI.class);
@@ -82,5 +84,31 @@ public class RestServiceUnitTest {
     public void testGetApplicationName() {
         String appName = restService.getApplicationName();
         assertEquals("applicationName", appName);
+    }
+    
+    @Test
+    public void testStartStop() {
+    	when(httpRequest.getHeader("X-Forwarded-Proto")).thenReturn("https");
+        when(httpRequest.getHeader("X-Forwarded-Host")).thenReturn("example.com");
+        when(uri.getPath()).thenReturn("example.com/applicationName");
+        when(uriInfo.getBaseUri()).thenReturn(null); 
+        
+        MediaPushPlugin plugin = mock(MediaPushPlugin.class);
+		doReturn(plugin).when(restService).getPluginApp();
+        Endpoint request = new Endpoint("http://example.com", 1280, 720, "myJSCommand", "");
+		String streamId = "test";
+		restService.startMediaPush(request, httpRequest, uriInfo, streamId );
+		verify(plugin).startMediaPush(streamId, "wss://example.com/applicationName/websocket", request);
+    
+		
+		//runs script
+		restService.mediaPushSendCommand(request, streamId);
+		verify(plugin).sendCommand(streamId, request.getJsCommand());
+
+		
+		
+		restService.stopMediaPush(streamId);
+		verify(plugin).stopMediaPush(streamId);
+
     }
 }
