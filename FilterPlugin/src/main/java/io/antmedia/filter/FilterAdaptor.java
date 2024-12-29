@@ -460,10 +460,11 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 					logger.info("Output stream:{} is same as input stream so no new customBroadcast will be created for filterId:{}", streamId, filterId);
 				}
 				else {
+					
 					IFrameListener broadcast = app.createCustomBroadcast(streamId, filterConfiguration.getVideoOutputHeight(), filterConfiguration.getVideoOutputBitrate());
 					startBroadcast(streamId, broadcast, filterConfiguration.isVideoEnabled(), filterConfiguration.isAudioEnabled());
 					currentOutStreams.put(streamId, broadcast);
-					logger.info("Output stream:{} will be created for filterId:{}", streamId, filterId);
+					logger.info("Output stream:{} will be created for filterId:{} and height:{}", streamId, filterId, filterConfiguration.getVideoOutputHeight());
 				}
 
 			}		
