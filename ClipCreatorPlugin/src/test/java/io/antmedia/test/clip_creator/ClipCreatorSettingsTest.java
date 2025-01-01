@@ -11,6 +11,7 @@ public class ClipCreatorSettingsTest {
     public void testDefaultValues() {
         ClipCreatorSettings settings = new ClipCreatorSettings();
         assertEquals(600, settings.getMp4CreationIntervalSeconds());
+        assertEquals(true, settings.isEnabled());
     }
 
     @Test

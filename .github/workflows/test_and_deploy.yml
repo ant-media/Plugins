@@ -127,4 +127,15 @@ jobs:
                 cd ID3Converter
                 mvn clean install -Dgpg.skip=true
                 cd ..
+                
+        - name: Build and Test HLS Merger
+          run: |
+                cd HLSMergerPlugin
+                mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+                sudo cp target/HLSMerger.jar /usr/local/antmedia/plugins
+                ls /usr/local/antmedia/plugins
+                sudo service antmedia restart
+                sleep 10
+                mvn test -DskipTests=false --quiet
+                cd ..
 

@@ -13,6 +13,8 @@ import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
 import io.vertx.core.Vertx;
+
+import org.awaitility.Awaitility;
 import org.junit.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -25,6 +27,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static io.smallrye.common.constraint.Assert.assertNotNull;
 import static org.junit.Assert.*;
@@ -34,14 +37,16 @@ import static org.mockito.Mockito.*;
 
 public class ClipCreatorPluginTest {
 
+	
+    Vertx vertx = Vertx.vertx();
+
     @Test
-    public void testCreateMp4Periodicly() throws Exception 
+    public void testStartStopRecordingInInitialization() throws Exception 
     {
         ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
 
         ApplicationContext context = Mockito.mock(ApplicationContext.class);
 
-        Vertx vertx = Mockito.mock(io.vertx.core.Vertx.class);
         when(context.getBean("vertxCore")).thenReturn(vertx);
 
         AntMediaApplicationAdapter applicationAdapter = Mockito.mock(AntMediaApplicationAdapter.class);
@@ -54,32 +59,89 @@ public class ClipCreatorPluginTest {
         when(applicationAdapter.getDataStore()).thenReturn(dataStore);
 
         when(context.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(applicationAdapter);
+        
+        ClipCreatorSettings clipCreatorSettings = new ClipCreatorSettings();
+        clipCreatorSettings.setEnabled(false);
+
+        Mockito.doReturn(clipCreatorSettings).when(plugin).getClipCreatorSettings(appSettings);
 
         plugin.setApplicationContext(context);
-
+        
         verify(plugin, times(1)).getClipCreatorSettings(appSettings);
         
+        //it should not call because clipCreatorSettings is disabled by default
+        verify(plugin, never()).startPeriodicRecording(Mockito.anyInt());
+        assertEquals(-1, plugin.getTimerId());
         
-        String streamId = "testStream";
+        
+        clipCreatorSettings.setEnabled(true);
+        plugin.setApplicationContext(context);
+        verify(plugin, times(2)).getClipCreatorSettings(appSettings);
+        
+        //it should  call because clipCreatorSettings is enabled
+        verify(plugin, times(1)).startPeriodicRecording(clipCreatorSettings.getMp4CreationIntervalSeconds());
+        
+        plugin.getLastMp4CreateTimeForStream().put("streamId", System.currentTimeMillis());
+        
+        plugin.getLastMp4CreateTimeForStream().put("streamId2", System.currentTimeMillis());
+    
+        assertNotEquals(-1, plugin.getTimerId());
+        
+        
+        
+        plugin.stopPeriodicRecording();
+        
+        assertFalse(clipCreatorSettings.isEnabled());
+        
+        assertEquals(-1, plugin.getTimerId());
+        
+        //it should be called for the last time
+        verify(plugin, timeout(10000).times(1)).createRecordings();
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> plugin.getLastMp4CreateTimeForStream().size() == 0);
+        
+    }
+    
+    @Test
+    public void testStreamFinished() throws Exception {
+    	 ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
 
-        Broadcast broadcast = new Broadcast();
-        broadcast.setStreamId(streamId);
-        plugin.streamStarted(broadcast);
-        verify(vertx, times(1)).setPeriodic(anyLong(), any());
+         ApplicationContext context = Mockito.mock(ApplicationContext.class);
 
-        
-        assertNotNull(plugin.getStreamRecoderTimer().get(streamId));
+         when(context.getBean("vertxCore")).thenReturn(vertx);
 
-        
-        plugin.streamFinished(broadcast);
-        
-        
-        verify(vertx, times(1)).cancelTimer(anyLong());
+         AntMediaApplicationAdapter applicationAdapter = Mockito.mock(AntMediaApplicationAdapter.class);
+         when(applicationAdapter.getScope()).thenReturn(Mockito.mock(org.red5.server.api.scope.IScope.class));
 
-        
-        verify(vertx, times(1)).setPeriodic(anyLong(), any());
-        assertNull(plugin.getStreamRecoderTimer().get(streamId));
+         AppSettings appSettings = new AppSettings();
+         when(applicationAdapter.getAppSettings()).thenReturn(appSettings);
 
+         DataStore dataStore = Mockito.mock(io.antmedia.datastore.db.DataStore.class);
+         when(applicationAdapter.getDataStore()).thenReturn(dataStore);
+
+         when(context.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(applicationAdapter);
+         
+         ClipCreatorSettings clipCreatorSettings = new ClipCreatorSettings();
+         
+         clipCreatorSettings.setEnabled(true);
+         Mockito.doReturn(clipCreatorSettings).when(plugin).getClipCreatorSettings(appSettings);
+
+         
+         plugin.setApplicationContext(context);
+         
+         String streamId = "testStreamId";
+         plugin.getLastMp4CreateTimeForStream().put(streamId, System.currentTimeMillis());
+         
+         Broadcast broadcast = new Broadcast();
+         broadcast.setStreamId(streamId);
+         
+         plugin.streamFinished(broadcast);
+         
+         verify(plugin, timeout(10000).times(1)).convertHlsToMp4(broadcast, true);
+         
+         //it should be null because it is removed
+         assertNull(plugin.getLastMp4CreateTimeForStream().get(streamId));
+         
+         
     }
 
     @Test
@@ -98,7 +160,15 @@ public class ClipCreatorPluginTest {
         broadcast.setStreamId("testStream");
         plugin.setStreamsFolder("src/test/resources");
         
+        plugin.setClipCreatorSettings(new ClipCreatorSettings());
+        
         Mp4CreationResponse createMp4Response = plugin.convertHlsToMp4(broadcast, true);
+        assertFalse(createMp4Response.isSuccess());
+        
+        
+        plugin.getLastMp4CreateTimeForStream().put(streamId, 0L);
+        
+        createMp4Response = plugin.convertHlsToMp4(broadcast, true);
         assertNotNull(createMp4Response.getFile());
         assertTrue(createMp4Response.getFile().getTotalSpace() > 0);
         assertTrue(createMp4Response.getFile().delete());

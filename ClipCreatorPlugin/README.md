@@ -28,7 +28,7 @@ After installation, the plugin will automatically initialize on server startup. 
 
 Plugin also introduces useful REST methods.
 
-### 1-) Create MP4 Clip
+### 1. Create MP4 Clip
 Send a `POST` request to:
 
 `https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/mp4/{STREAM_ID}`
@@ -47,29 +47,34 @@ If there is an MP4 created by plugin since boot, it returns the mp4 clip from la
 For example if last MP4 is generated at 14:00 and method is called at 14:05, duration of clip should be 5 minutes.
 
 If there is no MP4 created so far by the plugin, maximum duration of created clip by this endpoint will be around `mp4CreationIntervalSeconds` 
-### 2-) Start Periodic MP4 Creation
+### 2. Start Periodic MP4 Creation
 By default, plugin starts periodic creation on server boot. This endpoint is useful if you want to modify the periodic creation interval after server boot.
 
 Send a `POST` request to:
 
 
-`https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/start/{mp4CreationIntervalSeconds}`
-### 3-) Stop Periodic MP4 Creation
+`https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/periodic-recording/{mp4CreationIntervalSeconds}`
+
+
+If there is already active, it stops the recording for all streams and start again
+
+### 3. Stop Periodic MP4 Creation
 Stops periodic MP4 creation.
 
-Send a `POST` request to:
+Send a `DELETE` request to:
 
 
-`https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/stop`
+`https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/periodic-recording`
 
 
 ## Options
-MP4 creation interval can be set through plugins app settings.
+MP4 creation interval and starting after reboot can be set through plugins app settings.
 
 ```javascript
 "customSettings":{
   "plugin.clip-creator": {
-    "mp4CreationIntervalSeconds": 1800
+    "mp4CreationIntervalSeconds": 1800,
+    "enabled":true #if it's true, it's enabled by default
   }
 }
 ```
