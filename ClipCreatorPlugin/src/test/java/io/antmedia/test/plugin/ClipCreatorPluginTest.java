@@ -13,6 +13,8 @@ import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
 import io.vertx.core.Vertx;
+
+import org.awaitility.Awaitility;
 import org.junit.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -25,6 +27,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static io.smallrye.common.constraint.Assert.assertNotNull;
 import static org.junit.Assert.*;
@@ -58,6 +61,7 @@ public class ClipCreatorPluginTest {
         when(context.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(applicationAdapter);
         
         ClipCreatorSettings clipCreatorSettings = new ClipCreatorSettings();
+        clipCreatorSettings.setEnabled(false);
 
         Mockito.doReturn(clipCreatorSettings).when(plugin).getClipCreatorSettings(appSettings);
 
@@ -93,8 +97,7 @@ public class ClipCreatorPluginTest {
         
         //it should be called for the last time
         verify(plugin, timeout(10000).times(1)).createRecordings();
-        
-        assertEquals(0, plugin.getLastMp4CreateTimeForStream().size());
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> plugin.getLastMp4CreateTimeForStream().size() == 0);
         
     }
     

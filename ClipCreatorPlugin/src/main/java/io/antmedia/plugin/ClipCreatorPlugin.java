@@ -172,12 +172,14 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 		timerId = vertx.setPeriodic(periodSeconds * 1000, (l) -> {
 
-
+			
 			vertx.executeBlocking(() -> 
 			{
+				logger.info("startPeriodicRecording#createRecordings ", appName);
 				createRecordings();
 				return null;
 			}, false);
+			
 		});
 
 		result.setSuccess(true);
@@ -203,11 +205,16 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			vertx.cancelTimer(timerId);
 			//finish all recordings
 
-			logger.info("Clip Creator timer is stopped for app: {} and it will stop recording for the current streams ", appName);
+			logger.info("Clip Creator timer is stopped for app: {} ", appName);
 			vertx.executeBlocking(() -> {
 				
-				//create recordings for the last time
-				createRecordings();
+				try {
+				
+					//create recordings for the last time
+					createRecordings();
+				} catch (Exception e) {
+					logger.error("Error occured in createRecordings", e);
+				}
 				
 				//clear lastMp4CreateTimeMSForStream
 				lastMp4CreateTimeMSForStream.clear();

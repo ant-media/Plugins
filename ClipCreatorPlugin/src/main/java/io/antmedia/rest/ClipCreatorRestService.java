@@ -18,9 +18,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.WebApplicationContext;
 
-import java.io.File;
-import java.util.ArrayList;
-
 @Component
 @Path("/clip-creator")
 public class ClipCreatorRestService {
