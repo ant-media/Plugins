@@ -5,6 +5,8 @@ import io.antmedia.plugin.ClipCreatorPlugin;
 import io.antmedia.plugin.Mp4CreationResponse;
 import io.antmedia.rest.model.Result;
 import io.lindstrom.m3u8.model.MediaPlaylist;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.servlet.ServletContext;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -25,13 +27,34 @@ public class ClipCreatorRestService {
 
 	@Context
 	protected ServletContext servletContext;
+	
+	@Operation(description = "Starts periodic recording with the given period in seconds. If there is an active periodic recording, it stops that and starts a new one.")
+	@POST
+	@Path("/periodic-recording/{periodSeconds}")
+	@Produces({MediaType.APPLICATION_JSON})
+	public Result startPeriodicRecording(@Parameter(description = "Recording interval in seconds", required = true) @PathParam("periodSeconds") int periodSeconds) {
+		ClipCreatorPlugin clipCreator = getPluginApp();
+		return clipCreator.startPeriodicRecording(periodSeconds);
+	}
+	
+	
+	@Operation(description = "Stops the periodic recording and stops the recording of all active streams")
+	@DELETE
+	@Path("/periodic-recording")
+	@Produces({MediaType.APPLICATION_JSON})
+	public Result stopPeriodicRecording() {
+		ClipCreatorPlugin clipCreator = getPluginApp();
+		return clipCreator.stopPeriodicRecording();
+	}
+	
 
+	@Operation(description = "Get the mp4 recording for the moment it's called since the last recording moment")
 	@POST
 	@Path("/mp4/{streamId}")
 	@Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_OCTET_STREAM})
 	public Response createMp4(
-			@PathParam("streamId") String streamId,
-			@QueryParam("returnFile") @DefaultValue("false") boolean returnFile) 
+			@Parameter(description = "streamId of the broadcast that recording will be created", required = true) @PathParam("streamId") String streamId,
+			@Parameter(description = "The download option. If it's true, server returns the created mp4 file", required = true) @QueryParam("returnFile") @DefaultValue("false") boolean returnFile) 
 	{
 
 		

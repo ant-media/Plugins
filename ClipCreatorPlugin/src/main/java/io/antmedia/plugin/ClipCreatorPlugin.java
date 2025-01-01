@@ -8,6 +8,7 @@ import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.RecordMuxer;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
+import io.antmedia.settings.ServerSettings;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
@@ -48,7 +49,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	private Vertx vertx;
 	private ApplicationContext applicationContext;
 	private Map<String, Long> lastMp4CreateTimeMSForStream = new ConcurrentHashMap<>();
-	private Map<String, Long> streamRecoderTimer = new ConcurrentHashMap<>();
 
 	private AppSettings appSettings;
 
@@ -62,8 +62,12 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	private MediaPlaylistParser m3u8Parser = new MediaPlaylistParser();
 
 	private int createdMp4Count = 0;
-	
+
 	DateFormat dateFormat = DateFormat.getDateTimeInstance();
+
+	private long timerId = -1;
+
+	private ServerSettings serverSettings;
 
 
 	public final static class DirectoryFilter implements FilenameFilter {
@@ -94,10 +98,13 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		this.applicationContext = applicationContext;
 		vertx = (Vertx) applicationContext.getBean("vertxCore");
 
+		serverSettings = (ServerSettings) applicationContext.getBean(ServerSettings.BEAN_NAME);
+
 		IAntMediaStreamHandler app = getApplication();
 
 		appSettings = app.getAppSettings();
 		dataStore = app.getDataStore();
+
 		appName = app.getScope().getName();
 		streamsFolder = IAntMediaStreamHandler.WEBAPPS_PATH + appName + File.separator + "streams";
 
@@ -111,9 +118,15 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 				ClipCreatorSettings newClipCreatorSettings = getClipCreatorSettings(newSettings);
 
 				if (newClipCreatorSettings.getMp4CreationIntervalSeconds() != clipCreatorSettings
-						.getMp4CreationIntervalSeconds()) 
+						.getMp4CreationIntervalSeconds() || newClipCreatorSettings.isEnabled() != clipCreatorSettings.isEnabled()) 
 				{
-					logger.info("Clip creator settings has changed in {}. The new interval: {}", appName, newClipCreatorSettings.getMp4CreationIntervalSeconds());
+					logger.info("Clip creator settings has changed in {}. The new interval: {} and is enabled:{} ", appName, newClipCreatorSettings.getMp4CreationIntervalSeconds(), newClipCreatorSettings.isEnabled());
+					
+					if (newClipCreatorSettings.isEnabled()) {
+						startPeriodicRecording(newClipCreatorSettings.getMp4CreationIntervalSeconds());
+					} else {
+						stopPeriodicRecording();
+					}
 					clipCreatorSettings = newClipCreatorSettings;
 
 					return true;
@@ -127,11 +140,94 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 				return null;
 			}
 		});
-
+		
 		clipCreatorSettings = getClipCreatorSettings(appSettings);
 
+		if (clipCreatorSettings.isEnabled()) {
+			logger.info("Clip Creator Plugin is enabled for app: {}", appName);
+			startPeriodicRecording(clipCreatorSettings.getMp4CreationIntervalSeconds());
+		} 
+		else {
+			logger.info("Clip Creator Plugin is not active for app: {}", appName);
+		}
 
-		logger.info("Clip Creator Plugin is initialized for app: {}", appName);
+
+		
+
+	}
+
+	public Result startPeriodicRecording(int periodSeconds) 
+	{
+
+		Result result = new Result(false);
+
+		if (timerId != -1) {
+			stopPeriodicRecording();
+			result.setMessage("Old clip-creator timer is cancelled for app: " + appName + " and new one will be created");
+		}
+
+		//set the new interval for recording
+		clipCreatorSettings.setMp4CreationIntervalSeconds(periodSeconds);
+		clipCreatorSettings.setEnabled(true);
+
+		timerId = vertx.setPeriodic(periodSeconds * 1000, (l) -> {
+
+
+			vertx.executeBlocking(() -> 
+			{
+				createRecordings();
+				return null;
+			}, false);
+		});
+
+		result.setSuccess(true);
+
+		return result;
+	}
+	
+	public void createRecordings() 
+	{
+		List<Broadcast> broadcasts = dataStore.getLocalLiveBroadcasts(serverSettings.getHostAddress());
+
+		for (Broadcast broadcast : broadcasts) {
+			convertHlsToMp4(broadcast, true);
+		}
+	}
+
+	public Result stopPeriodicRecording() 
+	{
+		Result result = new Result(false);
+
+		if (timerId != -1) 
+		{
+			vertx.cancelTimer(timerId);
+			//finish all recordings
+
+			logger.info("Clip Creator timer is stopped for app: {} and it will stop recording for the current streams ", appName);
+			vertx.executeBlocking(() -> {
+				
+				//create recordings for the last time
+				createRecordings();
+				
+				//clear lastMp4CreateTimeMSForStream
+				lastMp4CreateTimeMSForStream.clear();
+				return null;
+			}, false);
+
+			result.setSuccess(true);
+
+		}
+		else {
+			result.setMessage("There is no active timer for Clip Creator Plugin in app: " + appName);
+		}
+		
+		logger.info("Clip creator periodic recording is stopped for app: {}", appName);
+
+		clipCreatorSettings.setEnabled(false);
+		
+		//clear timer
+		timerId = -1;
+		return result;
 
 	}
 
@@ -170,7 +266,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		return null;
 	}
 
-	public Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean upateLastMp4CreateTime) {
+	public synchronized Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime) {
 
 		Mp4CreationResponse response = new Mp4CreationResponse();
 		String streamId = broadcast.getStreamId();
@@ -182,23 +278,24 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			return response;
 		}
 		MediaPlaylist playList = readPlaylist(m3u8File);
-		
+
 		if (playList == null) {
 			logger.error("No HLS playlist found for stream {} from the file:{}", streamId, m3u8File.getAbsolutePath());
-			
+
 			response.setMessage("No HLS playlist found for stream " + streamId);
 			return response;
 		}
 
-		Long startTime = getLastMp4CreateTimeForStream().get(streamId);
+		Long startTime = lastMp4CreateTimeMSForStream.get(streamId);
+		
 		long endTime = System.currentTimeMillis();
 
 		if (startTime == null) {
-			startTime = 0L;
+			startTime = endTime - (clipCreatorSettings.getMp4CreationIntervalSeconds() * 1000);
 		}
 		
 		ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, startTime, endTime, m3u8File);
-		
+
 		if (tsFilesToMerge.size() == 0) {
 			logger.info("No segment file found for stream {} between {} and {}", streamId,
 					dateFormat.format(new Date(startTime)), dateFormat.format(new Date(endTime)));
@@ -206,7 +303,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 					+ dateFormat.format(new Date(startTime)) + " and " + dateFormat.format(new Date(endTime)));
 			return response;
 		}
-		
+
 		try {
 			logger.info("number of ts files: {} for streamId:{}", tsFilesToMerge.size(), streamId);
 			File tsFileListTextFile = writeTsFilePathsToTxt(m3u8File, tsFilesToMerge);
@@ -217,13 +314,13 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 			if (ClipCreatorConverter.createMp4(tsFileListTextFile, mp4FilePath)) 
 			{
-				
+
 				File mp4File = new File(mp4FilePath);
 
 				long durationMs = RecordMuxer.getDurationInMs(mp4File, streamId);
 				logger.info("New MP4 created from HLS playlist {} for stream {} for the time between {} and {} and duration:{}ms", mp4FilePath, streamId, dateFormat.format(new Date(startTime)), dateFormat.format(new Date(endTime)), durationMs);
-				
-				if (upateLastMp4CreateTime) {
+
+				if (updateLastMp4CreateTime) {
 					lastMp4CreateTimeMSForStream.put(streamId, endTime);
 				}
 
@@ -267,7 +364,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		return txtFile;
 	}
 
-	public ArrayList<File> getSegmentFilesWithinTimeRange(MediaPlaylist playList, long startTime, long endTime, File m3u8File) {
+	public ArrayList<File> getSegmentFilesWithinTimeRange(MediaPlaylist playList, long startTimeMs, long endTimeMs, File m3u8File) {
 		ArrayList<File> segmentFiles = new ArrayList<>();
 
 		Path playlistBasePath = m3u8File.getParentFile().toPath();
@@ -283,7 +380,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 				OffsetDateTime segmentDateTime = segmentDateTimeOpt.get();
 				long segmentTime = segmentDateTime.toEpochSecond() * 1000;
 
-				if (segmentTime >= startTime && segmentTime <= endTime) 
+				if (segmentTime >= startTimeMs && segmentTime <= endTimeMs) 
 				{
 					Path segmentPath = playlistBasePath.resolve(segment.uri());
 					segmentFiles.add(segmentPath.toFile());
@@ -339,6 +436,10 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	public ClipCreatorSettings getClipCreatorSettings() {
 		return clipCreatorSettings;
 	}
+	
+	public void setClipCreatorSettings(ClipCreatorSettings clipCreatorSettings) {
+		this.clipCreatorSettings = clipCreatorSettings;
+	}
 
 	public MediaPlaylistParser getM3u8Parser() {
 		return this.m3u8Parser;
@@ -362,31 +463,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 	public void streamStarted(Broadcast broadcast) {
 
-
-		String streamId = broadcast.getStreamId();
-
-		long mp4CreationSeconds = clipCreatorSettings.getMp4CreationIntervalSeconds();
-
-		long timerId = vertx.setPeriodic(mp4CreationSeconds * 1000, (h) -> {
-
-			vertx.executeBlocking(() -> 
-			{
-				//get up to date broadcast	
-				Broadcast broadcastLocal = getDataStore().get(streamId);
-				if (broadcastLocal != null) {
-					convertHlsToMp4(broadcastLocal, true);
-				}
-				else {
-					logger.error("No broadcast found for stream id: {} to record", streamId);
-				}
-				return null;
-				
-			}, false);
-		});
-
-		streamRecoderTimer.put(broadcast.getStreamId(), timerId);
-
-
 	}
 
 	@Override
@@ -402,19 +478,17 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	@Override
 	public void streamFinished(Broadcast broadcast) {
 
-		String streamId = broadcast.getStreamId();
 
-		Long timerId = streamRecoderTimer.remove(streamId);
-		if (timerId != null) {
-			//timerId can be null if stream is stopped before it's started
-			vertx.cancelTimer(timerId);
+		if (clipCreatorSettings.isEnabled()) 
+		{
+
+			vertx.executeBlocking(() -> {
+				convertHlsToMp4(broadcast, true);
+				lastMp4CreateTimeMSForStream.remove(broadcast.getStreamId());
+				return null;
+			}, false);
 		}
-		
-		vertx.executeBlocking(() -> {
-			convertHlsToMp4(broadcast, true);
-			return null;
-		}, false);
-		
+
 
 	}
 
@@ -436,7 +510,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		this.dataStore = dataStore;
 	}
 	
-	public Map<String, Long> getStreamRecoderTimer() {
-		return streamRecoderTimer;
+	public long getTimerId() {
+		return timerId;
 	}
 }
