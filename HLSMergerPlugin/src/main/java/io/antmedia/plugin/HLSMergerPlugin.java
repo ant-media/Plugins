@@ -58,9 +58,14 @@ public class HLSMergerPlugin implements ApplicationContextAware{
 	}
 	
 	public boolean mergeStreams(String fileName, String[] streamIds) {
-		long hlsMergedFileUpdate = vertx.setPeriodic(5000,h -> mergeStreamsInternal(fileName, streamIds));
-		mergeTimers.put(fileName, hlsMergedFileUpdate);
-		return true;
+		if (!mergeTimers.contains(fileName)) {
+			long hlsMergedFileUpdate = vertx.setPeriodic(5000,h -> mergeStreamsInternal(fileName, streamIds));
+			mergeTimers.put(fileName, hlsMergedFileUpdate);
+			return true;
+		}
+		else {
+			return false;
+		}
 	}
 
 	public void mergeStreamsInternal(String fileName, String[] streamIds) {
@@ -113,28 +118,36 @@ public class HLSMergerPlugin implements ApplicationContextAware{
 	}
 
 	public boolean addMultipleAudioStreams(String fileName, String videoStreamId, String[] audioStreamIds) {
-		long hlsMergedFileUpdate = vertx.setPeriodic(5000,h -> addMultipleAudioInternal(fileName, videoStreamId, audioStreamIds));
-		mergeTimers.put(fileName, hlsMergedFileUpdate);
-		return true;
+		if (!mergeTimers.contains(fileName)) {
+			long hlsMergedFileUpdate = vertx.setPeriodic(5000,h -> addMultipleAudioInternal(fileName, videoStreamId, audioStreamIds));
+			mergeTimers.put(fileName, hlsMergedFileUpdate);
+			return true;
+		}
+		else {
+			return false;
+		}
 	}
 	
 	public void addMultipleAudioInternal(String fileName, String videoStreamId, String[] audioStreamIds) {
 		StringBuilder streamBuilder = new StringBuilder();
 		String subfolder = "";
 		streamBuilder.append("#EXTM3U\n");
-
+		
+		boolean defaultSet = false;
 		// Add audio streams
 		for (String audioStreamId : audioStreamIds) {
 			MuxAdaptor muxAdaptor = getMuxAdaptor(audioStreamId);
 			if (muxAdaptor != null) {
 				subfolder = muxAdaptor.getBroadcast().getSubFolder();
-				streamBuilder.append("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"")
+				streamBuilder.append("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio-group\",NAME=\"")
 					.append(audioStreamId)
-					.append("\",DEFAULT=NO,AUTOSELECT=YES,URI=\"")
+					.append("\",DEFAULT="+(defaultSet?"NO":"YES")+",AUTOSELECT=YES,URI=\"")
 					.append(audioStreamId).append(".m3u8\"\n");
+				
+				defaultSet = true;
 			}
 		}
-
+		
 		// Add video stream with reference to audio group
 		MuxAdaptor videoMuxAdaptor = getMuxAdaptor(videoStreamId);
 		if (videoMuxAdaptor != null) {
@@ -148,11 +161,12 @@ public class HLSMergerPlugin implements ApplicationContextAware{
 			int width = videoMuxAdaptor.getWidth();
 			int height = videoMuxAdaptor.getHeight();
 			streamBuilder.append("#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=")
-				.append(bitrate)
+				.append("1000000")
 				.append(",RESOLUTION=").append(width).append("x").append(height)
-				.append(",CODECS=\"avc1.42e00a,mp4a.40.2\",AUDIO=\"audio\"\n");
+				.append(",CODECS=\"avc1.42e00a,mp4a.40.2\",AUDIO=\"audio-group\"\n");
 			streamBuilder.append(videoStreamId).append(".m3u8\n");
 		}
+
 
 		writeHLSFile(fileName, streamBuilder.toString(), subfolder);
 	}
