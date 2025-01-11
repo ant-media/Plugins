@@ -1,9 +1,5 @@
 # HLS Merger Plugin
-This is a HLS Merger plugin project for Ant Media Server. You can use this a basis for your plugin.
-
-# Introducing the **HLSMerger Plugin**
-
-The **HLSMerger Plugin** enhances the HLS experience in two key ways:
+This is a HLS Merger plugin project for Ant Media Server. The **HLSMerger Plugin** enhances the HLS experience in two key ways:
 
 1. Creating an HLS stream with multiple resolutions  
 2. Creating an HLS stream with multiple audio tracks  
