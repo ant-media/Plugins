@@ -78,7 +78,7 @@ Adaptive Bitrate Streaming (ABR) enhances the viewing experience by dynamically 
    For example in [hls.js](https://hlsjs.video-dev.org/demo/):
    1. Copy the master file URL into URL field as in the image.
    2. Click "Apply" button. Player should start to play your stream.
-   3. Click "Quality-levels" button. Yous should see available resolutions below.
+   3. Click "Quality-levels" button. You should see available resolutions below the player.
    4. Choose any resolution to switch the quality.
    ![multi-resolution-hls](multi-resolution-hls.png)
 
@@ -135,7 +135,7 @@ Support multilingual or alternate audio streams by merging a video stream with m
    For example in [hls.js](https://hlsjs.video-dev.org/demo/):
    1. Copy the master file URL into URL field as in the image.
    2. Click "Apply" button. Player should start to play your stream.
-   3. Click "Audio-tracks" button. Yous should see available resolutions below.
+   3. Click "Audio-tracks" button. You should see available audio tracks below the player.
    4. Choose any audio track to listen.
    
    ![multi-audio-hls](multi-audio-hls.png)
