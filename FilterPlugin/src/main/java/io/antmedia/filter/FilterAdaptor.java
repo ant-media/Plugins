@@ -64,9 +64,6 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	private Map<String, VideoDecoder> videoDecodersMap = new LinkedHashMap<>();
 	private Map<String, OpusDecoder> audioDecodersMap = new LinkedHashMap<>();
 
-
-	private static final int WIDTH = 720;
-	private static final int HEIGHT = 480;
 	private boolean selfDecodeStreams = true;
 	/*
 	 * In case decoding in the plugin, video frames are generated later than audio.
@@ -86,7 +83,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
 
 		if(audioFilterGraph == null || !audioFilterGraph.isInitiated() || audioFilterGraph.getListener() == null) {
-			logger.warn("AudioFilter graph is not initialized correctly so returning frame for stream:{} and filter:{}", streamId, filterId);
+			//logger.warn("AudioFilter graph is not initialized correctly so returning frame for stream:{} and filter:{}", streamId, filterId);
 			
 			return audioFrame;
 		}
@@ -146,8 +143,6 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		}
 		return filterOutputFrame;
 	}
-
-	int index = 0;
 
 	@Override
 	public AVFrame onVideoFrame(String streamId, AVFrame videoFrame) {
@@ -465,10 +460,11 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 					logger.info("Output stream:{} is same as input stream so no new customBroadcast will be created for filterId:{}", streamId, filterId);
 				}
 				else {
-					IFrameListener broadcast = app.createCustomBroadcast(streamId);
+					
+					IFrameListener broadcast = app.createCustomBroadcast(streamId, filterConfiguration.getVideoOutputHeight(), filterConfiguration.getVideoOutputBitrate());
 					startBroadcast(streamId, broadcast, filterConfiguration.isVideoEnabled(), filterConfiguration.isAudioEnabled());
 					currentOutStreams.put(streamId, broadcast);
-					logger.info("Output stream:{} will be created for filterId:{}", streamId, filterId);
+					logger.info("Output stream:{} will be created for filterId:{} and height:{}", streamId, filterId, filterConfiguration.getVideoOutputHeight());
 				}
 
 			}		
@@ -523,8 +519,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 	private void startBroadcast(String streamId, IFrameListener broadcast, boolean videoEnabled, boolean audioEnabled) {
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
-		videoCodecParameters.width(WIDTH);
-		videoCodecParameters.height(HEIGHT);
+		videoCodecParameters.height(filterConfiguration.getVideoOutputHeight());
+		videoCodecParameters.width((int) (filterConfiguration.getVideoOutputHeight()*1.5f)); //non 0, it will be overriden by AMS
 		videoCodecParameters.codec_id(AV_CODEC_ID_H264);
 		videoCodecParameters.codec_type(AVMEDIA_TYPE_VIDEO);		
 		videoCodecParameters.format(AV_PIX_FMT_YUV420P);

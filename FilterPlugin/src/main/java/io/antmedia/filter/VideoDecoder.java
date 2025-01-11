@@ -16,6 +16,8 @@ import static org.bytedeco.ffmpeg.global.avutil.av_frame_alloc;
 import static org.bytedeco.ffmpeg.global.avutil.av_frame_free;
 import static org.bytedeco.ffmpeg.global.avutil.av_strerror;
 import static org.bytedeco.ffmpeg.presets.avutil.AVERROR_EAGAIN;
+import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_NV12;
+
 
 import org.bytedeco.ffmpeg.avcodec.AVCodec;
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext;
@@ -79,6 +81,10 @@ public class VideoDecoder {
 			}
 			codec = avcodec_find_decoder(streamParameters.getCodecParameters().codec_id());
 			result = openDecoder(codec, streamParameters.getCodecParameters());
+		}
+		else {
+			//h264_cuvid output pixel format is NV12, so update it
+			streamParameters.getCodecParameters().format(AV_PIX_FMT_NV12);
 		}
 		
 		BytePointer name = codec.name();
