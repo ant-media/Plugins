@@ -100,6 +100,7 @@ Support multilingual or alternate audio streams by merging a video stream with m
 #### Steps
 
 1. **Update HLS settings on Ant Media Server Dashboard**
+
    Set the `Segment Duration` to `10` seconds in LiveApp Application Settings in Ant Media Server Dashdoard.
 
    ![segment-duration-setting](segment-duration-setting.png)
