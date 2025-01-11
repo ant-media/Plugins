@@ -1,101 +1,173 @@
 # HLS Merger Plugin
-This is a HLS Merger plugin project for Ant Media Server. The **HLSMerger Plugin** enhances the HLS experience in two key ways:
 
-1. Creating an HLS stream with multiple resolutions  
-2. Creating an HLS stream with multiple audio tracks  
+The **HLS Merger Plugin** enhances your HLS streaming capabilities by providing tools to:
+
+1. Create HLS master playlists with multiple resolutions.
+2. Combine video streams with multiple audio tracks for multilingual or alternate audio experiences.
 
 ---
 
-## 1. Creating an HLS Stream with Multiple Resolutions
+## Installation
 
-Streaming with multiple resolutions is crucial for Adaptive Bitrate Streaming (ABR). ABR dynamically adjusts the video quality based on the viewer’s internet speed, providing a seamless viewing experience. However, ABR requires transcoding, which can be CPU-intensive. While Ant Media Server supports ABR, some users may prefer to handle this process on the client side.
+### Prerequisites
+- [Ant Media Server](https://antmedia.io/)
+- Java Runtime Environment (JRE)
+- FFmpeg (for generating streams)
 
-The **HLSMerger Plugin** offers a solution by allowing users to create streams with different resolutions and then merge these streams into a single HLS master file. This eliminates the need for transcoding on the server side, reducing CPU usage.
+### Installation Steps
 
-##### Example: Creating and Merging Multi-Resolution Streams
+1. **Download the Plugin**  
+   Fetch the latest snapshot from Sonatype:
 
-To publish multiple RTMP streams with different resolutions using FFmpeg, run the following commands:
+   ```bash
+   wget -O maven-metadata.xml https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/plugin/HLSMerger/maven-metadata.xml
+   export LATEST_SNAPSHOT=$(grep -o '<version>[^<]*</version>' maven-metadata.xml | tail -n 1 | sed -e 's/<version>//g' -e 's/<\/version>//g')
+   wget -O HLSMerger.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.antmedia.plugin&a=HLSMerger&v=${LATEST_SNAPSHOT}&e=jar"
+   ```
 
-```bash
-ffmpeg -re -i ~/test/bunnyz.mp4 -s 1920x1080 -codec copy -f flv rtmp://localhost/LiveApp/stream1
-ffmpeg -re -i ~/test/bunnyz.mp4 -s 1280x720 -codec copy -f flv rtmp://localhost/LiveApp/stream2
-ffmpeg -re -i ~/test/bunnyz.mp4 -s 640x360 -codec copy -f flv rtmp://localhost/LiveApp/stream3
-```
+2. **Install the Plugin**  
+   Copy the JAR file into the Ant Media Server plugins directory:
 
-Once these streams are created, merge them using the following REST API call:
+   ```bash
+   sudo cp HLSMerger.jar /usr/local/antmedia/plugins
+   ```
 
+3. **Restart the Server**  
+   Restart Ant Media Server to activate the plugin:
 
-```bash
-curl -X POST -H "Accept: Application/json" -H "Content-Type: application/json" \
-http://localhost:5080/LiveApp/rest/v1/hls-merger/multi-resolution-stream/merged_stream -d '["stream1", "stream2", "stream3"]'
-```
+   ```bash
+   sudo service antmedia restart
+   ```
 
-This creates a single HLS master file pointing to the different resolutions of the stream.
+---
 
-To delete this merged stream, use the following command:
+## Usage
 
-```bash
-curl -X DELETE -H "Accept: Application/json" -H "Content-Type: application/json" \
-http://localhost:5080/LiveApp/rest/v1/hls-merger/multi-resolution-stream/merged_stream
-```
+### 1. Create a HLS Master Playlist with Multiple Resolutions
 
-## 2. Creating an HLS Stream with Multiple Audio Tracks
-Adding multiple audio tracks to a single video stream is ideal for multilingual streaming. The HLSMerger Plugin enables users to merge a video stream with multiple audio streams into a single HLS playlist (M3U8 file). HLS players can then present these audio options to viewers, allowing them to select their preferred language or audio track.
+#### Overview  
+Adaptive Bitrate Streaming (ABR) enhances the viewing experience by dynamically adjusting video quality to match the viewer's internet speed. The **HLS Merger Plugin** simplifies ABR by merging multiple resolution streams into a single master playlist, reducing server-side CPU usage.
 
-##### Example: Creating and Merging Multi-Audio Streams
-Start by creating a video stream and separate audio streams using FFmpeg:
+#### Steps
 
-Create the Video Stream
+1. **Publish Streams with Different Resolutions**  
+   Use FFmpeg to stream video at different resolutions:
 
-```bash
-ffmpeg -re -i ~/test/bunnyz.mp4 -codec copy -f flv rtmp://localhost/LiveApp/videoStream
-```
+   ```bash
+   ffmpeg -re -stream_loop -1 -i src/test/resources/test_video_720p.flv -codec copy -f flv rtmp://localhost/LiveApp/stream1
+   ffmpeg -re -stream_loop -1 -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/stream2
+   ```
 
-Create Audio Streams
+2. **Merge the Streams**  
+   Call the REST API to create a master playlist:
 
-```bash
-ffmpeg -re -i ~/test/bunnyz.mp4 -codec copy -map 0:a:0 -f flv rtmp://localhost/LiveApp/audiostream1
-ffmpeg -re -i ~/test/bunnyz.mp4 -codec copy -map 0:a:1 -f flv rtmp://localhost/LiveApp/audiostream2
-```
+   ```bash
+   export MASTER_M3U8=merged_stream
+   export SERVER_ADDR=localhost
 
-Merge the audio streams with the video stream using the following REST API call:
+   curl -X POST -H "Accept: application/json" -H "Content-Type: application/json" \
+   http://${SERVER_ADDR}:5080/LiveApp/rest/v1/hls-merger/multi-resolution-stream/$MASTER_M3U8 -d '["stream1", "stream2"]'
+   ```
 
-```bash
-curl -X POST -H "Accept: Application/json" -H "Content-Type: application/json" \
-http://localhost:5080/LiveApp/rest//v1/hls-merger/videoStream/multi-audio-stream/merged_stream -d '["audiostream1", "audiostream2"]'
-```
+   **Result:**  
+   Access the master playlist at:  
+   `http://localhost:5080/LiveApp/streams/merged_stream.m3u8`
 
-Once merged, the M3U8 file will use the audio group feature of HLS, enabling audio selection in compatible players.
+3. **Play the Stream**  
+   Use a compatible HLS player or visit the sample player:  
+   `http://localhost:5080/LiveApp/play.html?id=merged_stream&playOrder=hls`
 
-To delete this merged stream, use the following command:
+4. **Stop the Merging Process**  
+   Delete the master playlist when no longer needed:
 
-```bash
-curl -X DELETE -H "Accept: Application/json" -H "Content-Type: application/json" \
-http://localhost:5080/LiveApp/rest/v1/hls-merger/multi-audio-stream/merged_stream
-```
+   ```bash
+   curl -X DELETE -H "Accept: application/json" -H "Content-Type: application/json" \
+   http://${SERVER_ADDR}:5080/LiveApp/rest/v1/hls-merger/multi-resolution-stream/$MASTER_M3U8
+   ```
 
-# How to Build and Install the HLSMerger Plugin
-## Building the Plugin
-Clone the Ant Media Plugins repository.
-Navigate to the HLSMerger folder.
-Run the following Maven command to build the plugin:
+---
 
-```bash
-mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
-```
+### 2. Create a HLS Stream with Multiple Audio Tracks
 
-The `HLSMerger.jar` file will be created in the `target` folder.
+#### Overview  
+Support multilingual or alternate audio streams by merging a video stream with multiple audio tracks into a single HLS playlist. Viewers can switch between audio tracks on HLS-compatible players.
 
-## Installing the Plugin
-Copy the `HLSMerger.jar` file to the `/usr/local/antmedia/plugins` directory.
-Restart the Ant Media Server service:
+#### Steps
 
-```bash
-sudo service antmedia restart
-```
+1. **Create Streams**  
+   Generate the video and audio streams:
 
+   - **Video Stream:**
 
+     ```bash
+     ffmpeg -re -i ~/test/bunnyz.mp4 -codec copy -f flv rtmp://localhost/LiveApp/videoStream
+     ```
 
+   - **Audio Streams:**
 
+     ```bash
+     ffmpeg -re -i ~/test/bunnyz.mp4 -codec copy -map 0:a:0 -f flv rtmp://localhost/LiveApp/audiostream1
+     ffmpeg -re -i ~/test/bunnyz.mp4 -codec copy -map 0:a:1 -f flv rtmp://localhost/LiveApp/audiostream2
+     ```
 
+2. **Merge Streams**  
+   Use the REST API to combine the audio streams with the video stream:
 
+   ```bash
+   curl -X POST -H "Accept: application/json" -H "Content-Type: application/json" \
+   http://localhost:5080/LiveApp/rest/v1/hls-merger/videoStream/multi-audio-stream/merged_stream -d '["audiostream1", "audiostream2"]'
+   ```
+
+3. **Play the Stream**  
+   Use VLC or an HLS-compatible player to play the stream:  
+   `http://localhost:5080/LiveApp/streams/merged_stream.m3u8`
+
+4. **Delete the Merged Stream**  
+   Remove the playlist when no longer needed:
+
+   ```bash
+   curl -X DELETE -H "Accept: application/json" -H "Content-Type: application/json" \
+   http://localhost:5080/LiveApp/rest/v1/hls-merger/multi-audio-stream/merged_stream
+   ```
+
+---
+
+## Build from Source
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/ant-media/Plugins.git
+   ```
+
+2. Navigate to the HLSMerger directory:
+
+   ```bash
+   cd Plugins/HLSMergerPlugin
+   ```
+
+3. Build the plugin:
+
+   ```bash
+   mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+   ```
+
+4. Install the plugin:
+
+   ```bash
+   sudo cp target/HLSMerger.jar /usr/local/antmedia/plugins
+   ```
+
+5. Restart the server:
+
+   ```bash
+   sudo service antmedia restart
+   ```
+
+---
+
+## Additional Resources
+
+- [Ant Media Server Documentation](https://antmedia.io/docs/)
+- [REST API Guide](https://antmedia.io/docs/guides/developer-sdk-and-api/rest-api-guide/)
+- [HLS Overview](https://en.wikipedia.org/wiki/HTTP_Live_Streaming)
