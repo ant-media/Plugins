@@ -74,8 +74,13 @@ Adaptive Bitrate Streaming (ABR) enhances the viewing experience by dynamically 
    `http://localhost:5080/LiveApp/streams/merged_stream.m3u8`
 
 3. **Play the Stream**  
-   Use a compatible HLS player or visit the sample player:  
-   `http://localhost:5080/LiveApp/play.html?id=merged_stream&playOrder=hls`
+   Use a compatible HLS player to play the resultant m3u8 file URL in step 2.
+   For example in [hls.js](https://hlsjs.video-dev.org/demo/):
+   1. Copy the master file URL into URL field as in the image.
+   2. Click "Apply" button. Player should start to play your stream.
+   3. Click "Quality-levels" button. Yous should see available resolutions below.
+   4. Choose any resolution to switch the quality.
+   ![multi-resolution-hls](multi-resolution-hls.png)
 
 4. **Stop the Merging Process**  
    Delete the master playlist when no longer needed:
@@ -100,34 +105,47 @@ Support multilingual or alternate audio streams by merging a video stream with m
    - **Video Stream:**
 
      ```bash
-     ffmpeg -re -i ~/test/bunnyz.mp4 -codec copy -f flv rtmp://localhost/LiveApp/videoStream
+     ffmpeg -re -stream_loop -1 -i src/test/resources/test_video_720p.flv -an -codec copy -f flv rtmp://localhost/LiveApp/videoStream
      ```
 
    - **Audio Streams:**
 
      ```bash
-     ffmpeg -re -i ~/test/bunnyz.mp4 -codec copy -map 0:a:0 -f flv rtmp://localhost/LiveApp/audiostream1
-     ffmpeg -re -i ~/test/bunnyz.mp4 -codec copy -map 0:a:1 -f flv rtmp://localhost/LiveApp/audiostream2
+     ffmpeg -re -stream_loop -1 -i src/test/resources/test_video_720p.flv -vn -codec copy -f flv rtmp://localhost/LiveApp/audiostream1
+     ffmpeg -re -stream_loop -1 -i src/test/resources/test_video_720p.flv -vn -codec copy -f flv rtmp://localhost/LiveApp/audiostream2
      ```
 
 2. **Merge Streams**  
    Use the REST API to combine the audio streams with the video stream:
 
    ```bash
+   export MASTER_M3U8=merged_stream
+   export SERVER_ADDR=localhost
+
    curl -X POST -H "Accept: application/json" -H "Content-Type: application/json" \
-   http://localhost:5080/LiveApp/rest/v1/hls-merger/videoStream/multi-audio-stream/merged_stream -d '["audiostream1", "audiostream2"]'
+   http://${SERVER_ADDR}:5080/LiveApp/rest/v1/hls-merger/videoStream/multi-audio-stream/$MASTER_M3U8 -d '["audiostream1", "audiostream2"]'
    ```
 
-3. **Play the Stream**  
-   Use VLC or an HLS-compatible player to play the stream:  
+   **Result:**  
+   Access the master playlist at:  
    `http://localhost:5080/LiveApp/streams/merged_stream.m3u8`
+
+3. **Play the Stream**  
+   Use a compatible HLS player to play the resultant m3u8 file URL in step 2.
+   For example in [hls.js](https://hlsjs.video-dev.org/demo/):
+   1. Copy the master file URL into URL field as in the image.
+   2. Click "Apply" button. Player should start to play your stream.
+   3. Click "Audio-tracks" button. Yous should see available resolutions below.
+   4. Choose any audio track to listen.
+   
+   ![multi-audio-hls](multi-audio-hls.png)
 
 4. **Delete the Merged Stream**  
    Remove the playlist when no longer needed:
 
    ```bash
    curl -X DELETE -H "Accept: application/json" -H "Content-Type: application/json" \
-   http://localhost:5080/LiveApp/rest/v1/hls-merger/multi-audio-stream/merged_stream
+   http://${SERVER_ADDR}:5080/LiveApp/rest/v1/hls-merger/multi-audio-stream/$MASTER_M3U8
    ```
 
 ---
