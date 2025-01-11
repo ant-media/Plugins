@@ -99,7 +99,12 @@ Support multilingual or alternate audio streams by merging a video stream with m
 
 #### Steps
 
-1. **Create Streams**  
+1. **Update HLS settings on Ant Media Server Dashboard**
+   Set the `Segment Duration` to `10` seconds in LiveApp Application Settings in Ant Media Server Dashdoard.
+
+   ![segment-duration-setting](segment-duration-setting.png)
+
+2. **Create Streams**  
    Generate the video and audio streams:
 
    - **Video Stream:**
@@ -115,7 +120,7 @@ Support multilingual or alternate audio streams by merging a video stream with m
      ffmpeg -re -stream_loop -1 -i src/test/resources/test_video_720p.flv -vn -codec copy -f flv rtmp://localhost/LiveApp/audiostream2
      ```
 
-2. **Merge Streams**  
+3. **Merge Streams**  
    Use the REST API to combine the audio streams with the video stream:
 
    ```bash
@@ -130,8 +135,8 @@ Support multilingual or alternate audio streams by merging a video stream with m
    Access the master playlist at:  
    `http://localhost:5080/LiveApp/streams/merged_stream.m3u8`
 
-3. **Play the Stream**  
-   Use a compatible HLS player to play the resultant m3u8 file URL in step 2.
+4. **Play the Stream**  
+   Use a compatible HLS player to play the resultant m3u8 file URL in step 3.
    For example in [hls.js](https://hlsjs.video-dev.org/demo/):
    1. Copy the master file URL into URL field as in the image.
    2. Click "Apply" button. Player should start to play your stream.
@@ -140,7 +145,7 @@ Support multilingual or alternate audio streams by merging a video stream with m
    
    ![multi-audio-hls](multi-audio-hls.png)
 
-4. **Delete the Merged Stream**  
+5. **Delete the Merged Stream**  
    Remove the playlist when no longer needed:
 
    ```bash
