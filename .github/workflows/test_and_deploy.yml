@@ -85,7 +85,7 @@ jobs:
             sudo cp target/clip-creator.jar /usr/local/antmedia/plugins
             ls /usr/local/antmedia/plugins
             sudo service antmedia restart
-            mvn test -DskipTests=false --quiet
+            mvn deploy -DskipTests=false --quiet --settings ../mvn-settings.xml
             popd
         
         - name: Build and Test Media Push Plugin
@@ -136,6 +136,6 @@ jobs:
                 ls /usr/local/antmedia/plugins
                 sudo service antmedia restart
                 sleep 10
-                mvn test -DskipTests=false --quiet
+                mvn deploy -DskipTests=false --quiet --settings ../mvn-settings.xml
                 cd ..
 

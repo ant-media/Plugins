@@ -178,9 +178,9 @@ public class HLSMergerPluginIntegrationTest {
 			audioStream2.destroyForcibly();
 
 			
-			assertTrue(lines[1].equals("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"audioStream1\",DEFAULT=NO,AUTOSELECT=YES,URI=\"audioStream1.m3u8\""));
-			assertTrue(lines[2].contains("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"audioStream2\",DEFAULT=NO,AUTOSELECT=YES,URI=\"audioStream2.m3u8\""));
-			assertTrue(lines[3].contains("AUDIO=\"audio\""));
+			assertTrue(lines[1].contains("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio-group\",NAME=\"audioStream1\",DEFAULT=YES,AUTOSELECT=YES,URI=\"audioStream1.m3u8\""));
+			assertTrue(lines[2].contains("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio-group\",NAME=\"audioStream2\",DEFAULT=NO,AUTOSELECT=YES,URI=\"audioStream2.m3u8\""));
+			assertTrue(lines[3].contains("AUDIO=\"audio-group\""));
 			assertTrue(lines[4].contains("videoStream.m3u8"));
 			
 			
