@@ -74,13 +74,14 @@ Adaptive Bitrate Streaming (ABR) enhances the viewing experience by dynamically 
    `http://localhost:5080/LiveApp/streams/merged_stream.m3u8`
 
 3. **Play the Stream**  
-   Use a compatible HLS player to play the resultant m3u8 file URL in step 2.
-   For example in [hls.js](https://hlsjs.video-dev.org/demo/):
-   1. Copy the master file URL into URL field as in the image.
-   2. Click "Apply" button. Player should start to play your stream.
-   3. Click "Quality-levels" button. You should see available resolutions below the player.
-   4. Choose any resolution to switch the quality.
-   ![multi-resolution-hls](multi-resolution-hls.png)
+   - Directly play with Ant Media Server player by visiting the url: `http://localhost:5080/LiveApp/play.html?id=merged_stream&playOrder=hls` in your browser.
+   - Use a compatible HLS player to play the resultant m3u8 file URL in step 2.
+     For example in [hls.js](https://hlsjs.video-dev.org/demo/):
+     1. Copy the master file URL into URL field as in the image.
+     2. Click "Apply" button. Player should start to play your stream.
+     3. Click "Quality-levels" button. You should see available resolutions below the player.
+     4. Choose any resolution to switch the quality.
+     ![multi-resolution-hls](multi-resolution-hls.png)
 
 4. **Stop the Merging Process**  
    Delete the master playlist when no longer needed:
