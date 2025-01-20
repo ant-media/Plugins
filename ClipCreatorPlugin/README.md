@@ -23,7 +23,7 @@ Without this plugin, creating MP4 clips from live HLS streams requires complicat
 
 - Download the Plugin(Alternatively, Build from Source)
 
-Find and download the jar file through [clip-creator on Sonatype](https://oss.sonatype.org/#nexus-search;gav~io.antmedia.plugin~clip-creator~~~). Now we assume that you've downloaded the clip-creator jar file.
+  Download the jar file through [clip-creator on Sonatype](https://oss.sonatype.org/#nexus-search;gav~io.antmedia.plugin~clip-creator~~~). Now we assume that you've downloaded the clip-creator jar file.
 
 
 - Copy the `clip-creator.jar` file to the plugins directory
@@ -39,23 +39,23 @@ Find and download the jar file through [clip-creator on Sonatype](https://oss.so
 
 
 ## Configuration
-Configuration
 To enable the Clip Creator Plugin to function correctly, follow these configuration steps:
 
 - Enable HLS Streaming:
 Go to your app settings and ensure HLS streaming is enabled. The plugin uses HLS segments to create MP4 clips.
 
-- Set Playlist Type to Event:
-In advanced settings, set hlsPlayListType to "event" to specify the type of HLS playlist.
+- Set Playlist Type to `Event`:
+In advanced settings, set `hlsPlayListType` to `event` to specify the type of HLS playlist.
 
 - Adjust Clip Interval:
 In advanced app settings, configure the custom settings:
-
+```
 "customSettings": {
     "plugin.clip-creator": {
         "mp4CreationIntervalSeconds": 1800
     }
 }
+```
 Replace 1800 with your preferred interval in seconds (default is 600 seconds or 10 minutes).
 
 
@@ -95,11 +95,11 @@ Example CURL Command:
 curl -X POST "https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/mp4/{STREAM_ID}?returnFile=true" -H "Content-Type: application/json"
 ```
 
-  - returnFile: This parameter is set to false by default.
-      - returnFile=true:
+  - `returnFile`: This parameter is set to false by default.
+      - `returnFile=true`:
         The server will create the MP4 immediately and return the file content as a response.
 
-      - returnFile=false:
+      - `returnFile=false`:
         The server will return a JSON response indicating whether the VoD creation was successful. If successful, the response will include a dataId field containing the created vodId.
 
 If there is an MP4 created by plugin since boot, it returns the MP4 clip from last MP4 creation time to the time of calling this REST endpoint.
