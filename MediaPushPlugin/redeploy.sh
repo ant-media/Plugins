@@ -1,8 +1,8 @@
 #!/bin/sh
 AMS_DIR=/usr/local/antmedia/
-AMS_DIR=~/softwares/ant-media-server/
+AMS_DIR=/home/usama/tem/ant-media-server/
 
-rm  src/main/resources/*.js
+# rm  src/main/resources/*.js
 
 cd src/main/js
 npm install
@@ -25,4 +25,4 @@ if [ $OUT -ne 0 ]; then
     exit $OUT
 fi
 cd $AMS_DIR
-./start-debug.sh
+# ./start-debug.sh

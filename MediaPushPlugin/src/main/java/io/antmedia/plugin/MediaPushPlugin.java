@@ -87,17 +87,11 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 					"--remote-allow-origins=*",
 					"--enable-usermedia-screen-capturing",
 					"--allow-http-screen-capture",
-					"--disable-infobars",
-					"--hide-scrollbars",
 					"--auto-accept-this-tab-capture",
 					"--no-sandbox",
 					"--autoplay-policy=no-user-gesture-required",
-					"--disable-background-media-suspend",
-					"--disable-gpu-vsync",
 					"--disable-audio-output",
-					"--disable-background-timer-throttling",
-					"--headless=new",
-					"--start-fullscreen");
+					"--disable-background-timer-throttling");
 
 	public static final int TIMEOUT_IN_SECONDS = 30;
 
@@ -300,6 +294,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			List<String> extraChromeSwitchList, String streamId, String publisherUrl, String targetUrl) throws IOException {
 		RemoteWebDriver driver;
 		driver = createDriver(width, height, streamId, extraChromeSwitchList);
+
 		driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 		driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 
@@ -448,6 +443,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			}
 		}
 
+    options.addArguments("--disable-blink-features=AutomationControlled");
 		options.setExperimentalOption("useAutomationExtension", false);
 		options.setExperimentalOption("excludeSwitches", List.of("enable-automation"));
 		options.addArguments(args);
