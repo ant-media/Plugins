@@ -5,9 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
+import io.antmedia.datastore.db.types.Broadcast;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -405,6 +404,54 @@ public class MediaPushPluginUnitTest  {
         assertEquals(expectedResult.getMessage(), result.getMessage());
     }
 
-   
+    @Test
+    public void testValidIP(){
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        assertFalse(plugin.isValidIP("test.abc.fd"));
+        assertFalse(plugin.isValidIP(""));
+        assertFalse(plugin.isValidIP(null));
+        assertTrue(plugin.isValidIP("127.0.0.1"));
+        assertFalse(plugin.isValidIP("192.168.0."));
+        assertFalse(plugin.isValidIP("192..0.1"));
+    }
+    @Test
+    public void testStopRequestForward(){
+        String streamId = "stream1";
+        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        doReturn(null).when(plugin).getBroadcast(anyString());
+        Result result = plugin.stopMediaPush(streamId);
+        assertEquals(result.getMessage(),"Driver does not exist for stream id: "+streamId);
 
+        Broadcast broadcast = mock(Broadcast.class);
+        doReturn(broadcast).when(plugin).getBroadcast(anyString());
+        doReturn(null).when(broadcast).getMetaData();
+        plugin.stopMediaPush(streamId);
+        assertEquals(result.getMessage(),"Driver does not exist for stream id: "+streamId);
+
+        doReturn("null").when(broadcast).getMetaData();
+        plugin.stopMediaPush(streamId);
+        assertEquals(result.getMessage(),"Driver does not exist for stream id: "+streamId);
+
+        String metaData = "{\"driverIp\":\"54.36..133\"}"; // test isvalid ip
+        doReturn(metaData).when(broadcast).getMetaData();
+        verify(plugin,times(0)).forwardMediaPushStopRequest(anyString(),anyString());
+        plugin.stopMediaPush(streamId);
+
+        result.setMessage("Driver does not exist for stream id: " + streamId);
+
+        metaData = "{\"driverIp\":\"54.36.24.133\"}";
+        doReturn(metaData).when(broadcast).getMetaData();
+        doReturn(false).when(plugin).forwardMediaPushStopRequest(anyString(),anyString());
+        plugin.stopMediaPush(streamId);
+
+        result.setMessage("Driver does not exist for stream id: " + streamId);
+
+        metaData = "{\"driverIp\":\"54.36.24.133\"}";
+        doReturn(metaData).when(broadcast).getMetaData();
+        plugin.stopMediaPush(streamId);
+        doReturn(true).when(plugin).forwardMediaPushStopRequest(anyString(),anyString());
+        verify(plugin,times(2)).forwardMediaPushStopRequest(streamId,"54.36.24.133");
+        System.out.println(result.getMessage());
+
+    }
 }

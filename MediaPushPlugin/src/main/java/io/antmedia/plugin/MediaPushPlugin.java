@@ -1,5 +1,5 @@
 package io.antmedia.plugin;
-
+import com.google.gson.Gson;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -15,7 +15,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
-
+import org.apache.http.impl.client.LaxRedirectStrategy;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.client.methods.RequestBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.HttpHeaders;
+import org.apache.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import org.apache.http.entity.StringEntity;
+import java.util.regex.Pattern;
+import java.net.InetAddress;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -42,8 +57,10 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.filter.JWTFilter;
 import io.antmedia.RecordType;
 import io.antmedia.datastore.db.types.Broadcast;
+import io.antmedia.filter.TokenFilterManager;
 import io.antmedia.model.Endpoint;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
@@ -70,6 +87,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	private boolean initialized = false;
 	private ApplicationContext applicationContext;
 
+  public String myPrivateIp = null; 
 
 	public Map<String, RemoteWebDriver> getDrivers() {
 		return drivers;
@@ -202,6 +220,20 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			return false;
 		}
 	}
+
+  public String getPrivateIpAddress() {
+      if(myPrivateIp == null){
+        try {
+            InetAddress localhost = InetAddress.getLocalHost();
+            myPrivateIp = localhost.getHostAddress().trim();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+      }
+      return myPrivateIp;
+  }
+
+
 	
 	@Override
 	public Result startMediaPush(String streamIdPar, String websocketUrl, int width, int height, String url, String token, String recordTypeString) 
@@ -211,6 +243,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		endpoint.setRecordType(recordTypeString);
 		return startMediaPush(streamIdPar, websocketUrl, endpoint);
 	}
+
 
 	@SuppressWarnings("javasecurity:S5334")
 	@Override
@@ -255,7 +288,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 			String publisherUrl = getPublisherHTMLURL(websocketUrl);
 
-
 			driver = openDriver(width, height, recordTypeString, extraChromeSwitchList, streamId, publisherUrl, url);
 
 			WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
@@ -267,9 +299,12 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 			wait.until(ExpectedConditions.jsReturnsValue("return (typeof window.startBroadcasting != 'undefined')"));
 
+			String driverIp =  getPrivateIpAddress();
+      driverIp = "{\"driverIp\":\"" + driverIp + "\"}";
+      
+			String startBroadcastingCommand = String.format("window.startBroadcasting({websocketURL:'%s',streamId:'%s',width:%d,height:%d,token:'%s',driverIp:'%s'});", 
+					websocketUrl, streamId, width, height, StringUtils.isNotBlank(token) ? token : "",driverIp);
 
-			String startBroadcastingCommand = String.format("window.startBroadcasting({websocketURL:'%s',streamId:'%s',width:%d,height:%d,token:'%s'});", 
-					websocketUrl, streamId, width, height, StringUtils.isNotBlank(token) ? token : "");
 			driver.executeScript(startBroadcastingCommand);
 
 
@@ -295,6 +330,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		RemoteWebDriver driver;
 		driver = createDriver(width, height, streamId, extraChromeSwitchList);
 
+		driver.get(publisherUrl);
 		driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 		driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 
@@ -342,7 +378,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		recordingMap.remove(streamId);
 		return "Error message is " + e.getMessage();
 	}
-
 	public String getPublisherHTMLURL(String websocketUrl) throws InvalidArgumentException, URISyntaxException 
 	{
 
@@ -370,15 +405,85 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return publisherHtmlURL;
 	}
 
+  public boolean isValidIP(String ip) {
+      if(ip == null)
+        return false;
+
+      String ipPattern = 
+          "^(25[0-5]|2[0-4][0-9]|1[0-9]{1,2}|[1-9]?[0-9])\\." + 
+          "(25[0-5]|2[0-4][0-9]|1[0-9]{1,2}|[1-9]?[0-9])\\." +
+          "(25[0-5]|2[0-4][0-9]|1[0-9]{1,2}|[1-9]?[0-9])\\." +
+          "(25[0-5]|2[0-4][0-9]|1[0-9]{1,2}|[1-9]?[0-9])$";
+
+
+      return Pattern.matches(ipPattern, ip);
+  }
+
+  public boolean forwardMediaPushStopRequest(String streamId,String ip){
+
+    AntMediaApplicationAdapter appAdapter = getApplication();
+    logger.info("forwarding media push stop request to {}",ip);
+		try {
+			CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
+
+      String url = "http://"+ ip + ":"+  appAdapter.getServerSettings().getDefaultHttpPort()  + applicationContext.getApplicationName() + "/rest/v1/media-push/stop/"+ streamId;
+      logger.info(url);
+
+      String jwtToken = JWTFilter.generateJwtToken(appAdapter.getAppSettings().getClusterCommunicationKey(), System.currentTimeMillis() + 5000);
+             HttpUriRequest post = RequestBuilder.post().setUri(url)
+				.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+        .setHeader(TokenFilterManager.TOKEN_HEADER_FOR_NODE_COMMUNICATION, jwtToken)
+        .setEntity(new StringEntity("{}", StandardCharsets.UTF_8))
+        .build();
+
+			CloseableHttpResponse response = client.execute(post);
+
+			if (response.getStatusLine().getStatusCode() == 404) {
+        return false;
+			}
+      else if(response.getStatusLine().getStatusCode() == 200){
+        return true;
+      }
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+    return false;
+  }
+
 	@Override
 	public Result stopMediaPush(String streamId) {
-		Result result = new Result(false);
-		if (!drivers.containsKey(streamId)) 
-		{
-			logger.warn("Driver does not exist for stream id: {}", streamId);
-			result.setMessage("Driver does not exist for stream id: " + streamId);
+	Result result = new Result(false);
+	if (!drivers.containsKey(streamId)) {
+	  Broadcast broadcast = getBroadcast(streamId);
+
+	if(broadcast == null){
+		logger.warn("Driver does not exist for stream id: {}", streamId);
+		result.setMessage("Driver does not exist for stream id: " + streamId);
+		return result;
+	}
+
+	  String metaData = broadcast.getMetaData();
+	  try {
+
+		if (metaData != null && !metaData.equals("null") && !metaData.isEmpty()){
+		  JsonObject jsonObject = JsonParser.parseString(metaData).getAsJsonObject();
+		  String driverIp = jsonObject.get("driverIp").getAsString();
+
+		  if(isValidIP(driverIp) && forwardMediaPushStopRequest(streamId, driverIp)){
+			result.setSuccess(true);
 			return result;
+		  }
 		}
+
+	  	result.setMessage("Driver does not exist for stream id: " + streamId);
+		return result;
+      }
+      catch(Exception e){
+        logger.error(e.getStackTrace().toString());
+      }
+      return result;
+    }
+  
 
 		RemoteWebDriver driver = drivers.remove(streamId);
 		recordingMap.remove(streamId);
@@ -456,6 +561,80 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 		return new ChromeDriver(options);
 	}
+
+	public static StringBuffer readResponse(HttpResponse response) throws IOException {
+		BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
+
+		StringBuffer result = new StringBuffer();
+		String line = "";
+		while ((line = rd.readLine()) != null) {
+			result.append(line);
+		}
+		return result;
+	}
+
+	public Broadcast getBroadcast(String streamId) {
+		try {
+
+			CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
+			Gson gson = new Gson();
+      String url = "http://"+ "127.0.0.1" +":5080" + applicationContext.getApplicationName() + "/rest/v2/broadcasts/"+ streamId;
+      logger.info(url);
+
+			HttpUriRequest get = RequestBuilder.get().setUri(url)
+					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+					.build();
+
+			CloseableHttpResponse response = client.execute(get);
+
+			StringBuffer result = readResponse(response);
+
+			if (response.getStatusLine().getStatusCode() == 404) {
+				logger.info("Response to getBroadcast is 404. It means stream is not found or deleted");
+				return null;
+			}
+			else if (response.getStatusLine().getStatusCode() != 200){
+				throw new Exception("Status code not 200 ");
+			}
+      Broadcast broadcast = gson.fromJson(result.toString(), Broadcast.class);
+			return broadcast;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	public Broadcast mediaPushStop(String streamId) {
+		try {
+
+			CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
+			Gson gson = new Gson();
+      String url = "http://"+ "127.0.0.1" +":5080" + applicationContext.getApplicationName() + "/rest/v2/broadcasts/"+ streamId;
+      logger.info(url);
+
+			HttpUriRequest get = RequestBuilder.get().setUri(url)
+					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+					.build();
+
+			CloseableHttpResponse response = client.execute(get);
+
+			StringBuffer result = readResponse(response);
+
+			if (response.getStatusLine().getStatusCode() == 404) {
+				logger.info("Response to getBroadcast is 404. It means stream is not found or deleted");
+				return null;
+			}
+			else if (response.getStatusLine().getStatusCode() != 200){
+				throw new Exception("Status code not 200 ");
+			}
+      Broadcast broadcast = gson.fromJson(result.toString(), Broadcast.class);
+			return broadcast;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
 
 
 
