@@ -566,8 +566,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 			CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
 			Gson gson = new Gson();
-      String url = "http://"+ "127.0.0.1" +":5080" + applicationContext.getApplicationName() + "/rest/v2/broadcasts/"+ streamId;
-      logger.info(url);
+		        String url = "http://"+ "127.0.0.1" + ":"+  getApplication().getServerSettings().getDefaultHttpPort() + applicationContext.getApplicationName() + "/rest/v2/broadcasts/"+ streamId;
+		        logger.info(url);
 
 			HttpUriRequest get = RequestBuilder.get().setUri(url)
 					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
