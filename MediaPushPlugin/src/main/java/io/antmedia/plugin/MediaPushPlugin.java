@@ -221,18 +221,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 	}
 
-  public String getPrivateIpAddress() {
-      if(myPrivateIp == null){
-        try {
-            InetAddress localhost = InetAddress.getLocalHost();
-            myPrivateIp = localhost.getHostAddress().trim();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-      }
-      return myPrivateIp;
-  }
-
 
 	
 	@Override
@@ -299,8 +287,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 			wait.until(ExpectedConditions.jsReturnsValue("return (typeof window.startBroadcasting != 'undefined')"));
 
-			String driverIp =  getPrivateIpAddress();
-      driverIp = "{\"driverIp\":\"" + driverIp + "\"}";
+			String driverIp = getApplication().getServerSettings().getHostAddress();
+      			driverIp = "{\"driverIp\":\"" + driverIp + "\"}";
       
 			String startBroadcastingCommand = String.format("window.startBroadcasting({websocketURL:'%s',streamId:'%s',width:%d,height:%d,token:'%s',driverIp:'%s'});", 
 					websocketUrl, streamId, width, height, StringUtils.isNotBlank(token) ? token : "",driverIp);
