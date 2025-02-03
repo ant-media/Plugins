@@ -78,15 +78,6 @@ jobs:
             sleep 20
             cd ..
 
-        - name: Build and Test Clip Creator
-          run: |
-            pushd ClipCreatorPlugin
-            mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
-            sudo cp target/clip-creator.jar /usr/local/antmedia/plugins
-            ls /usr/local/antmedia/plugins
-            sudo service antmedia restart
-            mvn deploy -DskipTests=false --quiet --settings ../mvn-settings.xml
-            popd
         
         - name: Build and Test Media Push Plugin
           run: |
