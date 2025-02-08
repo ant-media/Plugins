@@ -108,7 +108,7 @@ public class HLSMergerPluginIntegrationTest {
 			
 			callStopMultiResolutionStream(mergedStreamId);
 
-			Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
+			Awaitility.await().atMost(45, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
 				return !testFile(APP_URL+"/streams/" + mergedStreamId+ ".m3u8");
 			});
 
@@ -186,7 +186,8 @@ public class HLSMergerPluginIntegrationTest {
 			
 			callStopMultiResolutionStream(mergedStreamId);
 
-			Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
+			// hls list size is 15 and segment 2 secs, it means it'll be deleted after 30 seconds, have 45 to have some margin
+			Awaitility.await().atMost(45, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
 				return !testFile(APP_URL+"/streams/" + mergedStreamId+ ".m3u8");
 			});
 
