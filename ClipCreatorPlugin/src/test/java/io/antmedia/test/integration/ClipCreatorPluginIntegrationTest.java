@@ -7,6 +7,7 @@ import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.datastore.db.types.User;
 import io.antmedia.datastore.db.types.VoD;
 import io.antmedia.datastore.db.types.Broadcast.PlayListItem;
+import io.antmedia.datastore.db.types.BroadcastUpdate;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.ClipCreatorPlugin;
@@ -288,6 +289,7 @@ public class ClipCreatorPluginIntegrationTest {
     
          Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(5, TimeUnit.SECONDS).until(() -> {
              List<VoD> voDList2 = callGetVoDList(0,50, streamId);
+             logger.info("VoD List size: {}", voDList2.size());
              return voDList2 != null && voDList2.size() == 2;
          });
 
@@ -1067,7 +1069,7 @@ public class ClipCreatorPluginIntegrationTest {
 		String url = ROOT_SERVICE_URL + "/v2/broadcasts/" + id;
 
 		HttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
-		Broadcast broadcast = new Broadcast();
+		BroadcastUpdate broadcast = new BroadcastUpdate();
 		try {
 			broadcast.setStreamId(id);
 		} catch (Exception e1) {
@@ -1084,11 +1086,11 @@ public class ClipCreatorPluginIntegrationTest {
 
 		try {
 			Gson gson = new Gson();
-			HttpUriRequest post = RequestBuilder.put().setUri(url)
+			HttpUriRequest put = RequestBuilder.put().setUri(url)
 					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
 					.setEntity(new StringEntity(gson.toJson(broadcast))).build();
 
-			HttpResponse response = client.execute(post);
+			HttpResponse response = client.execute(put);
 
 			StringBuffer result = readResponse(response);
 
