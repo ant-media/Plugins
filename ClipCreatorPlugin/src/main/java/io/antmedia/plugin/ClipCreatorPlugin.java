@@ -189,8 +189,9 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	
 	public void createRecordings() 
 	{
+		
 		List<Broadcast> broadcasts = dataStore.getLocalLiveBroadcasts(serverSettings.getHostAddress());
-
+		logger.info("Create Recordings for active broadcasts size:{}", broadcasts.size());
 		for (Broadcast broadcast : broadcasts) {
 			convertHlsToMp4(broadcast, true);
 		}
