@@ -175,6 +175,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			
 			vertx.executeBlocking(() -> 
 			{
+				logger.info("startPeriodicRecording#createRecordings ", appName);
 				createRecordings();
 				return null;
 			}, false);
@@ -188,9 +189,8 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	
 	public void createRecordings() 
 	{
-		
 		List<Broadcast> broadcasts = dataStore.getLocalLiveBroadcasts(serverSettings.getHostAddress());
-		logger.info("createRecordings for active broadcasts size:{}", broadcasts.size());
+
 		for (Broadcast broadcast : broadcasts) {
 			convertHlsToMp4(broadcast, true);
 		}

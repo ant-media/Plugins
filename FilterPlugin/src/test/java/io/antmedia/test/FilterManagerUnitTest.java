@@ -142,7 +142,6 @@ public class FilterManagerUnitTest {
 			e.printStackTrace();
 			fail(e.getMessage());
 		}
-		broadcast.setUpdateTime(System.currentTimeMillis());
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
 		dataStore.save(broadcast);
 
@@ -227,7 +226,6 @@ public class FilterManagerUnitTest {
 			e.printStackTrace();
 			fail(e.getMessage());
 		}
-		broadcast.setUpdateTime(System.currentTimeMillis());
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
 		dataStore.save(broadcast);
 
@@ -353,7 +351,6 @@ public class FilterManagerUnitTest {
 			e.printStackTrace();
 			fail(e.getMessage());
 		}
-		broadcast.setUpdateTime(System.currentTimeMillis());
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
 		dataStore.save(broadcast);
 
@@ -574,7 +571,6 @@ public class FilterManagerUnitTest {
 			e.printStackTrace();
 			fail(e.getMessage());
 		}
-		broadcast.setUpdateTime(System.currentTimeMillis());
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
 		assertEquals("stream1", dataStore.save(broadcast));
 

@@ -131,7 +131,6 @@ public class MCUManagerUnitTest {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		broadcast.setUpdateTime(System.currentTimeMillis());
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
 		dataStore.save(broadcast);
 		

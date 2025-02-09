@@ -2,24 +2,30 @@ package io.antmedia.plugin;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.*;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
 
+import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.AppSettings;
 import io.antmedia.datastore.db.types.Broadcast;
+import io.antmedia.filter.JWTFilter;
+import io.antmedia.filter.TokenFilterManager;
+import io.antmedia.settings.ServerSettings;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.Header;
+import org.apache.http.HttpEntity;
+import org.apache.http.StatusLine;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.LaxRedirectStrategy;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
@@ -31,9 +37,6 @@ import org.mockito.Mockito;
 import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver.TargetLocator;
-import org.openqa.selenium.logging.LogEntries;
-import org.openqa.selenium.logging.LogEntry;
-import org.openqa.selenium.logging.LogType;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +44,9 @@ import org.slf4j.LoggerFactory;
 import io.antmedia.model.Endpoint;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.springframework.context.ApplicationContext;
 
 public class MediaPushPluginUnitTest  {
 	
@@ -70,7 +76,7 @@ public class MediaPushPluginUnitTest  {
 	
 	@Test
 	public void testCreateDriverWithExtraSwitches() {
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
         
        
         
@@ -96,7 +102,7 @@ public class MediaPushPluginUnitTest  {
 	
 	@Test
 	public void testStartMediaPushWithEndpoint() throws IOException {
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
         
         Endpoint endpoint = new Endpoint();
         endpoint.setUrl("http://example.com");
@@ -116,14 +122,14 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testSendCommand_WhenDriverExists_ShouldExecuteCommand() {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        HashMap<String, RemoteWebDriver> drivers = mock(HashMap.class);
+        RemoteWebDriver driver = mock(RemoteWebDriver.class);
         
-        Mockito.when(driver.switchTo()).thenReturn(Mockito.mock(TargetLocator.class));
+        when(driver.switchTo()).thenReturn(mock(TargetLocator.class));
         
         
-        JavascriptExecutor js = Mockito.mock(JavascriptExecutor.class);
+        JavascriptExecutor js = mock(JavascriptExecutor.class);
         String streamId = "streamId";
         String command = "someCommand";
         Result expectedResult = new Result(true, streamId, "");
@@ -132,7 +138,7 @@ public class MediaPushPluginUnitTest  {
         when(drivers.containsKey(streamId)).thenReturn(true);
         when(drivers.get(streamId)).thenReturn(driver);
         when(js.executeScript(command)).thenReturn(null);
-        Mockito.doNothing().when(plugin).waitToBeFrameAvailable(Mockito.any());
+        doNothing().when(plugin).waitToBeFrameAvailable(Mockito.any());
 
         // Act
         Result result = plugin.sendCommand(streamId, command);
@@ -145,15 +151,15 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testSendCommand_WhenDriverDoesNotExist_ShouldReturnErrorResult() {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        HashMap<String, RemoteWebDriver> drivers = mock(HashMap.class);
         String streamId = "streamId";
         String command = "someCommand";
         Result expectedResult = new Result(false, "Driver does not exist for stream id: " + streamId);
 
         when(plugin.getDrivers()).thenReturn(drivers);
         when(drivers.containsKey(streamId)).thenReturn(false);
-        Mockito.doNothing().when(plugin).waitToBeFrameAvailable(Mockito.any());
+        doNothing().when(plugin).waitToBeFrameAvailable(Mockito.any());
 
 
         // Act
@@ -188,9 +194,9 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testSendCommand_WhenCommandExecutionFails_ShouldReturnErrorResult() {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        HashMap<String, RemoteWebDriver> drivers = mock(HashMap.class);
+        RemoteWebDriver driver = mock(RemoteWebDriver.class);
         String streamId = "streamId";
         String command = "someCommand";
         Result expectedResult = new Result(false, "Command cannot be executed.");
@@ -199,9 +205,9 @@ public class MediaPushPluginUnitTest  {
         when(drivers.containsKey(streamId)).thenReturn(true);
         when(drivers.get(streamId)).thenReturn(driver);
         when(driver.executeScript(command)).thenThrow(new RuntimeException("Command execution failed."));
-        Mockito.doNothing().when(plugin).waitToBeFrameAvailable(Mockito.any());
+        doNothing().when(plugin).waitToBeFrameAvailable(Mockito.any());
 
-        Mockito.when(driver.switchTo()).thenReturn(Mockito.mock(TargetLocator.class));
+        when(driver.switchTo()).thenReturn(mock(TargetLocator.class));
 
         // Act
         Result result = plugin.sendCommand(streamId, command);
@@ -213,7 +219,7 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testStartMediaPush_WhenStreamIdIsEmptyOrNull_ShouldGenerateStreamId() throws IOException {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
       
         String streamId = plugin.checkAndGetStreamId("");
         
@@ -233,9 +239,9 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testStartMediaPush_InvalidUrl_ShouldReturnErrorResult() throws IOException {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        Endpoint endpoint = Mockito.mock(Endpoint.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        Endpoint endpoint = mock(Endpoint.class);
+        RemoteWebDriver driver = mock(RemoteWebDriver.class);
         String streamId = "streamId";
         String websocketUrl = "websocketUrl";
         String url = "invalid_url";
@@ -261,9 +267,9 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testStartMediaPush_WhenDriverExistsForStreamId_ShouldReturnErrorResult() throws IOException {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        Endpoint endpoint = Mockito.mock(Endpoint.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        Endpoint endpoint = mock(Endpoint.class);
+        RemoteWebDriver driver = mock(RemoteWebDriver.class);
         String streamId = "streamId";
         String websocketUrl = "websocketUrl";
         String url = "http://google.com";
@@ -291,8 +297,8 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testStartMediaPush_WhenDriverCreationFails_ShouldReturnErrorResult() throws IOException {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        Endpoint endpoint = Mockito.mock(Endpoint.class);
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        Endpoint endpoint = mock(Endpoint.class);
         String streamId = "streamId";
         String websocketUrl = "ws://test.antmedia.io";
         String url = "http://example.com";
@@ -303,7 +309,7 @@ public class MediaPushPluginUnitTest  {
         when(endpoint.getWidth()).thenReturn(width);
         when(endpoint.getHeight()).thenReturn(height);
         when(plugin.getDrivers()).thenReturn(new HashMap<>());
-        Mockito.doThrow(new IOException()).when(plugin).createDriver(width, height, "streamId", null);
+        doThrow(new IOException()).when(plugin).createDriver(width, height, "streamId", null);
 
         // Act
         Result result = plugin.startMediaPush(streamId, websocketUrl,endpoint.getWidth(), endpoint.getHeight(), endpoint.getUrl(), endpoint.getToken(), null);
@@ -315,7 +321,7 @@ public class MediaPushPluginUnitTest  {
     
     @Test
     public void testGetPublisherUrl() throws InvalidArgumentException, URISyntaxException {
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
 
         String url = plugin.getPublisherHTMLURL("ws://example.antmedia.io");
         
@@ -329,8 +335,8 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testStartMediaPush_WhenExecuteScriptTimeoutOccurs_ShouldReturnErrorResult() throws IOException {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        Endpoint endpoint = Mockito.mock(Endpoint.class);
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        Endpoint endpoint = mock(Endpoint.class);
         String streamId = "streamId";
         String websocketUrl = "ws://example.antmedia.io";
         String url = "http://example.com";
@@ -360,9 +366,9 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testStopMediaPush_WhenDriverExists_ShouldStopMediaPushAndReturnSuccessResult() {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
-        RemoteWebDriver driver = Mockito.mock(RemoteWebDriver.class);
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        HashMap<String, RemoteWebDriver> drivers = mock(HashMap.class);
+        RemoteWebDriver driver = mock(RemoteWebDriver.class);
         String streamId = "streamId";
         Result expectedResult = new Result(true, "Media Push stopped");
 
@@ -388,8 +394,8 @@ public class MediaPushPluginUnitTest  {
     @Test
     public void testStopMediaPush_WhenDriverDoesNotExist_ShouldReturnErrorResult() {
         // Arrange
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
-        HashMap<String, RemoteWebDriver> drivers = Mockito.mock(HashMap.class);
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        HashMap<String, RemoteWebDriver> drivers = mock(HashMap.class);
         String streamId = "streamId";
         Result expectedResult = new Result(false, "Driver does not exist for stream id: " + streamId, 404);
 
@@ -406,7 +412,7 @@ public class MediaPushPluginUnitTest  {
 
     @Test
     public void testValidIP(){
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
         assertFalse(plugin.isValidIP("test.abc.fd"));
         assertFalse(plugin.isValidIP(""));
         assertFalse(plugin.isValidIP(null));
@@ -415,9 +421,9 @@ public class MediaPushPluginUnitTest  {
         assertFalse(plugin.isValidIP("192..0.1"));
     }
     @Test
-    public void testStopRequestForward(){
+    public void testStopRequestForward() throws IOException, URISyntaxException {
         String streamId = "stream1";
-        MediaPushPlugin plugin = Mockito.spy(new MediaPushPlugin());
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
         doReturn(null).when(plugin).getBroadcast(anyString());
         Result result = plugin.stopMediaPush(streamId);
         assertEquals(result.getMessage(),"Driver does not exist for stream id: "+streamId);
@@ -452,6 +458,98 @@ public class MediaPushPluginUnitTest  {
         doReturn(true).when(plugin).forwardMediaPushStopRequest(anyString(),anyString());
         verify(plugin,times(2)).forwardMediaPushStopRequest(streamId,"54.36.24.133");
         System.out.println(result.getMessage());
+
+        plugin = spy(new MediaPushPlugin());
+
+        CloseableHttpClient mockHttpClient = mock(CloseableHttpClient.class);
+        HttpClientBuilder builder = mock(HttpClientBuilder.class);
+        mockStatic(HttpClients.class);
+        when(HttpClients.custom()).thenReturn(builder);
+        doReturn(builder).when(builder).setRedirectStrategy((any(LaxRedirectStrategy.class)));
+        doReturn(mockHttpClient).when(builder).build();
+
+        AntMediaApplicationAdapter adapter = mock(AntMediaApplicationAdapter.class);
+        doReturn(adapter).when(plugin).getApplication();
+        AppSettings appSettings = mock(AppSettings.class);
+        doReturn("test").when(appSettings).getClusterCommunicationKey();
+        doReturn(appSettings).when(adapter).getAppSettings();
+        ServerSettings settings = mock(ServerSettings.class);
+        doReturn(settings).when(adapter).getServerSettings();
+
+        doReturn(5080).when(settings).getDefaultHttpPort();
+
+        mockStatic(JWTFilter.class);
+        when(JWTFilter.generateJwtToken(anyString(),anyLong())).thenReturn("test");
+
+        ApplicationContext ctx = mock(ApplicationContext.class);
+        plugin.applicationContext = ctx;
+        doReturn("/LiveApp").when(ctx).getApplicationName();
+
+        URI url = new URI("http://"+ "127.0.0.1" + ":"+ "5080"  + "/LiveApp" + "/rest/v1/media-push/stop/"+ streamId);
+
+        CloseableHttpResponse response = mock(CloseableHttpResponse.class);
+        StatusLine statusLine = mock(StatusLine.class);
+        doReturn(statusLine).when(response).getStatusLine();
+        doReturn(200).when(statusLine).getStatusCode();
+        doReturn(response).when(mockHttpClient).execute(any());
+
+        plugin.forwardMediaPushStopRequest(streamId,"127.0.0.1");
+
+        ArgumentCaptor<HttpUriRequest> requestCaptor = ArgumentCaptor.forClass(HttpUriRequest.class);
+        verify(mockHttpClient).execute(requestCaptor.capture());
+        HttpUriRequest capturedRequest = requestCaptor.getValue();
+        assertEquals(capturedRequest.getMethod(),"POST");
+        assertEquals(capturedRequest.getURI(),url);
+        assertEquals(capturedRequest.getURI(),url);
+        Header[] header = capturedRequest.getHeaders(TokenFilterManager.TOKEN_HEADER_FOR_NODE_COMMUNICATION);
+        assertEquals(header[0].getValue(),"test");
+    }
+    @Test
+    public void getBroadcastTest() throws URISyntaxException, IOException {
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        String streamId = "stream1";
+
+        CloseableHttpClient mockHttpClient = mock(CloseableHttpClient.class);
+        HttpClientBuilder builder = mock(HttpClientBuilder.class);
+        mockStatic(HttpClients.class);
+        when(HttpClients.custom()).thenReturn(builder);
+        doReturn(builder).when(builder).setRedirectStrategy((any(LaxRedirectStrategy.class)));
+        doReturn(mockHttpClient).when(builder).build();
+
+        AntMediaApplicationAdapter adapter = mock(AntMediaApplicationAdapter.class);
+        doReturn(adapter).when(plugin).getApplication();
+        AppSettings appSettings = mock(AppSettings.class);
+        doReturn("test").when(appSettings).getClusterCommunicationKey();
+        doReturn(appSettings).when(adapter).getAppSettings();
+        ServerSettings settings = mock(ServerSettings.class);
+        doReturn(settings).when(adapter).getServerSettings();
+
+        doReturn(5080).when(settings).getDefaultHttpPort();
+
+        ApplicationContext ctx = mock(ApplicationContext.class);
+        plugin.applicationContext = ctx;
+        doReturn("/LiveApp").when(ctx).getApplicationName();
+
+        URI url = new URI("http://"+ "127.0.0.1" + ":"+ "5080"  + "/LiveApp" + "/rest/v2/broadcasts/"+ streamId);
+        CloseableHttpResponse response = mock(CloseableHttpResponse.class);
+        HttpEntity entity = mock(HttpEntity.class);
+        String broadcast = "{\"streamId\":\"stream1\",\"status\":\"broadcasting\"}";
+        InputStream stream = new ByteArrayInputStream(broadcast.getBytes());
+        doReturn(stream).when(entity).getContent();
+        doReturn(entity).when(response).getEntity();
+        StatusLine statusLine = mock(StatusLine.class);
+        doReturn(statusLine).when(response).getStatusLine();
+        doReturn(200).when(statusLine).getStatusCode();
+        doReturn(response).when(mockHttpClient).execute(any());
+
+        Broadcast broadcast1 = plugin.getBroadcast(streamId);
+        assertEquals(broadcast1.getStreamId(),streamId);
+
+        ArgumentCaptor<HttpUriRequest> requestCaptor = ArgumentCaptor.forClass(HttpUriRequest.class);
+        verify(mockHttpClient).execute(requestCaptor.capture());
+        HttpUriRequest capturedRequest = requestCaptor.getValue();
+        assertEquals(capturedRequest.getMethod(),"GET");
+        assertEquals(capturedRequest.getURI(),url);
 
     }
 }

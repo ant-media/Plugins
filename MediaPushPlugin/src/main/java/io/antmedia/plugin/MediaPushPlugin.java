@@ -30,7 +30,6 @@ import org.apache.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import org.apache.http.entity.StringEntity;
 import java.util.regex.Pattern;
-import java.net.InetAddress;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -65,8 +64,6 @@ import io.antmedia.model.Endpoint;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
 import io.github.bonigarcia.wdm.WebDriverManager;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.Response.Status;
 
 
 @Component(value=IMediaPushPlugin.BEAN_NAME)
@@ -85,7 +82,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 
 	private boolean initialized = false;
-	private ApplicationContext applicationContext;
+	public ApplicationContext applicationContext;
 
 
 	public Map<String, RemoteWebDriver> getDrivers() {
@@ -410,36 +407,37 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
       return Pattern.matches(ipPattern, ip);
   }
 
-  public boolean forwardMediaPushStopRequest(String streamId,String ip){
+	public boolean forwardMediaPushStopRequest(String streamId, String ip) {
 
-    AntMediaApplicationAdapter appAdapter = getApplication();
-    logger.info("forwarding media push stop request to {}",ip);
+		AntMediaApplicationAdapter appAdapter = getApplication();
+		logger.info("forwarding media push stop request to {}", ip);
 		try {
 			CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
 
-      String url = "http://"+ ip + ":"+  appAdapter.getServerSettings().getDefaultHttpPort()  + applicationContext.getApplicationName() + "/rest/v1/media-push/stop/"+ streamId;
-      logger.info(url);
+			String url = "http://" + ip + ":" + appAdapter.getServerSettings().getDefaultHttpPort()
+					+ applicationContext.getApplicationName() + "/rest/v1/media-push/stop/" + streamId;
+			logger.info(url);
 
-      String jwtToken = JWTFilter.generateJwtToken(appAdapter.getAppSettings().getClusterCommunicationKey(), System.currentTimeMillis() + 5000);
-             HttpUriRequest post = RequestBuilder.post().setUri(url)
-				.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
-        .setHeader(TokenFilterManager.TOKEN_HEADER_FOR_NODE_COMMUNICATION, jwtToken)
-        .setEntity(new StringEntity("{}", StandardCharsets.UTF_8))
-        .build();
+			String jwtToken = JWTFilter.generateJwtToken(appAdapter.getAppSettings().getClusterCommunicationKey(),
+					System.currentTimeMillis() + 5000);
+			HttpUriRequest post = RequestBuilder.post().setUri(url)
+					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+					.setHeader(TokenFilterManager.TOKEN_HEADER_FOR_NODE_COMMUNICATION, jwtToken)
+					.setEntity(new StringEntity("{}", StandardCharsets.UTF_8))
+					.build();
 
 			CloseableHttpResponse response = client.execute(post);
 
 			if (response.getStatusLine().getStatusCode() == 404) {
-        return false;
+				return false;
+			} else if (response.getStatusLine().getStatusCode() == 200) {
+				return true;
 			}
-      else if(response.getStatusLine().getStatusCode() == 200){
-        return true;
-      }
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-    return false;
-  }
+		return false;
+	}
 
 	@Override
 	public Result stopMediaPush(String streamId) {
@@ -565,7 +563,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	public Broadcast getBroadcast(String streamId) {
 		try {
-
 			CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
 			Gson gson = new Gson();
 		        String url = "http://"+ "127.0.0.1" + ":"+  getApplication().getServerSettings().getDefaultHttpPort() + applicationContext.getApplicationName() + "/rest/v2/broadcasts/"+ streamId;
@@ -586,46 +583,13 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			else if (response.getStatusLine().getStatusCode() != 200){
 				throw new Exception("Status code not 200 ");
 			}
-      Broadcast broadcast = gson.fromJson(result.toString(), Broadcast.class);
+      		Broadcast broadcast = gson.fromJson(result.toString(), Broadcast.class);
 			return broadcast;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		return null;
 	}
-
-	public Broadcast mediaPushStop(String streamId) {
-		try {
-
-			CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
-			Gson gson = new Gson();
-      String url = "http://"+ "127.0.0.1" +":5080" + applicationContext.getApplicationName() + "/rest/v2/broadcasts/"+ streamId;
-      logger.info(url);
-
-			HttpUriRequest get = RequestBuilder.get().setUri(url)
-					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
-					.build();
-
-			CloseableHttpResponse response = client.execute(get);
-
-			StringBuffer result = readResponse(response);
-
-			if (response.getStatusLine().getStatusCode() == 404) {
-				logger.info("Response to getBroadcast is 404. It means stream is not found or deleted");
-				return null;
-			}
-			else if (response.getStatusLine().getStatusCode() != 200){
-				throw new Exception("Status code not 200 ");
-			}
-      Broadcast broadcast = gson.fromJson(result.toString(), Broadcast.class);
-			return broadcast;
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-
 
 
 	public AntMediaApplicationAdapter getApplication() {
