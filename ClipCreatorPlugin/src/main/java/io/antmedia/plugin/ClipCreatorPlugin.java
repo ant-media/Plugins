@@ -190,9 +190,16 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	{
 		
 		List<Broadcast> broadcasts = dataStore.getLocalLiveBroadcasts(serverSettings.getHostAddress());
-		logger.info("createRecordings for active broadcasts size:{}", broadcasts.size());
-		for (Broadcast broadcast : broadcasts) {
-			convertHlsToMp4(broadcast, true);
+		logger.info("createRecordings for active broadcasts size:{} for app:{}", broadcasts.size(), appName);
+		
+		for (Broadcast broadcast : broadcasts) 
+		{
+			vertx.executeBlocking(() -> 
+			{
+				convertHlsToMp4(broadcast, true);
+				return null;
+			}, false);
+			
 		}
 	}
 
@@ -312,7 +319,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		}
 
 		try {
-			logger.info("number of ts files: {} for streamId:{}", tsFilesToMerge.size(), streamId);
+			logger.info("number of ts files: {} for streamId:{} and startTime:{}", tsFilesToMerge.size(), streamId, dateFormat.format(new Date(startTime)));
 			File tsFileListTextFile = writeTsFilePathsToTxt(m3u8File, tsFilesToMerge);
 
 			String vodId = RandomStringUtils.randomNumeric(24);
