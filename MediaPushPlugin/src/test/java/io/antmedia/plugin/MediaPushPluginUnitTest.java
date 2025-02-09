@@ -33,6 +33,7 @@ import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
@@ -463,7 +464,7 @@ public class MediaPushPluginUnitTest  {
 
         CloseableHttpClient mockHttpClient = mock(CloseableHttpClient.class);
         HttpClientBuilder builder = mock(HttpClientBuilder.class);
-        mockStatic(HttpClients.class);
+        MockedStatic<HttpClients> httpClientStaticMock = mockStatic(HttpClients.class);
         when(HttpClients.custom()).thenReturn(builder);
         doReturn(builder).when(builder).setRedirectStrategy((any(LaxRedirectStrategy.class)));
         doReturn(mockHttpClient).when(builder).build();
@@ -478,7 +479,7 @@ public class MediaPushPluginUnitTest  {
 
         doReturn(5080).when(settings).getDefaultHttpPort();
 
-        mockStatic(JWTFilter.class);
+        MockedStatic<JWTFilter> jwtStaticMock = mockStatic(JWTFilter.class);
         when(JWTFilter.generateJwtToken(anyString(),anyLong())).thenReturn("test");
 
         ApplicationContext ctx = mock(ApplicationContext.class);
@@ -503,6 +504,9 @@ public class MediaPushPluginUnitTest  {
         assertEquals(capturedRequest.getURI(),url);
         Header[] header = capturedRequest.getHeaders(TokenFilterManager.TOKEN_HEADER_FOR_NODE_COMMUNICATION);
         assertEquals(header[0].getValue(),"test");
+
+        jwtStaticMock.close();
+        httpClientStaticMock.close();
     }
     @Test
     public void getBroadcastTest() throws URISyntaxException, IOException {
@@ -511,7 +515,7 @@ public class MediaPushPluginUnitTest  {
 
         CloseableHttpClient mockHttpClient = mock(CloseableHttpClient.class);
         HttpClientBuilder builder = mock(HttpClientBuilder.class);
-        mockStatic(HttpClients.class);
+        MockedStatic<HttpClients> httpClientStaticMock = mockStatic(HttpClients.class);
         when(HttpClients.custom()).thenReturn(builder);
         doReturn(builder).when(builder).setRedirectStrategy((any(LaxRedirectStrategy.class)));
         doReturn(mockHttpClient).when(builder).build();
@@ -550,6 +554,6 @@ public class MediaPushPluginUnitTest  {
         HttpUriRequest capturedRequest = requestCaptor.getValue();
         assertEquals(capturedRequest.getMethod(),"GET");
         assertEquals(capturedRequest.getURI(),url);
-
+        httpClientStaticMock.close();
     }
 }
