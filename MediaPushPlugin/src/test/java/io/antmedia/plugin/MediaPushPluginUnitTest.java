@@ -9,6 +9,7 @@ import static org.mockito.Mockito.*;
 import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 
@@ -18,6 +19,7 @@ import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.filter.JWTFilter;
 import io.antmedia.filter.TokenFilterManager;
 import io.antmedia.settings.ServerSettings;
+import kotlin.jvm.internal.unsafe.MonitorKt;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
@@ -119,7 +121,7 @@ public class MediaPushPluginUnitTest  {
         
 
 	}
-		
+
     @Test
     public void testSendCommand_WhenDriverExists_ShouldExecuteCommand() {
         // Arrange
@@ -499,11 +501,11 @@ public class MediaPushPluginUnitTest  {
         ArgumentCaptor<HttpUriRequest> requestCaptor = ArgumentCaptor.forClass(HttpUriRequest.class);
         verify(mockHttpClient).execute(requestCaptor.capture());
         HttpUriRequest capturedRequest = requestCaptor.getValue();
-        assertEquals(capturedRequest.getMethod(),"POST");
+        assertEquals("POST", capturedRequest.getMethod());
         assertEquals(capturedRequest.getURI(),url);
         assertEquals(capturedRequest.getURI(),url);
         Header[] header = capturedRequest.getHeaders(TokenFilterManager.TOKEN_HEADER_FOR_NODE_COMMUNICATION);
-        assertEquals(header[0].getValue(),"test");
+        assertEquals("test", header[0].getValue());
 
         jwtStaticMock.close();
         httpClientStaticMock.close();
@@ -547,13 +549,24 @@ public class MediaPushPluginUnitTest  {
         doReturn(response).when(mockHttpClient).execute(any());
 
         Broadcast broadcast1 = plugin.getBroadcast(streamId);
-        assertEquals(broadcast1.getStreamId(),streamId);
+        assertEquals(streamId, broadcast1.getStreamId());
 
         ArgumentCaptor<HttpUriRequest> requestCaptor = ArgumentCaptor.forClass(HttpUriRequest.class);
         verify(mockHttpClient).execute(requestCaptor.capture());
         HttpUriRequest capturedRequest = requestCaptor.getValue();
-        assertEquals(capturedRequest.getMethod(),"GET");
+        assertEquals("GET", capturedRequest.getMethod());
         assertEquals(capturedRequest.getURI(),url);
         httpClientStaticMock.close();
     }
+
+    @Test
+    public void testDriverExit() throws IOException {
+       MediaPushPlugin plugin = spy(new MediaPushPlugin());
+       RemoteWebDriver driver = plugin.createDriver(1280, 720, "streamId", Arrays.asList("--disable-gpu", "--start-fullscreen"));
+       driver.get("https://google.com");
+       plugin.clearAndQuit("streamId" , driver,new Exception("test"));
+       verify(driver).quit();
+
+    }
+
 }

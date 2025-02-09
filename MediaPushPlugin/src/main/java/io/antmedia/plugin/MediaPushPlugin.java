@@ -347,7 +347,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return streamId;
 	}
 
-	private String clearAndQuit(String streamId, RemoteWebDriver driver, Exception e) {
+	public String clearAndQuit(String streamId, RemoteWebDriver driver, Exception e) {
 
 		logger.error(ExceptionUtils.getStackTrace(e));
 		if (driver != null) 
@@ -434,7 +434,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 				return true;
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error(ExceptionUtils.getStackTrace(e));
 		}
 		return false;
 	}
@@ -463,7 +463,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			return result;
 		  }
 		}
-
 	  	result.setMessage("Driver does not exist for stream id: " + streamId);
 		return result;
       }
@@ -586,7 +585,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
       		Broadcast broadcast = gson.fromJson(result.toString(), Broadcast.class);
 			return broadcast;
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error(ExceptionUtils.getStackTrace(e));
 		}
 		return null;
 	}
