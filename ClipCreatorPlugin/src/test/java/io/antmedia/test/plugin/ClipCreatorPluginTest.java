@@ -9,6 +9,7 @@ import io.antmedia.plugin.ClipCreatorConverter;
 import io.antmedia.plugin.ClipCreatorPlugin;
 import io.antmedia.plugin.ClipCreatorSettings;
 import io.antmedia.plugin.Mp4CreationResponse;
+import io.antmedia.settings.ServerSettings;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.lindstrom.m3u8.model.MediaSegment;
 import io.lindstrom.m3u8.parser.MediaPlaylistParser;
@@ -25,8 +26,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 import static io.smallrye.common.constraint.Assert.assertNotNull;
@@ -39,6 +42,41 @@ public class ClipCreatorPluginTest {
 
 	
     Vertx vertx = Vertx.vertx();
+    
+    @Test
+    public void testCreateRecordingsAsync() throws Exception 
+    {
+    	ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
+
+        ApplicationContext context = Mockito.mock(ApplicationContext.class);
+
+        Vertx vertx =Mockito.mock(Vertx.class);
+        when(context.getBean("vertxCore")).thenReturn(vertx);
+        
+        AntMediaApplicationAdapter applicationAdapter = Mockito.mock(AntMediaApplicationAdapter.class);
+        when(applicationAdapter.getScope()).thenReturn(Mockito.mock(org.red5.server.api.scope.IScope.class));
+
+        AppSettings appSettings = new AppSettings();
+        when(applicationAdapter.getAppSettings()).thenReturn(appSettings);
+
+        DataStore dataStore = Mockito.mock(io.antmedia.datastore.db.DataStore.class);
+        when(applicationAdapter.getDataStore()).thenReturn(dataStore);
+        
+        when(context.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(applicationAdapter);
+        when(context.getBean(ServerSettings.BEAN_NAME)).thenReturn(new ServerSettings());
+        
+        plugin.setApplicationContext(context);
+        
+        Broadcast broadcast = new Broadcast();
+        broadcast.setStreamId("streamId");
+        
+        when(dataStore.getLocalLiveBroadcasts(Mockito.anyString())).thenReturn(Arrays.asList(broadcast));
+        
+        plugin.createRecordings();
+        
+        verify(vertx, times(1)).executeBlocking((Callable)any(), eq(false));
+          
+    }
 
     @Test
     public void testStartStopRecordingInInitialization() throws Exception 
