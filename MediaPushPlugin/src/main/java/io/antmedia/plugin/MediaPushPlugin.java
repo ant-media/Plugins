@@ -234,6 +234,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return startMediaPush(streamIdPar, websocketUrl, endpoint);
 	}
 
+	public WebDriverWait createWebDriverWait(WebDriver driver, int timeoutSeconds) {
+		return new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+	}
 
 	@SuppressWarnings("javasecurity:S5334")
 	@Override
@@ -280,7 +283,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 			driver = openDriver(width, height, recordTypeString, extraChromeSwitchList, streamId, publisherUrl, url);
 
-			WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
+			WebDriverWait wait = createWebDriverWait(driver, TIMEOUT_IN_SECONDS);
 
 			//there are three methods in javascript side
 			//window.startBroadcasting = startBroadcasting -> gets message json parameter
@@ -290,7 +293,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			wait.until(ExpectedConditions.jsReturnsValue("return (typeof window.startBroadcasting != 'undefined')"));
 
 			String driverIp = getApplication().getServerSettings().getHostAddress();
-      			driverIp = "{\"driverIp\":\"" + driverIp + "\"}";
+			driverIp = "{\"driverIp\":\"" + driverIp + "\"}";
       
 			String startBroadcastingCommand = String.format("window.startBroadcasting({websocketURL:'%s',streamId:'%s',width:%d,height:%d,token:'%s',driverIp:'%s'});", 
 					websocketUrl, streamId, width, height, StringUtils.isNotBlank(token) ? token : "",driverIp);

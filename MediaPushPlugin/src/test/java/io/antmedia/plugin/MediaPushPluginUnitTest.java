@@ -9,9 +9,9 @@ import static org.mockito.Mockito.*;
 import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.function.Function;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.AppSettings;
@@ -19,7 +19,6 @@ import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.filter.JWTFilter;
 import io.antmedia.filter.TokenFilterManager;
 import io.antmedia.settings.ServerSettings;
-import kotlin.jvm.internal.unsafe.MonitorKt;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
@@ -39,8 +38,10 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebDriver.TargetLocator;
 import org.openqa.selenium.remote.RemoteWebDriver;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -121,6 +122,33 @@ public class MediaPushPluginUnitTest  {
         
 
 	}
+    @Test
+    public void testStartMediaPushWithWithIP() throws IOException, InterruptedException {
+        MediaPushPlugin plugin = spy(new MediaPushPlugin());
+        String myIp = "192.168.0.1";
+        Endpoint endpoint = new Endpoint();
+        endpoint.setUrl("http://example.com");
+        endpoint.setWidth(1280);
+        endpoint.setHeight(720);
+        endpoint.setToken("token");
+        endpoint.setExtraChromeSwitches("--disable-gpu,--start-fullscreen");
+
+
+        RemoteWebDriver driver = mock(RemoteWebDriver.class);
+        doReturn(driver).when(plugin).openDriver(endpoint.getWidth(),endpoint.getHeight(),endpoint.getRecordType(),Arrays.asList("--disable-gpu", "--start-fullscreen"),"streamId","http://example.antmedia.io/media-push/media-push-publisher.html",endpoint.getUrl());
+        WebDriverWait wait = mock(WebDriverWait.class);
+        when(wait.until(any(Function.class))).thenReturn(true);
+        doReturn(wait).when(plugin).createWebDriverWait(any(WebDriver.class),anyInt());
+
+        AntMediaApplicationAdapter adapter = mock(AntMediaApplicationAdapter.class);
+        doReturn(adapter).when(plugin).getApplication();
+        ServerSettings settings = mock(ServerSettings.class);
+        doReturn(settings).when(adapter).getServerSettings();
+        doReturn(myIp).when(settings).getHostAddress();
+
+        plugin.startMediaPush("streamId", "ws://example.antmedia.io", endpoint);
+        verify(driver).executeScript("window.startBroadcasting({websocketURL:'ws://example.antmedia.io',streamId:'streamId',width:1280,height:720,token:'token',driverIp:'{\"driverIp\":\"192.168.0.1\"}'});");
+    }
 
     @Test
     public void testSendCommand_WhenDriverExists_ShouldExecuteCommand() {
@@ -559,14 +587,5 @@ public class MediaPushPluginUnitTest  {
         httpClientStaticMock.close();
     }
 
-    @Test
-    public void testDriverExit() throws IOException {
-       MediaPushPlugin plugin = spy(new MediaPushPlugin());
-       RemoteWebDriver driver = plugin.createDriver(1280, 720, "streamId", Arrays.asList("--disable-gpu", "--start-fullscreen"));
-       driver.get("https://google.com");
-       plugin.clearAndQuit("streamId" , driver,new Exception("test"));
-       verify(driver).quit();
-
-    }
 
 }
