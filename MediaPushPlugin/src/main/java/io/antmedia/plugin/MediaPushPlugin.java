@@ -396,19 +396,11 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return publisherHtmlURL;
 	}
 
-  public boolean isValidIP(String ip) {
-      if(ip == null)
-        return false;
-
-      String ipPattern = 
-          "^(25[0-5]|2[0-4][0-9]|1[0-9]{1,2}|[1-9]?[0-9])\\." + 
-          "(25[0-5]|2[0-4][0-9]|1[0-9]{1,2}|[1-9]?[0-9])\\." +
-          "(25[0-5]|2[0-4][0-9]|1[0-9]{1,2}|[1-9]?[0-9])\\." +
-          "(25[0-5]|2[0-4][0-9]|1[0-9]{1,2}|[1-9]?[0-9])$";
-
-
-      return Pattern.matches(ipPattern, ip);
-  }
+	public boolean isValidIP(String ip) {
+		if (ip == null)
+			return false;
+		return ip.matches("^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$");
+	}
 
 	public boolean forwardMediaPushStopRequest(String streamId, String ip) {
 
@@ -444,59 +436,54 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	@Override
 	public Result stopMediaPush(String streamId) {
-	Result result = new Result(false);
-	if (!drivers.containsKey(streamId)) {
-	  Broadcast broadcast = getBroadcast(streamId);
+		Result result = new Result(false);
+		if (!drivers.containsKey(streamId)) {
+			Broadcast broadcast = getBroadcast(streamId);
 
-	if(broadcast == null){
-		logger.warn("Driver does not exist for stream id: {}", streamId);
-		result.setMessage("Driver does not exist for stream id: " + streamId);
-		return result;
-	}
+			if (broadcast == null) {
+				result.setMessage("Driver does not exist for stream id: " + streamId);
+				return result;
+			}
 
-	  String metaData = broadcast.getMetaData();
-	  try {
+			String metaData = broadcast.getMetaData();
+			try {
+				if (metaData != null && !metaData.equals("null") && !metaData.isEmpty()) {
+					JsonObject jsonObject = JsonParser.parseString(metaData).getAsJsonObject();
+					String driverIp = jsonObject.get("driverIp").getAsString();
 
-		if (metaData != null && !metaData.equals("null") && !metaData.isEmpty()){
-		  JsonObject jsonObject = JsonParser.parseString(metaData).getAsJsonObject();
-		  String driverIp = jsonObject.get("driverIp").getAsString();
-
-		  if(isValidIP(driverIp) && forwardMediaPushStopRequest(streamId, driverIp)){
-			result.setSuccess(true);
+					if (isValidIP(driverIp) && forwardMediaPushStopRequest(streamId, driverIp)) {
+						result.setSuccess(true);
+						return result;
+					}
+				}
+				result.setMessage("Driver does not exist for stream id: " + streamId);
+				return result;
+			} catch (Exception e) {
+				logger.error(ExceptionUtils.getStackTrace(e));
+			}
 			return result;
-		  }
 		}
-	  	result.setMessage("Driver does not exist for stream id: " + streamId);
-		return result;
-      }
-      catch(Exception e){
-        logger.error(e.getStackTrace().toString());
-      }
-      return result;
-    }
-  
 
 		RemoteWebDriver driver = drivers.remove(streamId);
 		recordingMap.remove(streamId);
 
 		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
 
-		try 
-		{
+		try {
 			driver.executeScript("window.stopBroadcasting({"
 					+ "streamId:'" + streamId + "',"
 					+ "});");
 
-			wait.until(ExpectedConditions.jsReturnsValue("return !window.isConnected('"+streamId+"')"));
+			wait.until(ExpectedConditions.jsReturnsValue("return !window.isConnected('" + streamId + "')"));
 			result.setSuccess(true);
 
-		}
-		catch(TimeoutException e) {
+		} catch (TimeoutException e) {
 			logger.error(ExceptionUtils.getStackTrace(e));
-			result.setMessage("Timeoutexception occured in stopping the stream. Fortunately, it'll quit the session to stop completely. Error message is " + e.getMessage());
+			result.setMessage(
+					"Timeoutexception occured in stopping the stream. Fortunately, it'll quit the session to stop completely. Error message is "
+							+ e.getMessage());
 
-		}
-		finally {
+		} finally {
 			driver.quit();
 		}
 		return result;

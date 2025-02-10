@@ -1,14 +1,12 @@
 package io.antmedia.plugin;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.function.Function;
@@ -420,6 +418,16 @@ public class MediaPushPluginUnitTest  {
         
         //make sure it's removed
         assertEquals(0, plugin.getDrivers().size());
+    }
+    public boolean waituntiltest(){
+       return true;
+    }
+    @Test
+    public void testCreateDriverWait(){
+        MediaPushPlugin plugin = new MediaPushPlugin();
+        WebDriverWait wait = plugin.createWebDriverWait(mock(WebDriver.class),10);
+        assertNotNull(wait);
+        wait.withTimeout(Duration.ofSeconds(1));
     }
 
     @Test
