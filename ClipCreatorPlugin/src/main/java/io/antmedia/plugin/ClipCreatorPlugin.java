@@ -5,6 +5,7 @@ import io.antmedia.AppSettings;
 import io.antmedia.IAppSettingsUpdateListener;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
+import io.antmedia.datastore.db.types.VoD;
 import io.antmedia.muxer.RecordMuxer;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.rest.model.Result;
@@ -38,6 +39,8 @@ import java.text.DateFormat;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+
+import javax.annotation.Nonnull;
 
 @Component(value = "plugin.clip-creator")
 public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListener {
@@ -120,8 +123,8 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 				if (newClipCreatorSettings.getMp4CreationIntervalSeconds() != clipCreatorSettings
 						.getMp4CreationIntervalSeconds() || newClipCreatorSettings.isEnabled() != clipCreatorSettings.isEnabled()) 
 				{
-					logger.info("Clip creator settings has changed in {}. The new interval: {} and is enabled:{} ", appName, newClipCreatorSettings.getMp4CreationIntervalSeconds(), newClipCreatorSettings.isEnabled());
-					
+					logger.info("Clip-creator settings has changed in {}. The new interval: {} and is enabled:{} ", appName, newClipCreatorSettings.getMp4CreationIntervalSeconds(), newClipCreatorSettings.isEnabled());
+
 					if (newClipCreatorSettings.isEnabled()) {
 						startPeriodicRecording(newClipCreatorSettings.getMp4CreationIntervalSeconds());
 					} else {
@@ -140,7 +143,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 				return null;
 			}
 		});
-		
+
 		clipCreatorSettings = getClipCreatorSettings(appSettings);
 
 		if (clipCreatorSettings.isEnabled()) {
@@ -150,10 +153,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		else {
 			logger.info("Clip Creator Plugin is not active for app: {}", appName);
 		}
-
-
-		
-
 	}
 
 	public Result startPeriodicRecording(int periodSeconds) 
@@ -163,6 +162,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 		if (timerId != -1) {
 			stopPeriodicRecording();
+			logger.info("Old clip-creator timer is cancelled for app: {}", appName);
 			result.setMessage("Old clip-creator timer is cancelled for app: " + appName + " and new one will be created");
 		}
 
@@ -170,28 +170,29 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		clipCreatorSettings.setMp4CreationIntervalSeconds(periodSeconds);
 		clipCreatorSettings.setEnabled(true);
 
+		logger.info("Clip-Creator Plugin is started for app: {} with interval: {} seconds", appName, periodSeconds);
 		timerId = vertx.setPeriodic(periodSeconds * 1000, (l) -> {
 
-			
+
 			vertx.executeBlocking(() -> 
 			{
 				createRecordings();
 				return null;
 			}, false);
-			
+
 		});
 
 		result.setSuccess(true);
 
 		return result;
 	}
-	
+
 	public void createRecordings() 
 	{
-		
+
 		List<Broadcast> broadcasts = dataStore.getLocalLiveBroadcasts(serverSettings.getHostAddress());
 		logger.info("createRecordings for active broadcasts size:{} for app:{}", broadcasts.size(), appName);
-		
+
 		for (Broadcast broadcast : broadcasts) 
 		{
 			vertx.executeBlocking(() -> 
@@ -199,7 +200,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 				convertHlsToMp4(broadcast, true);
 				return null;
 			}, false);
-			
+
 		}
 	}
 
@@ -214,15 +215,15 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 			logger.info("Clip Creator timer is stopped for app: {} ", appName);
 			vertx.executeBlocking(() -> {
-				
+
 				try {
-				
+
 					//create recordings for the last time
 					createRecordings();
 				} catch (Exception e) {
 					logger.error("Error occured in createRecordings", e);
 				}
-				
+
 				//clear lastMp4CreateTimeMSForStream
 				lastMp4CreateTimeMSForStream.clear();
 				return null;
@@ -234,11 +235,11 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		else {
 			result.setMessage("There is no active timer for Clip Creator Plugin in app: " + appName);
 		}
-		
+
 		logger.info("Clip creator periodic recording is stopped for app: {}", appName);
 
 		clipCreatorSettings.setEnabled(false);
-		
+
 		//clear timer
 		timerId = -1;
 		return result;
@@ -301,13 +302,13 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		}
 
 		Long startTime = lastMp4CreateTimeMSForStream.get(streamId);
-		
+
 		long endTime = System.currentTimeMillis();
 
 		if (startTime == null) {
 			startTime = endTime - (clipCreatorSettings.getMp4CreationIntervalSeconds() * 1000);
 		}
-		
+
 		ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, startTime, endTime, m3u8File);
 
 		if (tsFilesToMerge.size() == 0) {
@@ -322,7 +323,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			logger.info("number of ts files: {} for streamId:{} and startTime:{}", tsFilesToMerge.size(), streamId, dateFormat.format(new Date(startTime)));
 			File tsFileListTextFile = writeTsFilePathsToTxt(m3u8File, tsFilesToMerge);
 
-			String vodId = RandomStringUtils.randomNumeric(24);
+			String vodId = RandomStringUtils.randomAlphanumeric(24);
 
 			String mp4FilePath = m3u8File.getParentFile().getAbsolutePath() + File.separator + vodId + ".mp4";
 
@@ -345,10 +346,15 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 						startTime,
 						durationMs,
 						ClipCreatorConverter.getResolutionHeight(mp4FilePath),
-						mp4FilePath,
+						null,
 						vodId
 						);
 				createdMp4Count++;
+
+				if (clipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4()) {
+					deleteFiles(tsFilesToMerge);
+				}
+
 				response = new Mp4CreationResponse(mp4File, vodId);
 				response.setSuccess(true);
 			} else {
@@ -362,6 +368,122 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		}
 
 		return response;
+	}
+
+	public int deleteFiles(@Nonnull List<File> fileList) 
+	{
+		int t = 0;
+
+		for (File file : fileList) 
+		{
+			try {
+				boolean deleted = file.delete();
+				if (!deleted) {
+					logger.warn("File could not be deleted: {}", file.getAbsolutePath());
+				}
+				else {
+					t++;
+				}
+			}
+			catch (Exception e) {
+				logger.error("Exception while deleting file: {}", file.getAbsolutePath());
+			}
+		}
+
+		return t;
+
+	}
+
+	private void fillListWithMp4Files(File directory, List<File> mp4FileList) 
+	{
+		if (directory == null || !directory.isDirectory()) {
+			return ;
+		}
+
+		File[] mp4Files = directory.listFiles(new FilenameFilter() 
+		{
+			@Override
+			public boolean accept(File dir, String name) {
+				return name.endsWith(".mp4");
+			}
+		});
+
+		if (mp4Files != null) 
+		{ 	
+			//mp4 files can be null
+			mp4FileList.addAll(Arrays.asList(mp4Files));
+		}
+
+		File[] directories = directory.listFiles(new DirectoryFilter());
+
+		for (File dir : directories) {
+			fillListWithMp4Files(dir, mp4FileList);
+		}
+
+	}
+
+	public Result deleteMp4sNotInDB() 
+	{	
+		File streamsDirectory = new File(streamsFolder);
+
+		List<File> mp4FileList = new ArrayList<>();
+		fillListWithMp4Files(streamsDirectory, mp4FileList);
+
+		long totalVoDNumber = getDataStore().getTotalVodNumber();
+
+		List<VoD> fullVodList = new ArrayList<>();
+
+		int batchCount = 25;
+		for (int offset = 0;  offset < totalVoDNumber; offset += batchCount) 
+		{
+			List<VoD> vodList = getDataStore().getVodList(offset, batchCount, null, null, null, null);	
+			fullVodList.addAll(vodList);
+		}
+
+		for (VoD vod : fullVodList) 
+		{
+			//this is relative path streams/vodId.mp4 
+			File voDFileInDB = new File(IAntMediaStreamHandler.WEBAPPS_PATH + appName, vod.getFilePath());
+			mp4FileList.remove(voDFileInDB);
+
+		};
+
+		int deletedFileCount = 0;
+		List<String> notDeletedFiles = new ArrayList<>();
+		if (mp4FileList.size() > 0) 
+		{
+			logger.info("There are {} files in the streams directory that are not in the database", mp4FileList.size());
+
+			deletedFileCount = deleteFiles(mp4FileList);
+
+		}
+		
+		Result result = new Result(deletedFileCount == mp4FileList.size());
+		if (deletedFileCount < mp4FileList.size()) 
+		{	
+			String notDeletedFilesString = String.join(",", notDeletedFiles);
+			logger.info("Following files are not deleted: {}", notDeletedFilesString);
+			result.setMessage("Following files are not deleted: " + notDeletedFilesString);
+		} 
+		else if (deletedFileCount == mp4FileList.size()) 
+		{
+			if (deletedFileCount > 0) 
+			{
+				logger.info("All files in the streams directory not in the database are deleted successfully for app: {} delete file count:{}", appName, deletedFileCount);
+				result.setMessage("All files in the streams directory not in the database are deleted successfully for app:" + appName + " deleted file count:" + deletedFileCount); 					
+			} 
+			else 
+			{
+				//it meands deletedFileCount == 0 and mp4FileList.size() == 0
+				logger.info("MP4 files and database is in sycn for app: {}", appName);
+				result.setMessage("MP4 files and database is in synch");
+			}
+
+			result.setDataId(String.valueOf(deletedFileCount));
+		}
+
+
+		return result;
 	}
 
 	public File writeTsFilePathsToTxt(File m3u8File, ArrayList<File> tsFilesToMerge) throws IOException {
@@ -450,7 +572,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	public ClipCreatorSettings getClipCreatorSettings() {
 		return clipCreatorSettings;
 	}
-	
+
 	public void setClipCreatorSettings(ClipCreatorSettings clipCreatorSettings) {
 		this.clipCreatorSettings = clipCreatorSettings;
 	}
@@ -523,8 +645,10 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	public void setDataStore(DataStore dataStore) {
 		this.dataStore = dataStore;
 	}
-	
+
 	public long getTimerId() {
 		return timerId;
 	}
+
+
 }
