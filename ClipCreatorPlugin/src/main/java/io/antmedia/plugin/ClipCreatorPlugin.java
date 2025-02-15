@@ -452,8 +452,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		List<String> notDeletedFiles = new ArrayList<>();
 		if (mp4FileList.size() > 0) 
 		{
-			logger.info("There are {} files in the streams directory that are not in the database", mp4FileList.size());
-
+			logger.info("There are {} files in the streams directory that are not in the database and in total there are {} vod records in db ", mp4FileList.size(), totalVoDNumber);
 			deletedFileCount = deleteFiles(mp4FileList);
 
 		}
@@ -469,8 +468,8 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		{
 			if (deletedFileCount > 0) 
 			{
-				logger.info("All files in the streams directory not in the database are deleted successfully for app: {} delete file count:{}", appName, deletedFileCount);
-				result.setMessage("All files in the streams directory not in the database are deleted successfully for app:" + appName + " deleted file count:" + deletedFileCount); 					
+				logger.info("All files - not in the database - in the streams directory are deleted successfully for app: {} delete file count:{}", appName, deletedFileCount);
+				result.setMessage("All files - not in the database - in the streams directory are deleted successfully for app:" + appName + " deleted file count:" + deletedFileCount); 					
 			} 
 			else 
 			{

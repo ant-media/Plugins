@@ -458,15 +458,7 @@ public class ClipCreatorPluginIntegrationTest {
 		assertEquals("MP4 files and database is in synch", callDeleteMp4NotInDB.getMessage());
 		
 		assertEquals("0", callDeleteMp4NotInDB.getDataId());
-		
-
-		//put a file that is no in db
-		File f = new File( DEFAULT_INSTALLATION_PATH + "webapps/LiveApp/streams/test.mp4");
-		f.createNewFile();
-		
-		callDeleteMp4NotInDB = callDeleteMp4NotInDB();
-		assertTrue(callDeleteMp4NotInDB.isSuccess());
-		assertEquals("1", callDeleteMp4NotInDB.getDataId());
+	
 
 
 	}

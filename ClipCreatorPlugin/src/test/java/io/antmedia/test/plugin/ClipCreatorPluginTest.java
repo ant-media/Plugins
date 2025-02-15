@@ -339,6 +339,13 @@ public class ClipCreatorPluginTest {
 		assertTrue(f4.exists());
 		assertTrue(f5.exists());
 		
+		
+		File vodFile = new File(plugin.getStreamsFolder(), "vod.mp4");
+		vodFile.createNewFile();
+		VoD vod =new VoD("streamName", "streamId", AntMediaApplicationAdapter.getRelativePath(vodFile.getAbsolutePath()), "vodName", 111, 111, 111, 111, VoD.USER_VOD, RandomStringUtils.randomAlphanumeric(24), null);
+		dataStore.addVod(vod);
+		
+		
 		result = plugin.deleteMp4sNotInDB();
 		//it returns true because it should delete all files
 		
@@ -350,6 +357,9 @@ public class ClipCreatorPluginTest {
 		assertFalse(f3.exists());
 		assertFalse(f4.exists());
 		assertFalse(f5.exists());
+		
+		
+		
 		
 		
 		
