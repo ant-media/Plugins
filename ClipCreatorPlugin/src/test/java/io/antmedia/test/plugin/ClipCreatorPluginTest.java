@@ -25,6 +25,8 @@ import org.mockito.Mockito;
 import org.red5.server.api.scope.IScope;
 import org.springframework.context.ApplicationContext;
 
+import com.google.common.io.Files;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -200,7 +202,18 @@ public class ClipCreatorPluginTest {
 
 		Broadcast broadcast = new Broadcast();
 		broadcast.setStreamId("testStream");
-		plugin.setStreamsFolder("src/test/resources");
+		plugin.setStreamsFolder("target/resources_tmp");
+		
+		File streamFolder = new File(plugin.getStreamsFolder());
+		streamFolder.mkdirs();
+		
+		File file = new File("src/test/resources");
+		File[] files = file.listFiles();
+		
+		for (File tmpFile : files) {
+			Files.copy(tmpFile, new File(streamFolder, tmpFile.getName()));
+		}
+	
 
 		plugin.setClipCreatorSettings(new ClipCreatorSettings());
 
@@ -220,9 +233,15 @@ public class ClipCreatorPluginTest {
 
 
 		//check it calls the deleteTSFiles
+		plugin.getLastMp4CreateTimeForStream().put(streamId, 0L);
 		plugin.getClipCreatorSettings().setDeleteHLSFilesAfterCreatedMp4(true);
 		plugin.convertHlsToMp4(broadcast, true);
 		verify(plugin, times(1)).deleteFiles(Mockito.any());
+		
+		String[] list = streamFolder.list();
+		for (String fileName : list) {
+			assertFalse(fileName.endsWith(".ts"));
+		}
 
 	}
 
