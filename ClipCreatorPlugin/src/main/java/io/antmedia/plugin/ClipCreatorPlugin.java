@@ -118,24 +118,29 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			@Override
 			public boolean settingsUpdated(AppSettings newSettings) 
 			{
+				
+				boolean result = false;
 				ClipCreatorSettings newClipCreatorSettings = getClipCreatorSettings(newSettings);
 
 				if (newClipCreatorSettings.getMp4CreationIntervalSeconds() != clipCreatorSettings
-						.getMp4CreationIntervalSeconds() || newClipCreatorSettings.isEnabled() != clipCreatorSettings.isEnabled()) 
+						.getMp4CreationIntervalSeconds() || newClipCreatorSettings.isEnabled() != clipCreatorSettings.isEnabled()
+						|| newClipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4() != clipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4()) 
 				{
-					logger.info("Clip-creator settings has changed in {}. The new interval: {} and is enabled:{} ", appName, newClipCreatorSettings.getMp4CreationIntervalSeconds(), newClipCreatorSettings.isEnabled());
+					logger.info("Clip-creator settings has changed in {}. The interval: {}secs and enabled:{} and deleteHLSFilesOnEnded:{}", appName, newClipCreatorSettings.getMp4CreationIntervalSeconds(),
+							newClipCreatorSettings.isEnabled(), newClipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4());
 
 					if (newClipCreatorSettings.isEnabled()) {
 						startPeriodicRecording(newClipCreatorSettings.getMp4CreationIntervalSeconds());
 					} else {
 						stopPeriodicRecording();
 					}
-					clipCreatorSettings = newClipCreatorSettings;
-
-					return true;
+					
+					result = true;
 				}
+				
+				clipCreatorSettings = newClipCreatorSettings;
 
-				return false;
+				return result;
 			}
 
 			@Override
