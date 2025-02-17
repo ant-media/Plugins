@@ -546,54 +546,5 @@ public class MediaPushPluginUnitTest  {
         jwtStaticMock.close();
         httpClientStaticMock.close();
     }
-    @Test
-    public void getBroadcastTest() throws URISyntaxException, IOException {
-        MediaPushPlugin plugin = spy(new MediaPushPlugin());
-        String streamId = "stream1";
-
-        CloseableHttpClient mockHttpClient = mock(CloseableHttpClient.class);
-        HttpClientBuilder builder = mock(HttpClientBuilder.class);
-        MockedStatic<HttpClients> httpClientStaticMock = mockStatic(HttpClients.class);
-        when(HttpClients.custom()).thenReturn(builder);
-        doReturn(builder).when(builder).setRedirectStrategy((any(LaxRedirectStrategy.class)));
-        doReturn(mockHttpClient).when(builder).build();
-
-        AntMediaApplicationAdapter adapter = mock(AntMediaApplicationAdapter.class);
-        doReturn(adapter).when(plugin).getApplication();
-        AppSettings appSettings = mock(AppSettings.class);
-        doReturn("test").when(appSettings).getClusterCommunicationKey();
-        doReturn(appSettings).when(adapter).getAppSettings();
-        ServerSettings settings = mock(ServerSettings.class);
-        doReturn(settings).when(adapter).getServerSettings();
-
-        doReturn(5080).when(settings).getDefaultHttpPort();
-
-        ApplicationContext ctx = mock(ApplicationContext.class);
-        plugin.applicationContext = ctx;
-        doReturn("/LiveApp").when(ctx).getApplicationName();
-
-        URI url = new URI("http://"+ "127.0.0.1" + ":"+ "5080"  + "/LiveApp" + "/rest/v2/broadcasts/"+ streamId);
-        CloseableHttpResponse response = mock(CloseableHttpResponse.class);
-        HttpEntity entity = mock(HttpEntity.class);
-        String broadcast = "{\"streamId\":\"stream1\",\"status\":\"broadcasting\"}";
-        InputStream stream = new ByteArrayInputStream(broadcast.getBytes());
-        doReturn(stream).when(entity).getContent();
-        doReturn(entity).when(response).getEntity();
-        StatusLine statusLine = mock(StatusLine.class);
-        doReturn(statusLine).when(response).getStatusLine();
-        doReturn(200).when(statusLine).getStatusCode();
-        doReturn(response).when(mockHttpClient).execute(any());
-
-        Broadcast broadcast1 = plugin.getBroadcast(streamId);
-        assertEquals(streamId, broadcast1.getStreamId());
-
-        ArgumentCaptor<HttpUriRequest> requestCaptor = ArgumentCaptor.forClass(HttpUriRequest.class);
-        verify(mockHttpClient).execute(requestCaptor.capture());
-        HttpUriRequest capturedRequest = requestCaptor.getValue();
-        assertEquals("GET", capturedRequest.getMethod());
-        assertEquals(capturedRequest.getURI(),url);
-        httpClientStaticMock.close();
-    }
-
 
 }

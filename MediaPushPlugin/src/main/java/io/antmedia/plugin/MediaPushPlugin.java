@@ -58,6 +58,7 @@ import org.springframework.stereotype.Component;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.filter.JWTFilter;
 import io.antmedia.RecordType;
+import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.filter.TokenFilterManager;
 import io.antmedia.model.Endpoint;
@@ -551,33 +552,13 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	}
 
 	public Broadcast getBroadcast(String streamId) {
-		try {
-			CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
-			Gson gson = new Gson();
-		        String url = "http://"+ "127.0.0.1" + ":"+  getApplication().getServerSettings().getDefaultHttpPort() + applicationContext.getApplicationName() + "/rest/v2/broadcasts/"+ streamId;
-		        logger.info(url);
+		AntMediaApplicationAdapter app = getApplication();
+    DataStore dataStore = app.getDataStore();
 
-			HttpUriRequest get = RequestBuilder.get().setUri(url)
-					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
-					.build();
+    if(dataStore == null)
+      return null; 
 
-			CloseableHttpResponse response = client.execute(get);
-
-			StringBuffer result = readResponse(response);
-
-			if (response.getStatusLine().getStatusCode() == 404) {
-				logger.info("Response to getBroadcast is 404. It means stream is not found or deleted");
-				return null;
-			}
-			else if (response.getStatusLine().getStatusCode() != 200){
-				throw new Exception("Status code not 200 ");
-			}
-      		Broadcast broadcast = gson.fromJson(result.toString(), Broadcast.class);
-			return broadcast;
-		} catch (Exception e) {
-			logger.error(ExceptionUtils.getStackTrace(e));
-		}
-		return null;
+    return dataStore.get(streamId);
 	}
 
 
