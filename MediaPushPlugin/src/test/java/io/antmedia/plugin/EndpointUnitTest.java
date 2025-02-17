@@ -18,4 +18,4 @@ public class EndpointUnitTest {
         assertEquals("switches", endpoint.getExtraChromeSwitches());
       
     }
-    }
+}
