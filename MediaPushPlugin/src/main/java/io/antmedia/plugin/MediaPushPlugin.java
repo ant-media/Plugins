@@ -474,7 +474,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 				result.setMessage("Driver does not exist for stream id: " + streamId);
 				return result;
 			} catch (Exception e) {
-				logger.error(ExceptionUtils.getStackTrace(e));
+				logger.error("Cannot proceed for forwarding media push stop request to driver for streamId:{} because {}", streamId, ExceptionUtils.getStackTrace(e));
+				result.setMessage("");
 			}
 			return result;
 		}

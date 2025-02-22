@@ -25,6 +25,7 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.LaxRedirectStrategy;
+import org.json.simple.JSONObject;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
@@ -440,6 +441,8 @@ public class MediaPushPluginUnitTest  {
 
         when(plugin.getDrivers()).thenReturn(drivers);
         when(drivers.containsKey(streamId)).thenReturn(false);
+        
+        doReturn(null).when(plugin).getBroadcast(Mockito.anyString());
 
         // Act
         Result result = plugin.stopMediaPush(streamId);
@@ -447,6 +450,47 @@ public class MediaPushPluginUnitTest  {
         // Assert
         assertFalse(result.isSuccess());
         assertEquals(expectedResult.getMessage(), result.getMessage());
+        
+        
+        Broadcast broadcast = mock(Broadcast.class);
+        doReturn(broadcast).when(plugin).getBroadcast(Mockito.anyString());
+        
+        
+        result = plugin.stopMediaPush(streamId);
+
+        // Assert
+        assertFalse(result.isSuccess());
+        
+        
+        when(broadcast.getMetaData()).thenReturn("non parseable string");
+        result = plugin.stopMediaPush(streamId);
+        assertFalse(result.isSuccess());
+        
+        
+        JSONObject jsObject = new JSONObject();
+        jsObject.put(MediaPushPlugin.ORIGIN_IP_OF_DRIVER, "127.0.0.1sadfaf");
+        when(broadcast.getMetaData()).thenReturn(jsObject.toJSONString());
+        result = plugin.stopMediaPush(streamId);
+        verify(plugin, times(1)).isValidIP(Mockito.anyString());
+        verify(plugin, never()).forwardMediaPushStopRequest(Mockito.anyString(), Mockito.anyString());
+        assertFalse(result.isSuccess());
+        
+        
+        jsObject.put(MediaPushPlugin.ORIGIN_IP_OF_DRIVER, "127.0.0.1");
+        when(broadcast.getMetaData()).thenReturn(jsObject.toJSONString());
+        result = plugin.stopMediaPush(streamId);
+        verify(plugin, times(2)).isValidIP(Mockito.anyString());
+        verify(plugin, times(1)).forwardMediaPushStopRequest(Mockito.anyString(), Mockito.anyString());
+        assertFalse(result.isSuccess());
+        
+        
+        doReturn(true).when(plugin).forwardMediaPushStopRequest(Mockito.anyString(), Mockito.anyString());
+        result = plugin.stopMediaPush(streamId);
+        verify(plugin, times(3)).isValidIP(Mockito.anyString());
+        verify(plugin, times(2)).forwardMediaPushStopRequest(Mockito.anyString(), Mockito.anyString());
+        assertTrue(result.isSuccess());
+        
+
     }
 
     @Test
