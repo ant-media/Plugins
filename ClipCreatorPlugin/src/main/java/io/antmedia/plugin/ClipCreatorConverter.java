@@ -69,6 +69,8 @@ public class ClipCreatorConverter {
 	}
 
 	public static boolean createMp4(File tsFileList, String outputFilePath) {
+		
+		long startTime = System.nanoTime();
 		String command = String.format(
 				"%s -f concat -safe 0 -i %s -c copy -bsf:a aac_adtstoasc %s",
 				ffmpegPath,
@@ -77,6 +79,10 @@ public class ClipCreatorConverter {
 				);
 
 		boolean success = runCommand(command);
+		
+		long endTime = System.nanoTime();
+		long duration = (endTime - startTime) / 1000000;  //divide by 1000000 to get milliseconds.
+		logger.info("Mp4 creation duration: {} ms for {}", duration, outputFilePath);
 		if (success) {
 			deleteFile(tsFileList);
 			return true;
