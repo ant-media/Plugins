@@ -16,6 +16,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import org.apache.http.impl.client.LaxRedirectStrategy;
+import org.apache.http.util.EntityUtils;
+import org.json.simple.JSONObject;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.BufferedReader;
@@ -71,6 +74,7 @@ import io.github.bonigarcia.wdm.WebDriverManager;
 public class MediaPushPlugin implements ApplicationContextAware, IStreamListener, IMediaPushPlugin{
 
 
+	public static final String ORIGIN_IP_OF_DRIVER = "driverIp";
 	public static final String MEDIA_PUSH_PUBLISHER_JS = "media-push-publisher.js";
 	public static final String MEDIA_PUSH_PUBLISHER_HTML = "media-push-publisher.html";
 	public static final String MEDIA_PUSH_FOLDER = "media-push";
@@ -80,6 +84,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	private Map<String, RemoteWebDriver> drivers = new ConcurrentHashMap<>();
 
 	private Map<String, RecordType> recordingMap = new ConcurrentHashMap<>();
+	
+	private Gson gson = new Gson();
 
 
 	private boolean initialized = false;
@@ -294,10 +300,12 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			wait.until(ExpectedConditions.jsReturnsValue("return (typeof window.startBroadcasting != 'undefined')"));
 
 			String driverIp = getApplication().getServerSettings().getHostAddress();
-			driverIp = "{\"driverIp\":\"" + driverIp + "\"}";
+			JSONObject jsonObject = new JSONObject();
+			jsonObject.put(ORIGIN_IP_OF_DRIVER, driverIp);
+			
       
 			String startBroadcastingCommand = String.format("window.startBroadcasting({websocketURL:'%s',streamId:'%s',width:%d,height:%d,token:'%s',driverIp:'%s'});", 
-					websocketUrl, streamId, width, height, StringUtils.isNotBlank(token) ? token : "",driverIp);
+					websocketUrl, streamId, width, height, StringUtils.isNotBlank(token) ? token : "",jsonObject.toJSONString());
 
 			driver.executeScript(startBroadcastingCommand);
 
@@ -405,6 +413,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	public boolean forwardMediaPushStopRequest(String streamId, String ip) {
 
+		
+		boolean result = false;
 		AntMediaApplicationAdapter appAdapter = getApplication();
 		logger.info("forwarding media push stop request to {}", ip);
 		try {
@@ -419,20 +429,24 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			HttpUriRequest post = RequestBuilder.post().setUri(url)
 					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
 					.setHeader(TokenFilterManager.TOKEN_HEADER_FOR_NODE_COMMUNICATION, jwtToken)
-					.setEntity(new StringEntity("{}", StandardCharsets.UTF_8))
 					.build();
 
 			CloseableHttpResponse response = client.execute(post);
+			
+			String content = EntityUtils.toString(response.getEntity());
 
-			if (response.getStatusLine().getStatusCode() == 404) {
-				return false;
-			} else if (response.getStatusLine().getStatusCode() == 200) {
-				return true;
+
+			Result resultResponse = gson.fromJson(content, Result.class);
+			
+			result = resultResponse.isSuccess();
+			if (!result) {
+				logger.error("Error in forwarding media push stop request to {} with response {} for streamId:{}", ip, content, streamId);
 			}
+			
 		} catch (Exception e) {
 			logger.error(ExceptionUtils.getStackTrace(e));
 		}
-		return false;
+		return result;
 	}
 
 	@Override
@@ -450,7 +464,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			try {
 				if (metaData != null && !metaData.equals("null") && !metaData.isEmpty()) {
 					JsonObject jsonObject = JsonParser.parseString(metaData).getAsJsonObject();
-					String driverIp = jsonObject.get("driverIp").getAsString();
+					String driverIp = jsonObject.get(ORIGIN_IP_OF_DRIVER).getAsString();
 
 					if (isValidIP(driverIp) && forwardMediaPushStopRequest(streamId, driverIp)) {
 						result.setSuccess(true);
