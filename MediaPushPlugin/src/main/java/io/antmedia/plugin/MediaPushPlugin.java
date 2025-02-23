@@ -84,7 +84,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	private Map<String, RemoteWebDriver> drivers = new ConcurrentHashMap<>();
 
 	private Map<String, RecordType> recordingMap = new ConcurrentHashMap<>();
-	
+
 	private Gson gson = new Gson();
 
 
@@ -188,35 +188,35 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return result;
 	}
 
-	
+
 	@SuppressWarnings("javasecurity:S5334") //because this is Javascript
 	public Result sendCommand(String streamId, String command) {
-	    if (!getDrivers().containsKey(streamId)) {
-	        logger.warn("Driver does not exist for stream id: {}", streamId);
-	        return new Result(false, "Driver does not exist for stream id: " + streamId);
-	    }
-	    try {
-	        WebDriver driver = getDrivers().get(streamId);
-	        
-	        waitToBeFrameAvailable(driver);
-	        
-	        JavascriptExecutor js = (JavascriptExecutor) driver;
-	        
-	        Object obj = js.executeScript(command);
-	        
-	        // Switch back to the default content
-	        driver.switchTo().defaultContent();
-	        
-	        return new Result(true, streamId, obj != null ? obj.toString() : "");
-	    } catch (Exception e) {
-	        logger.error("Command cannot be executed: {} ", e.getMessage());
-	        return new Result(false, "Command cannot be executed: " + e.getMessage());
-	    }
+		if (!getDrivers().containsKey(streamId)) {
+			logger.warn("Driver does not exist for stream id: {}", streamId);
+			return new Result(false, "Driver does not exist for stream id: " + streamId);
+		}
+		try {
+			WebDriver driver = getDrivers().get(streamId);
+
+			waitToBeFrameAvailable(driver);
+
+			JavascriptExecutor js = (JavascriptExecutor) driver;
+
+			Object obj = js.executeScript(command);
+
+			// Switch back to the default content
+			driver.switchTo().defaultContent();
+
+			return new Result(true, streamId, obj != null ? obj.toString() : "");
+		} catch (Exception e) {
+			logger.error("Command cannot be executed: {} ", e.getMessage());
+			return new Result(false, "Command cannot be executed: " + e.getMessage());
+		}
 	}
 
 	public void waitToBeFrameAvailable(WebDriver driver) {
 		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(TIMEOUT_IN_SECONDS));
-		
+
 		// Switch to the iframe
 		wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.tagName("iframe")));
 	}
@@ -231,7 +231,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 	}
 
 
-	
+
 	@Override
 	public Result startMediaPush(String streamIdPar, String websocketUrl, int width, int height, String url, String token, String recordTypeString) 
 	{
@@ -256,12 +256,12 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		String token = endpoint.getToken();
 		String recordTypeString = endpoint.getRecordType();
 		String extraChromeSwitches = endpoint.getExtraChromeSwitches();
-		
+
 		List<String> extraChromeSwitchList = null;
 		if (StringUtils.isNotBlank(extraChromeSwitches)) {
 			extraChromeSwitchList = Arrays.asList(extraChromeSwitches.split(","));
 		}
-		
+
 		Result result = new Result(false);
 
 		if (!isValidURL(url)) 
@@ -302,8 +302,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			String driverIp = getApplication().getServerSettings().getHostAddress();
 			JSONObject jsonObject = new JSONObject();
 			jsonObject.put(ORIGIN_IP_OF_DRIVER, driverIp);
-			
-      
+
+
 			String startBroadcastingCommand = String.format("window.startBroadcasting({websocketURL:'%s',streamId:'%s',width:%d,height:%d,token:'%s',driverIp:'%s'});", 
 					websocketUrl, streamId, width, height, StringUtils.isNotBlank(token) ? token : "",jsonObject.toJSONString());
 
@@ -344,7 +344,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 		logger.info("publisherUrl -> {}", publisherUrl);
 		driver.get(publisherUrl);
-		
+
 		driver.executeScript(
 				String.format("document.getElementById('media-push-iframe').src='%s'", targetUrl)
 				);
@@ -413,7 +413,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	public boolean forwardMediaPushStopRequest(String streamId, String ip) {
 
-		
+
 		boolean result = false;
 		AntMediaApplicationAdapter appAdapter = getApplication();
 		logger.info("forwarding media push stop request to {}", ip);
@@ -432,17 +432,17 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 					.build();
 
 			CloseableHttpResponse response = client.execute(post);
-			
+
 			String content = EntityUtils.toString(response.getEntity());
 
 
 			Result resultResponse = gson.fromJson(content, Result.class);
-			
+
 			result = resultResponse.isSuccess();
 			if (!result) {
 				logger.error("Error in forwarding media push stop request to {} with response {} for streamId:{}", ip, content, streamId);
 			}
-			
+
 		} catch (Exception e) {
 			logger.error(ExceptionUtils.getStackTrace(e));
 		}
@@ -504,8 +504,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		}
 		return result;
 	}
-	
-	
+
+
 	@SuppressWarnings("java:S1130")
 	public RemoteWebDriver createDriver(int width, int height, String streamId, List<String> extraChromeSwitchList) throws IOException 
 	{
@@ -525,14 +525,14 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		ChromeOptions options = new ChromeOptions();
 		List<String> args = new ArrayList<>(CHROME_DEFAULT_SWITHES);
 
-		
+
 		if (height > 0 && width > 0) {
 			args.add(String.format("--window-size=%s,%s", width, height));
 		}
 		else {
 			logger.info("creating the driver with default width and height for streamId:{}", streamId);
 		}
-		
+
 		if (extraChromeSwitchList != null) {
 			for (String extraChromeSwitch : extraChromeSwitchList) {
 				if (StringUtils.isBlank(extraChromeSwitch)) {
@@ -555,25 +555,15 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		return new ChromeDriver(options);
 	}
 
-	public static StringBuffer readResponse(HttpResponse response) throws IOException {
-		BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
-
-		StringBuffer result = new StringBuffer();
-		String line = "";
-		while ((line = rd.readLine()) != null) {
-			result.append(line);
-		}
-		return result;
-	}
 
 	public Broadcast getBroadcast(String streamId) {
 		AntMediaApplicationAdapter app = getApplication();
-    DataStore dataStore = app.getDataStore();
+		DataStore dataStore = app.getDataStore();
 
-    if(dataStore == null)
-      return null; 
+		if(dataStore == null)
+			return null; 
 
-    return dataStore.get(streamId);
+		return dataStore.get(streamId);
 	}
 
 
@@ -590,7 +580,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 			getApplication().getMuxAdaptor(streamId).startRecording(recordingMap.get(streamId), 0);
 		}
 	}
-		
+
 
 	@Override
 	@SuppressWarnings("java:S5738")

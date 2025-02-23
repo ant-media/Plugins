@@ -13,6 +13,7 @@ import java.util.function.Function;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.AppSettings;
+import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.filter.JWTFilter;
 import io.antmedia.filter.TokenFilterManager;
@@ -503,6 +504,30 @@ public class MediaPushPluginUnitTest  {
         assertFalse(plugin.isValidIP("192.168.0."));
         assertFalse(plugin.isValidIP("192..0.1"));
     }
+    
+    
+    @Test
+    public void testGetBroadcast() {
+    	 String streamId = "stream1";
+         MediaPushPlugin plugin = spy(new MediaPushPlugin());
+         
+         AntMediaApplicationAdapter adapter = mock(AntMediaApplicationAdapter.class);
+         doReturn(adapter).when(plugin).getApplication();
+         Broadcast broadcast = mock(Broadcast.class);
+         
+         assertNull(plugin.getBroadcast(streamId));
+         
+         
+         DataStore dataStore = mock(DataStore.class);
+         doReturn(dataStore).when(adapter).getDataStore();
+         
+         assertNull(plugin.getBroadcast(streamId));
+         
+         doReturn(broadcast).when(dataStore).get(streamId);
+         assertEquals(broadcast, plugin.getBroadcast(streamId));
+
+    }
+    
     @Test
     public void testStopRequestForward() throws IOException, URISyntaxException {
         String streamId = "stream1";
