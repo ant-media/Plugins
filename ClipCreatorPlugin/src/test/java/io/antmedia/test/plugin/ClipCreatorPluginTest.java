@@ -18,11 +18,18 @@ import io.lindstrom.m3u8.parser.MediaPlaylistParser;
 import io.vertx.core.Vertx;
 
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.awaitility.Awaitility;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.red5.server.api.scope.IScope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 
 import com.google.common.io.Files;
@@ -33,6 +40,7 @@ import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
@@ -47,6 +55,24 @@ import static org.mockito.Mockito.*;
 public class ClipCreatorPluginTest {
 
 
+	private static Logger logger = LoggerFactory.getLogger(ClipCreatorPluginTest.class);
+	
+	@Rule
+	public TestRule watcher = new TestWatcher() {
+		protected void starting(Description description) {
+			logger.info("Starting test: " + description.getMethodName() + " @"+new Date());
+		}
+
+		protected void failed(Throwable e, Description description) {
+			logger.error("Failed test: " + description.getMethodName() + " @"+new Date()+  " e: " + ExceptionUtils.getStackTrace(e));
+		};
+
+		protected void finished(Description description) {
+			logger.info("Finishing test: " + description.getMethodName() + " @"+new Date());
+		};
+	};
+
+	
 	Vertx vertx = Vertx.vertx();
 
 	@Test
@@ -180,7 +206,8 @@ public class ClipCreatorPluginTest {
 
 		plugin.streamFinished(broadcast);
 
-		verify(plugin, timeout(10000).times(1)).convertHlsToMp4(broadcast, true);
+		//sometimes the below timeout value does not work and test fails. I don't know why so I've changed with after - @mekya
+		verify(plugin, Mockito.after(5000)).convertHlsToMp4(broadcast, true);
 
 		//it should be null because it is removed
 		assertNull(plugin.getLastMp4CreateTimeForStream().get(streamId));
