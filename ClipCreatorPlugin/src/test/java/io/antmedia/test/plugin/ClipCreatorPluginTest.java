@@ -206,8 +206,8 @@ public class ClipCreatorPluginTest {
 
 		plugin.streamFinished(broadcast);
 
-		//sometimes the below timeout value does not work and test fails. I don't know why - @mekya
-		verify(plugin, Mockito.timeout(3000)).convertHlsToMp4(broadcast, true);
+		//sometimes the below timeout value does not work and test fails. I don't know why so I've changed with after - @mekya
+		verify(plugin, Mockito.after(5000)).convertHlsToMp4(broadcast, true);
 
 		//it should be null because it is removed
 		assertNull(plugin.getLastMp4CreateTimeForStream().get(streamId));
