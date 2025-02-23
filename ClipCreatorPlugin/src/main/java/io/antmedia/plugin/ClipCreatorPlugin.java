@@ -621,7 +621,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 		if (clipCreatorSettings.isEnabled()) 
 		{
-
+			logger.info("stream finished for streamId: {} and clip creator is enabled. It will create final recording", broadcast.getStreamId());
 			vertx.executeBlocking(() -> {
 				convertHlsToMp4(broadcast, true);
 				lastMp4CreateTimeMSForStream.remove(broadcast.getStreamId());
