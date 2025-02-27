@@ -96,7 +96,7 @@ jobs:
             sudo rm /usr/local/antmedia/plugins/media-push.jar
             # if it exits with 0, it means that it's installed
             cd MediaPushPlugin
-            rm  src/main/resources/*.js
+            rm  -rf src/main/resources/*.js
             cd src/main/js
             npm install
             npm run build

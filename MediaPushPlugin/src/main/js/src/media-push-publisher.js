@@ -91,7 +91,7 @@ async function startBroadcasting(message) {
         callback : (info, obj) => {
             if (info == "initialized") {
 	            console.log("WebRTC adaptor initialized");
-                webRTCAdaptorMediaPush.publish(message.streamId, token, "", "", "", "");
+                webRTCAdaptorMediaPush.publish(message.streamId, token, "", "", "", "", message.driverIp ,"");
             } else if (info == "publish_started") {
                 console.log("mediapush_publish_started");
                 publishStarted = true;

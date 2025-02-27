@@ -7,12 +7,18 @@ import io.antmedia.rest.model.Result;
 import io.lindstrom.m3u8.model.MediaPlaylist;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.servlet.ServletContext;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
+
+import java.util.List;
 
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
@@ -83,6 +89,26 @@ public class ClipCreatorRestService {
 		}
 
 	}
+	
+	@Operation(description = "Delete the mp4 files in the disk that are not recorded in the database. If there are unmatched files, it may delete them according to the parameter ")
+	@ApiResponses(value = {
+			@ApiResponse(responseCode = "200", description = "If there are unmatched files or not deleted them Result#success is false. If operations are successfull, its value is true. It gives extra information in the message field",
+					content = @Content(
+							mediaType = "application/json",
+							schema = @Schema(implementation = Result.class)
+							))
+	})
+	@DELETE
+	@Path("/mp4-not-in-db")
+	@Produces({MediaType.APPLICATION_JSON})
+	public Result deleteMp4sNotInDB() 
+	{
+		ClipCreatorPlugin clipCreator = getPluginApp();
+		return clipCreator.deleteMp4sNotInDB();
+		
+	}
+	
+	
 
 	private ClipCreatorPlugin getPluginApp() {
 		ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
