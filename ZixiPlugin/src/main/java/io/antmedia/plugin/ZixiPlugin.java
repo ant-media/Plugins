@@ -197,7 +197,7 @@ public class ZixiPlugin implements ApplicationContextAware, IStreamListener{
 		broadcast.setPublishType(PUBLISH_TYPE_ZIXI_CLIENT);
 		broadcast = RestServiceBase.saveBroadcast(broadcast,
 				IAntMediaStreamHandler.BROADCAST_STATUS_CREATED, app.getScope().getName(), app.getDataStore(),
-				app.getAppSettings().getListenerHookURL(), app.getServerSettings(), 0);
+				app.getAppSettings().getListenerHookURL(), app.getServerSettings(), 0, false);
 
 		Result result = null;
 		if (start) 
