@@ -1,16 +1,21 @@
 #add your imports here <
 import numpy as np
+# import traceback
+import importlib
+import sys
 import subprocess
 import cv2
 import time
 import time
-from cypes import *
 import cython
 from libc.stdint cimport (uint8_t, uint16_t, uint32_t, uint64_t,
                           int8_t, int16_t, int32_t, int64_t)
 
+import subprocess
 import sys
+
 cdef streamidProcessDict
+cdef plugin
 
 cdef extern from "libavutil/frame.h":
     cdef struct AVFrame:
@@ -26,11 +31,20 @@ cdef extern from "libavcodec/avcodec.h":
 
 cdef public void init_python_plugin_state():
     # initialize all global variables and state of the program in this functions it will be called once when program is initialized
-    global streamidProcessDict
+    global streamidProcessDict 
+    global plugin
     try:
         streamidProcessDict = {}
+        print(sys.path)
+        sys.path.append("/usr/local/antmedia")
+        plugin = importlib.import_module("python_plugin") 
+
+        print("Module Loaded:", plugin)
+
+        plugin.init_python_plugin_state()
     except Exception as e:
         print("Exception occurred in init_python_plugin_state:", e)
+        sys.exit(0)
     return
 
 
@@ -39,19 +53,29 @@ cdef public void init_restream(streamid,int width,int height):
         global streamidProcessDict
         print("initializing writer for stream"+streamid)
         rtmpUrl = 'rtmp://127.0.0.1/WebRTCAppEE/' + streamid + "frompython"
-        send_gst = " appsrc !  videoconvert ! video/x-raw,format=I420  ! x264enc key-int-max=2 tune=zerolatency speed-preset=veryfast  ! video/x-h264,stream-format=byte-stream,alignment=au ! h264parse ! queue !  flvmux ! rtmpsink location=" + rtmpUrl
 
-        adaptive_resolution = (width, height) 
+        fps = 30
 
-        out_send = cv2.VideoWriter(send_gst, 0, 30, adaptive_resolution)
+        command = ['ffmpeg',
+                   '-re',
+                   '-y',
+                   '-f', 'rawvideo',
+                   '-vcodec', 'rawvideo',
+                   '-pix_fmt', 'bgr24',
+                   '-s', "{}x{}".format(width, height),
+                   '-r', str(fps),
+                   '-i', '-',
+                   '-c:v', 'libx264',
+                   '-g', str(fps * 2), 
+                   '-pix_fmt', 'yuv420p',
+                   '-preset', 'ultrafast',
+                   '-f', 'flv',
+                   rtmpUrl]
 
-        if not out_send.isOpened():
-            print("Failed to initialize VideoWriter")
-        else:
-            print("VideoWriter initialized successfully streamid: ",streamid )
+        ffmpegprocess = subprocess.Popen(command, stdin=subprocess.PIPE)
             
-            
-        streamidProcessDict[streamid] = out_send
+        streamidProcessDict[streamid] = ffmpegprocess
+
     except Exception as e:
         print("Exception occurred in init_restream :", e)
     return
@@ -62,7 +86,7 @@ cdef public void uninit_restream(streamid):
 
         if streamid in streamidProcessDict:
             print("releasing re streaming resources for "+ streamid)
-            streamidProcessDict[streamid].release()
+            # streamidProcessDict[streamid].release()
         else:
             print("failed to release video stream no such stream exist "+streamid)
     except Exception as e:
@@ -75,7 +99,7 @@ cdef public void streamStarted(const char* utfstreamid,int width,int height):
     try:
         streamid = utfstreamid.decode('utf-8') 
         init_restream(streamid,width,height)
-        print("------------- on stream started in python plugin streamid {} resolution {} x {}  ---------------".format(streamid,width,height))
+        plugin.streamStarted(streamid,width,height)
     except Exception as e:
         print("Exception occurred in streamStarted:", e)
     return
@@ -84,7 +108,7 @@ cdef public void streamFinished(const char* utfstreamid):
     try:
         streamid = utfstreamid.decode('utf-8') 
         uninit_restream(streamid)
-        print("------------- on stream finished in python plugin ------------------",streamid)
+        plugin.streamFinished(streamid)
     except Exception as e:
         print("Exception occurred in streamFinished:", e)
     return
@@ -113,15 +137,8 @@ cdef public void onVideoFrame(const char* streamid, AVFrame *avframe):
     # do not touch above code if you don't know what you are doing
 
     try:
-        cv2.rectangle(rgb_image, (20, 20), (240, 240), (255, 0, 0), 2)
  
-        #start writing code from here
-
-
-        # your code for modifying frame
-
-
-        #end writing code 
+        plugin.onVideoFrame(streamid,rgb_image,width,height)
 
         py_streamid = streamid.decode('UTF-8')
         width, height = avframe.width, avframe.height
@@ -129,7 +146,7 @@ cdef public void onVideoFrame(const char* streamid, AVFrame *avframe):
 
         if not writer:
             return 
-        writer.write(rgb_image)    
+        writer.stdin.write(rgb_image.tobytes())
 
     except Exception as e:
         print("Exception occurred in onVideoFrame:", e)
@@ -150,7 +167,7 @@ cdef public void onAudioPacket(const char *streamid, AVPacket *avpacket):
     print("on audio packet recieved in python : ", streamid)
     return
 
-cdef public void setVideoStreamInfo(const char* streamid,const void *audioStreamInfo):
+cdef public void setVideoStreamInfo(const char* streamid,const void *videoStreamInfo):
     py_streamid = streamid.decode('utf-8') 
     print("on video stream info")
     return

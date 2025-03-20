@@ -59,11 +59,13 @@ int main() {
     if (codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
       printf("video track %d width : %d height: : %d", i, codecpar->width,
              codecpar->height);
+
+      aquirejil();
+      streamStarted(test,codecpar->width,codecpar->height);
+      releasejil();
+
     }
 
-    aquirejil();
-    streamStarted(test,codecpar->width,codecpar->height);
-    releasejil();
 
 
 

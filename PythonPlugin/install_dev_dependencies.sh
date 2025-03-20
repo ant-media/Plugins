@@ -7,19 +7,8 @@ sudo at install ffmpeg
 apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 libjson-glib-dev gstreamer1.0-nice gstreamer1.0-pulseaudio 
 
 sudo apt install cmake
+sudo apt install git
 sudo apt-get install python3-dev
 sudo apt-get install python3-numpy
 sudo pip3 install cython
-sudo pip3 uninstall opencv-python
-
-#sudo pip3 install cython
-# we need Gstreamer Support for OpenCV so build from src
-git clone --branch 4.x --single-branch --recursive https://github.com/skvark/opencv-python.git
-# git clone --recursive https://github.com/skvark/opencv-python.git
-cd opencv-python
-export CMAKE_ARGS="-DWITH_GSTREAMER=ON"
-pip install --upgrade pip wheel
-# this is the build step - the repo estimates it can take from 5 
-#   mins to > 2 hrs depending on your computer hardware
-pip wheel . --verbose
-pip install opencv_python*.whl
+sudo pip3 install opencv-python
