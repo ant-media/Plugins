@@ -2,31 +2,30 @@
 #include <libavcodec/avcodec.h>
 #include <libavcodec/codec.h>
 #include <libavcodec/codec_par.h>
-#include <signal.h>
 #include <libavformat/avformat.h>
 #include <libavformat/avio.h>
 #include <libavutil/avutil.h>
 #include <libavutil/log.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 
 extern void init_py_and_wrapperlib();
 extern void releasejil();
 extern void aquirejil();
-extern void streamStarted(const char *streamid,int width , int height);
+extern void streamStarted(const char *streamid, int width, int height);
 extern void streamFinished(const char *streamid);
 extern void onVideoFrame(const char *streamid, AVFrame *avframe);
 extern void init_python_plugin_state();
 int execute;
-void trap(int signal){ execute = 0; }
+void trap(int signal) { execute = 0; }
 
-void my_log_callback(void *ptr, int level, const char *fmt, va_list vargs)
-{
-    /*vprintf(fmt, vargs);*/
+void my_log_callback(void *ptr, int level, const char *fmt, va_list vargs) {
+  /*vprintf(fmt, vargs);*/
 }
 
 int main() {
-  av_log_set_level(0);  
+  av_log_set_level(0);
   av_log_set_callback(my_log_callback);
 
   signal(SIGINT, &trap);
@@ -51,23 +50,20 @@ int main() {
   avformat_find_stream_info(avformatctx, NULL);
 
   for (int i = 0; i < avformatctx->nb_streams; i++) {
+
     AVStream *stream = avformatctx->streams[i];
     const AVCodec *decoder =
         avcodec_find_decoder(avformatctx->streams[i]->codecpar->codec_id);
     AVCodecParameters *codecpar = avformatctx->streams[i]->codecpar;
 
     if (codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-      printf("video track %d width : %d height: : %d", i, codecpar->width,
-             codecpar->height);
-
       aquirejil();
-      streamStarted(test,codecpar->width,codecpar->height);
+      streamStarted(test, codecpar->width, codecpar->height);
       releasejil();
 
+    } else {
+      continue;
     }
-
-
-
 
     AVCodecContext *codec_ctx = avcodec_alloc_context3(decoder);
     avcodec_parameters_to_context(codec_ctx, codecpar);
@@ -93,6 +89,7 @@ int main() {
       }
       /*i--;*/
     }
+    printf("video finished\n");
   }
 
   signal(SIGINT, SIG_DFL);

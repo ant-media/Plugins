@@ -86,7 +86,7 @@ cdef public void uninit_restream(streamid):
 
         if streamid in streamidProcessDict:
             print("releasing re streaming resources for "+ streamid)
-            # streamidProcessDict[streamid].release()
+            streamidProcessDict[streamid].terminate()
         else:
             print("failed to release video stream no such stream exist "+streamid)
     except Exception as e:
