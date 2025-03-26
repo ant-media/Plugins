@@ -242,7 +242,7 @@
             <scope>provided</scope>
         </dependency>
 	</dependencies>
-	<description>PluginApp for Ant Media Server</description>
+	<description>PythonPlugin for Ant Media Server</description>
 	<organization>
 		<name>Ant Media</name>
 		<url>http://antmedia.io</url>

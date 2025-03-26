@@ -1,5 +1,4 @@
 import cv2
-import torch
 import traceback
 #import Examples.facedetection as facedetection
 
