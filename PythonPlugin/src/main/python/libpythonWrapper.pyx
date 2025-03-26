@@ -1,4 +1,3 @@
-#add your imports here <
 import numpy as np
 # import traceback
 import importlib
@@ -6,6 +5,7 @@ import sys
 import subprocess
 import cv2
 import time
+import os
 import time
 import cython
 from libc.stdint cimport (uint8_t, uint16_t, uint32_t, uint64_t,
@@ -13,6 +13,11 @@ from libc.stdint cimport (uint8_t, uint16_t, uint32_t, uint64_t,
 
 import subprocess
 import sys
+
+cdef extern from "libpythonWrapper.h":
+    cdef char *PLUGIN_PATH
+
+cdef str plugin_path = PLUGIN_PATH.decode('utf-8')
 
 cdef streamidProcessDict
 cdef plugin
@@ -30,18 +35,25 @@ cdef extern from "libavcodec/avcodec.h":
         pass
 
 cdef public void init_python_plugin_state():
-    # initialize all global variables and state of the program in this functions it will be called once when program is initialized
     global streamidProcessDict 
     global plugin
     try:
         streamidProcessDict = {}
         print(sys.path)
-        sys.path.append("/usr/local/antmedia")
+
+        if plugin_path!=None:
+            sys.path.append(plugin_path)
+            print("\npython append path to \n",plugin_path)
+        else:
+            print("\n python append path to usr\\local\\antmedia \n")
+            sys.path.append("/usr/local/antmedia")
+
         plugin = importlib.import_module("python_plugin") 
 
         print("Module Loaded:", plugin)
 
         plugin.init_python_plugin_state()
+
     except Exception as e:
         print("Exception occurred in init_python_plugin_state:", e)
         sys.exit(0)
@@ -114,6 +126,7 @@ cdef public void streamFinished(const char* utfstreamid):
     return
 
 cdef public void onVideoFrame(const char* streamid, AVFrame *avframe):
+
     global streamidProcessDict
 
     cdef int width = avframe.width

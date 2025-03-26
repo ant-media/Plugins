@@ -8,7 +8,6 @@ if [ $OUT -ne 0 ]; then
     exit $OUT
 fi
 
-cp ./src/main/python/python_plugin.py /usr/local/antmedia/
 cd ./src/main/python/
 python3 setup.py build_ext --inplace
 cd ../../../

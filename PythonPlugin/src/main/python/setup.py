@@ -14,6 +14,8 @@ libraries = [sysconfig.get_config_var(
 
 print(library_dirs)
 
+setup_dir = os.path.dirname(os.path.abspath(__file__))
+
 
 class MySuffix(build_ext):
     suffix = '.so'
@@ -30,7 +32,8 @@ setup(
             include_dirs=include_dirs,
             library_dirs=library_dirs,
             libraries=libraries,
-            extra_compile_args=["-w"]
+            extra_compile_args=["-w"],
+            define_macros=[("PLUGIN_PATH", f'"{setup_dir}"')] 
         ),
         build_dir="build"
     ),

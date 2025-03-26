@@ -3,4 +3,6 @@
 /pluginsimulator
 /compile_commands.json
 /pluginsimulator
-/build
+/build/*
+/__pycache__
+/models/

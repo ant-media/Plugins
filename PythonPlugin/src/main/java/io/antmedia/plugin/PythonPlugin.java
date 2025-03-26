@@ -28,6 +28,7 @@ public class PythonPlugin extends NativeInterface implements ApplicationContextA
   private PythonWrapFrameListener frameListener = new PythonWrapFrameListener();
   private PythonWrapPacketListener packetListener = new PythonWrapPacketListener();
   private ApplicationContext applicationContext;
+  private boolean is_python_init = false;
 
   @Override
   public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
@@ -57,18 +58,26 @@ public class PythonPlugin extends NativeInterface implements ApplicationContextA
   }
 
   public void isPythonRunning() {
+ synchronized(this) {
+    if(!is_python_init){
+
     if (!NativeInterface.PY_WRAPPER.INSTANCE.Py_IsInitialized()) {
       logger.info("python context not running initializing new context");
-      NativeInterface.PY_WRAPPER.INSTANCE.init_py_and_wrapperlib();
+
+        NativeInterface.PY_WRAPPER.INSTANCE.init_py_and_wrapperlib();
 
       NativeInterface.PY_WRAPPER.INSTANCE.aquirejil();
       NativeInterface.PY_WRAPPER.INSTANCE.init_python_plugin_state();
       NativeInterface.PY_WRAPPER.INSTANCE.releasejil();
 
+      is_python_init=true;
       return;
     }
+      
+  }
     logger.info("already running python context");
     return;
+    }
   }
 
   public void register(String streamId) {

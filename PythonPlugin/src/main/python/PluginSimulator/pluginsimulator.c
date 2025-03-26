@@ -49,6 +49,7 @@ int main() {
 
   avformat_find_stream_info(avformatctx, NULL);
 
+  signal(SIGINT, SIG_DFL);
   for (int i = 0; i < avformatctx->nb_streams; i++) {
 
     AVStream *stream = avformatctx->streams[i];
@@ -89,9 +90,8 @@ int main() {
       }
       /*i--;*/
     }
-    printf("video finished\n");
   }
+  printf("\n\nvideo file finished exiting plugin simulator\n\n");
 
-  signal(SIGINT, SIG_DFL);
   return 0;
 }
