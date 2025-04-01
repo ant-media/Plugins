@@ -39,6 +39,8 @@ import java.text.DateFormat;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+import java.util.HashMap;
 
 import javax.annotation.Nonnull;
 
@@ -332,9 +334,8 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 			String mp4FilePath = m3u8File.getParentFile().getAbsolutePath() + File.separator + vodId + ".mp4";
 
-			if (ClipCreatorConverter.createMp4(tsFileListTextFile, mp4FilePath)) 
+			if (ClipCreatorConverter.createMp4(tsFileListTextFile, mp4FilePath, startTime, endTime)) 
 			{
-
 				File mp4File = new File(mp4FilePath);
 
 				long durationMs = RecordMuxer.getDurationInMs(mp4File, streamId);
@@ -508,24 +509,50 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		ArrayList<File> segmentFiles = new ArrayList<>();
 
 		Path playlistBasePath = m3u8File.getParentFile().toPath();
-
 		List<MediaSegment> mediaSegments = playList.mediaSegments();
-
-		for (MediaSegment segment : mediaSegments) 
-		{
+		
+		double targetDurationSecs = (endTimeMs - startTimeMs) / 1000.0;
+		logger.info("Target clip duration: {:.3f} seconds", targetDurationSecs);
+		
+		Map<Integer, Long> segmentStartTimes = new HashMap<>();
+		int firstSegmentIndex = -1;
+		int lastSegmentIndex = -1;
+		
+		for (int i = 0; i < mediaSegments.size(); i++) {
+			MediaSegment segment = mediaSegments.get(i);
 			Optional<OffsetDateTime> segmentDateTimeOpt = segment.programDateTime();
 
-			if (segmentDateTimeOpt.isPresent()) 
-			{
+			if (segmentDateTimeOpt.isPresent()) {
 				OffsetDateTime segmentDateTime = segmentDateTimeOpt.get();
-				long segmentTime = segmentDateTime.toEpochSecond() * 1000;
+				long segmentTimeMs = segmentDateTime.toEpochSecond() * 1000;
+				segmentStartTimes.put(i, segmentTimeMs);
 
-				if (segmentTime >= startTimeMs && segmentTime <= endTimeMs) 
-				{
+				if (segmentTimeMs <= startTimeMs && firstSegmentIndex == -1) {
+					firstSegmentIndex = i;
+				}
+
+				if (segmentTimeMs <= endTimeMs) {
+					lastSegmentIndex = i;
+				}
+			}
+		}
+
+		if (firstSegmentIndex == -1 && !segmentStartTimes.isEmpty()) {
+			firstSegmentIndex = Collections.min(segmentStartTimes.keySet());
+		}
+
+		if (firstSegmentIndex != -1 && lastSegmentIndex != -1) {
+			for (int i = firstSegmentIndex; i <= lastSegmentIndex; i++) {
+				if (i < mediaSegments.size()) {
+					MediaSegment segment = mediaSegments.get(i);
 					Path segmentPath = playlistBasePath.resolve(segment.uri());
 					segmentFiles.add(segmentPath.toFile());
 				}
 			}
+	
+			logger.info("Selected {} segments from index {} to {} for time range {} to {}", 
+					segmentFiles.size(), firstSegmentIndex, lastSegmentIndex, 
+					dateFormat.format(new Date(startTimeMs)), dateFormat.format(new Date(endTimeMs)));
 		}
 
 		return segmentFiles;
