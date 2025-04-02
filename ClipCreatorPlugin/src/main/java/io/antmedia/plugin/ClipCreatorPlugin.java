@@ -202,7 +202,11 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		{
 			vertx.executeBlocking(() -> 
 			{
-				convertHlsToMp4(broadcast, true);
+				long endTime = System.currentTimeMillis();
+				vertx.setTimer(3000, (l) -> {
+					convertHlsToMp4(broadcast, true, endTime);
+				});
+
 				return null;
 			}, false);
 
@@ -285,8 +289,11 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		}
 		return null;
 	}
-
 	public synchronized Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime) {
+		return convertHlsToMp4(broadcast, updateLastMp4CreateTime, System.currentTimeMillis());
+	}
+
+	public synchronized Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime, long endTime) {
 
 		Mp4CreationResponse response = new Mp4CreationResponse();
 		String streamId = broadcast.getStreamId();
@@ -308,7 +315,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 		Long startTime = lastMp4CreateTimeMSForStream.get(streamId);
 
-		long endTime = System.currentTimeMillis();
 
 		if (startTime == null) {
 			startTime = endTime - (clipCreatorSettings.getMp4CreationIntervalSeconds() * 1000);
@@ -624,7 +630,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			vertx.executeBlocking(() -> {
 				logger.info("stream finished for streamId:{}. It will create final recording", broadcast.getStreamId());
 
-				convertHlsToMp4(broadcast, true);
+				convertHlsToMp4(broadcast, true, System.currentTimeMillis());
 				lastMp4CreateTimeMSForStream.remove(broadcast.getStreamId());
 				return null;
 			}, false);
