@@ -203,7 +203,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			vertx.executeBlocking(() -> 
 			{
 				long endTime = System.currentTimeMillis();
-				vertx.setTimer(3000, (l) -> {
+				vertx.setTimer(2100, (l) -> {
 					convertHlsToMp4(broadcast, true, endTime);
 				});
 
@@ -338,7 +338,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 			String mp4FilePath = m3u8File.getParentFile().getAbsolutePath() + File.separator + vodId + ".mp4";
 
-			if (ClipCreatorConverter.createMp4(tsFileListTextFile, mp4FilePath)) 
+			if (ClipCreatorConverter.createMp4(tsFileListTextFile, mp4FilePath, startTime, endTime)) 
 			{
 
 				File mp4File = new File(mp4FilePath);

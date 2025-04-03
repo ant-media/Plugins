@@ -68,6 +68,51 @@ public class ClipCreatorConverter {
 		}
 	}
 
+	public static boolean createMp4(File tsFileList, String outputFilePath, long exactStartTimeMs, long exactEndTimeMs) {
+        
+        long startTime = System.nanoTime();
+        
+        double exactDurationSecs = (exactEndTimeMs - exactStartTimeMs) / 1000.0;
+        
+        String tempMp4Path = outputFilePath + ".temp.mp4";
+        String command = String.format(
+                "%s -f concat -safe 0 -i %s -c copy -bsf:a aac_adtstoasc %s",
+                ffmpegPath,
+                tsFileList.getAbsolutePath(),
+                tempMp4Path
+                );
+
+        boolean success = runCommand(command);
+        
+        if (success) {
+            //The 2nd command is to trim the exact duration 
+            //because ts file lengths on the above command are not exact 
+            //and can't be trusted to be exact
+            command = String.format(
+                    "%s -i %s -ss 0 -t %.3f -c copy -avoid_negative_ts 1 %s",
+                    ffmpegPath,
+                    tempMp4Path,
+                    exactDurationSecs,
+                    outputFilePath
+                    );
+            
+            success = runCommand(command);
+            
+            // Clean up temp file
+            deleteFile(new File(tempMp4Path));
+        }
+        
+        long endTime = System.nanoTime();
+        long duration = (endTime - startTime) / 1000000;  //divide by 1000000 to get milliseconds.
+        logger.info("Mp4 creation duration: {} ms for {} with exact duration: {:.3f}s", duration, outputFilePath, exactDurationSecs);
+        
+        if (success) {
+            deleteFile(tsFileList);
+            return true;
+        }
+        return false;
+    }
+
 	public static boolean createMp4(File tsFileList, String outputFilePath) {
 		
 		long startTime = System.nanoTime();
