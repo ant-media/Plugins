@@ -76,11 +76,14 @@ public class ClipCreatorConverter {
         
         String tempMp4Path = outputFilePath + ".temp.mp4";
         String command = String.format(
-                "%s -f concat -safe 0 -i %s -c copy -bsf:a aac_adtstoasc %s",
-                ffmpegPath,
-                tsFileList.getAbsolutePath(),
-                tempMp4Path
-                );
+			"%s -f concat -safe 0 -i %s " +
+			" -r 30 -c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p " +
+			" -c:a aac -b:a 64k -movflags +faststart " +
+			" %s",
+			ffmpegPath,
+			tsFileList.getAbsolutePath(),
+			tempMp4Path
+		);
 
         boolean success = runCommand(command);
         
