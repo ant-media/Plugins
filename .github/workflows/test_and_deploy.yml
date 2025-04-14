@@ -138,4 +138,10 @@ jobs:
                 sleep 10
                 mvn deploy -DskipTests=false --quiet --settings ../mvn-settings.xml
                 cd ..
+                
+        - name: Build and Test System Monitor Plugin
+          run: |
+            cd SystemMonitor
+            mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar --settings ../mvn-settings.xml --quiet
+            cd ..
 
