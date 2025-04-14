@@ -43,14 +43,14 @@ public class SystemMonitor implements ApplicationContextAware {
 		dataStore = app.getDataStore();
 		
 		if(app.isClusterMode()) {
-			IClusterNotifier clusterNotifier = (IClusterNotifier) app.getContext().getBean(IClusterNotifier.BEAN_NAME);
+			IClusterNotifier clusterNotifier = (IClusterNotifier) applicationContext.getBean(IClusterNotifier.BEAN_NAME);
 			clusterDataStore = clusterNotifier.getClusterStore();
 			monitorTask = vertx.setPeriodic(MONITORING_PERIOD, id -> monitorSystemStatus());
 		}
 		
 	}
 		
-	private void monitorSystemStatus() {
+	public void monitorSystemStatus() {
 		handleOrphanStreams();
 	}
 
