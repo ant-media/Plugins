@@ -45,9 +45,9 @@ public class SystemMonitor implements ApplicationContextAware {
 		if(app.isClusterMode()) {
 			IClusterNotifier clusterNotifier = (IClusterNotifier) app.getContext().getBean(IClusterNotifier.BEAN_NAME);
 			clusterDataStore = clusterNotifier.getClusterStore();
+			monitorTask = vertx.setPeriodic(MONITORING_PERIOD, id -> monitorSystemStatus());
 		}
 		
-		monitorTask = vertx.setPeriodic(MONITORING_PERIOD, id -> monitorSystemStatus());
 	}
 		
 	private void monitorSystemStatus() {
@@ -55,7 +55,7 @@ public class SystemMonitor implements ApplicationContextAware {
 	}
 
 	private void handleOrphanStreams() {
-		logger.info("Check Orphan Streams");
+		logger.debug("Check Orphan Streams");
 		List<ClusterNode> nodes = clusterDataStore.getClusterNodes(0, MAX_NODE_COUNT);
 		
 		List<String> deadNodes = new ArrayList<String>();
@@ -73,7 +73,7 @@ public class SystemMonitor implements ApplicationContextAware {
 		}
 		
 		for (String address : deadNodes) {
-			logger.info("Checking orphan streams for {}", address);
+			logger.debug("Checking orphan streams for {}", address);
 			checkAndTransferOrphanStreams(address, liveNodes);
 		}
 		
@@ -91,7 +91,6 @@ public class SystemMonitor implements ApplicationContextAware {
 				
 				logger.info("Orphan stream found 2 {} on origin {}", broadcast.getStreamId(), originAddress);
 
-				vertx.setTimer(2000, l -> getApplication().startStreaming(broadcast));
 			}
 		}
 	}
