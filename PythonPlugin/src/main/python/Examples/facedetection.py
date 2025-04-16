@@ -1,11 +1,13 @@
 import cv2
 import os
 
+
 def onVideoFrame(rgb_image):
     gray_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
 
     model_path = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(model_path, "haarcascade_frontalface_default.xml")
+    model_path = os.path.join(
+        model_path, "haarcascade_frontalface_default.xml")
 
     face_classifier = cv2.CascadeClassifier(
         model_path

@@ -5,6 +5,7 @@
 #include <libavformat/avformat.h>
 #include <libavformat/avio.h>
 #include <libavutil/avutil.h>
+#include <libavutil/frame.h>
 #include <libavutil/log.h>
 #include <signal.h>
 #include <stdio.h>
@@ -71,12 +72,13 @@ int main() {
     avcodec_open2(codec_ctx, decoder, NULL);
 
     AVPacket *pPacket = av_packet_alloc();
-    AVFrame *pFrame = av_frame_alloc();
 
     const char *streamid = "stream1";
 
     int i = 10;
+
     while (av_read_frame(avformatctx, pPacket) >= 0) {
+      AVFrame *pFrame = av_frame_alloc();
       int ret = avcodec_send_packet(codec_ctx, pPacket);
       if (ret < 0)
         continue;
@@ -88,6 +90,7 @@ int main() {
       if (!execute) {
         exit(0);
       }
+      av_frame_free(&pFrame);
       /*i--;*/
     }
   }

@@ -1,4 +1,5 @@
 #!/bin/sh
+sudo systemctl stop antmedia
 set -e
 AMS_DIR=/usr/local/antmedia
 mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true

@@ -99,6 +99,7 @@ cdef public void uninit_restream(streamid):
         if streamid in streamidProcessDict:
             print("releasing re streaming resources for "+ streamid)
             streamidProcessDict[streamid].terminate()
+            streamidProcessDict[streamid].kill()
         else:
             print("failed to release video stream no such stream exist "+streamid)
     except Exception as e:
@@ -109,6 +110,9 @@ cdef public void uninit_restream(streamid):
 
 cdef public void streamStarted(const char* utfstreamid,int width,int height):
     try:
+        if plugin!=None and plugin.mode == "debug":
+            importlib.reload(plugin)
+
         streamid = utfstreamid.decode('utf-8') 
         init_restream(streamid,width,height)
         plugin.streamStarted(streamid,width,height)
