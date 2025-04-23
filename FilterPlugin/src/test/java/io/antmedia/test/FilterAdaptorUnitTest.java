@@ -18,6 +18,8 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.RandomUtils;
@@ -57,11 +59,11 @@ public class FilterAdaptorUnitTest {
 
 		protected void failed(Throwable e, Description description) {
 			System.out.println("Failed test: " + description.getMethodName() + " e: " + ExceptionUtils.getStackTrace(e));
-		};
+		}
 
 		protected void finished(Description description) {
 			System.out.println("Finishing test: " + description.getMethodName());
-		};
+		}
 	};
 	
 	private static Vertx vertx;
@@ -78,9 +80,10 @@ public class FilterAdaptorUnitTest {
 
 	@Test
 	public void testNullFrame() {
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
 		doReturn(new Result(true)).when(filterAdaptor).update();
-		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
+		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
 		filterConf.setOutputStreams(new ArrayList<>());
@@ -119,9 +122,11 @@ public class FilterAdaptorUnitTest {
 	
 	@Test
 	public void testFilterGraphVideoFeed() {
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
+
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
 		doReturn(new Result(true)).when(filterAdaptor).update();
-		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
+		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
 		filterConf.setOutputStreams(new ArrayList<>());
@@ -163,7 +168,9 @@ public class FilterAdaptorUnitTest {
 	
 	@Test
 	public void testFilterGraphAudioFeed() {
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
+
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
 		doReturn(new Result(true)).when(filterAdaptor).update();
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
@@ -221,7 +228,9 @@ public class FilterAdaptorUnitTest {
 	
 	
 	public void testFiltering(boolean videoEnabled, String videoFilter, boolean audioEnabled, String audioFilter) {
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
+
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		when(app.createCustomBroadcast(anyString(), anyInt(), anyInt())).thenReturn(mock(IFrameListener.class));
 
@@ -299,9 +308,11 @@ public class FilterAdaptorUnitTest {
 	 */
 	@Test
 	public void testTimeBaseInSyncMode() {
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), false));
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
+
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
 		doReturn(new Result(true)).when(filterAdaptor).update();
-		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any());
+		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
 		filterConf.setOutputStreams(new ArrayList<>());

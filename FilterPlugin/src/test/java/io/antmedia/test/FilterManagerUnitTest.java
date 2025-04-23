@@ -26,6 +26,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.awaitility.Awaitility;
@@ -103,9 +105,11 @@ public class FilterManagerUnitTest {
 		Gson gson = new Gson();
 		FilterConfiguration filterConfiguration = gson.fromJson(filterString, FilterConfiguration.class);
 
-		FilterAdaptor filterAdaptor = filtersManager.getFilterAdaptor(filterConfiguration.getFilterId(), false);
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
 
-		FilterAdaptor filterAdaptor2 = filtersManager.getFilterAdaptor(filterConfiguration.getFilterId(), false);
+		FilterAdaptor filterAdaptor = filtersManager.getFilterAdaptor(filterConfiguration.getFilterId(), decodeStreamMap);
+
+		FilterAdaptor filterAdaptor2 = filtersManager.getFilterAdaptor(filterConfiguration.getFilterId(), decodeStreamMap);
 		assertEquals(filterAdaptor, filterAdaptor2);
 
 		filterAdaptor.setFilterConfiguration(filterConfiguration);
@@ -149,7 +153,7 @@ public class FilterManagerUnitTest {
 		when(app.createCustomBroadcast("stream2", 720, 1500)).thenReturn(Mockito.mock(IFrameListener.class));
 		when(app.createCustomBroadcast("stream3", 720, 1500)).thenReturn(Mockito.mock(IFrameListener.class));
 		FilterAdaptor filterAdaptor = Mockito.mock(FilterAdaptor.class);
-		Mockito.doReturn(filterAdaptor).when(filtersManager).getFilterAdaptor(Mockito.anyString(), Mockito.anyBoolean());
+		Mockito.doReturn(filterAdaptor).when(filtersManager).getFilterAdaptor(Mockito.anyString(), Mockito.anyMap());
 		Mockito.when(filterAdaptor.createOrUpdateFilter(Mockito.any(), Mockito.any())).thenReturn(new Result(true));
 
 
@@ -231,7 +235,10 @@ public class FilterManagerUnitTest {
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
 		dataStore.save(broadcast);
 
-		FilterAdaptor filterAdaptor = new FilterAdaptor("filter1", false);
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
+
+		
+		FilterAdaptor filterAdaptor = new FilterAdaptor("filter1", decodeStreamMap);
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
 		videoCodecParameters.width(sourceWidth);
 		videoCodecParameters.height(sourceHeight);
@@ -251,7 +258,7 @@ public class FilterManagerUnitTest {
 
 		filterAdaptor.setAudioStreamInfo("stream1", new StreamParametersInfo());
 
-		Mockito.when(filtersManager.getFilterAdaptor(Mockito.anyString(), Mockito.anyBoolean())).thenReturn(filterAdaptor);
+		Mockito.when(filtersManager.getFilterAdaptor(Mockito.anyString(), Mockito.anyMap())).thenReturn(filterAdaptor);
 
 		result = filtersManager.createFilter(filterConfiguration, app);
 		assertTrue(result.isSuccess());
@@ -402,7 +409,9 @@ public class FilterManagerUnitTest {
 
 		when(app.createCustomBroadcast(Mockito.anyString(), anyInt(), anyInt())).thenReturn(frameListener);
 
-		FilterAdaptor filterAdaptor = new FilterAdaptor("filter1", false);
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
+
+		FilterAdaptor filterAdaptor = new FilterAdaptor("filter1", decodeStreamMap);
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
 		videoCodecParameters.width(sourceWidth);
 		videoCodecParameters.height(sourceHeight);
@@ -422,7 +431,7 @@ public class FilterManagerUnitTest {
 
 		filterAdaptor.setAudioStreamInfo("stream1", new StreamParametersInfo());
 
-		Mockito.when(filtersManager.getFilterAdaptor(Mockito.anyString(), Mockito.anyBoolean())).thenReturn(filterAdaptor);
+		Mockito.when(filtersManager.getFilterAdaptor(Mockito.anyString(), Mockito.anyMap())).thenReturn(filterAdaptor);
 
 		Result result = filtersManager.createFilter(filterConfiguration, app);
 		assertTrue(result.isSuccess());
@@ -579,7 +588,9 @@ public class FilterManagerUnitTest {
 		assertEquals("stream1", dataStore.save(broadcast));
 
 		//prepare filter adaptor
-		FilterAdaptor filterAdaptor = new FilterAdaptor("filter1", true);
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
+		decodeStreamMap.put("stream1", true);
+		FilterAdaptor filterAdaptor = new FilterAdaptor("filter1", decodeStreamMap);
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
 
 		videoCodecParameters.width(width);
@@ -601,7 +612,7 @@ public class FilterManagerUnitTest {
 		filterAdaptor.setVideoStreamInfo("stream1", streamParams);
 
 		//create filter
-		Mockito.when(filtersManager.getFilterAdaptor(Mockito.anyString(), Mockito.anyBoolean())).thenReturn(filterAdaptor);
+		Mockito.when(filtersManager.getFilterAdaptor(Mockito.anyString(), Mockito.anyMap())).thenReturn(filterAdaptor);
 		Result result = filtersManager.createFilter(filterConfiguration, app);
 		assertTrue(result.isSuccess());
 

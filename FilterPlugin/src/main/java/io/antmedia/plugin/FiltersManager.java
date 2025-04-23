@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -33,17 +34,20 @@ public class FiltersManager {
 	 * @param filterConfiguration
 	 * @param appAdaptor
 	 */
-	public Result createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter appAdaptor) {
-		final boolean decodeStreams;
+	public Result createFilter(FilterConfiguration filterConfiguration, AntMediaApplicationAdapter appAdaptor) 
+	{
+		final boolean defaultDecodeStreamValue;
 		AppSettings appSettings = appAdaptor.getAppSettings();
-		if (appSettings != null) {
+		if (appSettings != null) 
+		{
 			List<EncoderSettings> encoderSettings = appSettings.getEncoderSettings(); 
-			decodeStreams = encoderSettings == null || encoderSettings.isEmpty();
+			defaultDecodeStreamValue = encoderSettings == null || encoderSettings.isEmpty();
 		}
 		else {
-			decodeStreams = true;
+			defaultDecodeStreamValue = true;
 		}
 		
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<String, Boolean>();
 		
 		for(String streamId : filterConfiguration.getInputStreams()) 
 		{
@@ -51,6 +55,24 @@ public class FiltersManager {
    			if(broadcast == null || !IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus())) {
    				logger.error("Cannot add filter because input stream id:{} in filter is not actively streaming", streamId);
    				return new Result(false, "Input stream ID: "+ streamId +" is not actively streaming");
+   			}
+   			
+   			//if origin stream is not in this instance, we are going to decode stream locally
+   			if (!StringUtils.equals(appAdaptor.getServerSettings().getHostAddress(), broadcast.getOriginAdress())) 
+   			{
+   				decodeStreamMap.put(streamId, true);
+   			}
+   			else 
+   			{
+   				//if origin stream is in this instance, we are going to decode stream locally
+   				boolean decodeStream = defaultDecodeStreamValue;
+   				
+   				if (broadcast.getEncoderSettingsList() != null && broadcast.getEncoderSettingsList().isEmpty()) 
+   				{
+   					decodeStream = true;
+   				}
+   				
+				decodeStreamMap.put(streamId, decodeStream);
    			}
 		}
 		
@@ -60,11 +82,11 @@ public class FiltersManager {
 			filterConfiguration.setFilterId(filterId);
 		}
 		
-		return getFilterAdaptor(filterId, decodeStreams).createOrUpdateFilter(filterConfiguration, appAdaptor);
+		return getFilterAdaptor(filterId, decodeStreamMap).createOrUpdateFilter(filterConfiguration, appAdaptor);
 	}
 	
 	
-	public FilterAdaptor getFilterAdaptor(String filterId, boolean decodeStreams) {
+	public FilterAdaptor getFilterAdaptor(String filterId, Map<String, Boolean> decodeStreams) {
 		return filterList.computeIfAbsent(filterId, key -> new FilterAdaptor(filterId, decodeStreams));
 	}
 	
