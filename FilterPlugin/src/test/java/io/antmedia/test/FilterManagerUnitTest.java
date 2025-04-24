@@ -144,7 +144,8 @@ public class FilterManagerUnitTest {
 		DataStore dataStore = new InMemoryDataStore("test");
 		when(app.getDataStore()).thenReturn(dataStore);
 
-		when(app.getServerSettings()).thenReturn(new ServerSettings());
+		ServerSettings serverSettings = new ServerSettings();
+		when(app.getServerSettings()).thenReturn(serverSettings);
 
 		Broadcast broadcast = new Broadcast();
 		try {
@@ -155,6 +156,7 @@ public class FilterManagerUnitTest {
 		}
 		broadcast.setUpdateTime(System.currentTimeMillis());
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
+		broadcast.setOriginAdress(serverSettings.getHostAddress());
 		dataStore.save(broadcast);
 
 		when(app.createCustomBroadcast("stream2", 720, 1500)).thenReturn(Mockito.mock(IFrameListener.class));
@@ -398,7 +400,8 @@ public class FilterManagerUnitTest {
 		DataStore dataStore = new InMemoryDataStore("test");
 		when(app.getDataStore()).thenReturn(dataStore);
 
-		when(app.getServerSettings()).thenReturn(new ServerSettings());
+		ServerSettings serverSettings = new ServerSettings();
+		when(app.getServerSettings()).thenReturn(serverSettings);
 
 
 		Result result = filtersManager.createFilter(filterConfiguration, app);
@@ -413,6 +416,7 @@ public class FilterManagerUnitTest {
 		}
 		broadcast.setUpdateTime(System.currentTimeMillis());
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
+		broadcast.setOriginAdress(serverSettings.getHostAddress());
 		dataStore.save(broadcast);
 
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
@@ -533,7 +537,8 @@ public class FilterManagerUnitTest {
 		DataStore dataStore = new InMemoryDataStore("test");
 		when(app.getDataStore()).thenReturn(dataStore);
 
-		when(app.getServerSettings()).thenReturn(new ServerSettings());
+		ServerSettings serverSettings = new ServerSettings();
+		when(app.getServerSettings()).thenReturn(serverSettings);
 
 		Broadcast broadcast = new Broadcast();
 		try {
@@ -544,6 +549,8 @@ public class FilterManagerUnitTest {
 		}
 		broadcast.setUpdateTime(System.currentTimeMillis());
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
+		broadcast.setOriginAdress(serverSettings.getHostAddress());
+
 		dataStore.save(broadcast);
 
 		callCount = 0;
@@ -769,6 +776,7 @@ public class FilterManagerUnitTest {
 		}
 		broadcast.setUpdateTime(System.currentTimeMillis());
 		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
+		broadcast.setOriginAdress(app.getServerSettings().getHostAddress());
 		assertEquals("stream1", dataStore.save(broadcast));
 
 		//prepare filter adaptor
