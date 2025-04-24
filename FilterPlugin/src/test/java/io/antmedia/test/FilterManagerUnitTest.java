@@ -13,6 +13,7 @@ import static org.bytedeco.ffmpeg.global.avutil.av_malloc;
 import static org.bytedeco.ffmpeg.global.avutil.avutil_configuration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -20,6 +21,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
@@ -42,6 +44,7 @@ import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacpp.BytePointer;
 import org.bytedeco.javacpp.PointerPointer;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +58,7 @@ import io.antmedia.FFmpegUtilities;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.datastore.db.types.Broadcast;
+import io.antmedia.datastore.db.types.BroadcastUpdate;
 import io.antmedia.filter.FilterAdaptor;
 import io.antmedia.filter.Utils;
 import io.antmedia.filter.utils.FilterConfiguration;
@@ -63,6 +67,7 @@ import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
 import io.antmedia.rest.model.Result;
+import io.antmedia.settings.ServerSettings;
 import io.vertx.core.Vertx;
 
 
@@ -139,6 +144,8 @@ public class FilterManagerUnitTest {
 		DataStore dataStore = new InMemoryDataStore("test");
 		when(app.getDataStore()).thenReturn(dataStore);
 
+		when(app.getServerSettings()).thenReturn(new ServerSettings());
+
 		Broadcast broadcast = new Broadcast();
 		try {
 			broadcast.setStreamId("stream1");
@@ -180,22 +187,194 @@ public class FilterManagerUnitTest {
 	{
 		//BytePointer conf = avfilter_configuration();
 		//System.out.println(conf.getString());
-		
-		
+
+
 		//movie=src/test/resources/background.jpeg[background];[background][in0]chromakey=0x6de61b:0.1:0.2[transparent];
-		
+
 		//SW
 		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png[background];[in0]chromakey=0x6de61b:1/10:2/10[transparent];[background][transparent]overlay[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
-		
+
 		//HW - run this on a machine with CUDA
 		//String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream1\"],\"videoFilter\":\"movie=src/test/resources/background.png,format=yuv420p[background];[background]hwupload_cuda,scale_npp=w=1280:h=720:format=yuv420p[mask];[in0]hwupload_cuda,scale_npp=w=1280:h=720:format=yuva420p,chromakey_cuda=0x6de61b:1/10:2/10[greenOut];[mask][greenOut]overlay_cuda[overlayed];[overlayed]hwdownload[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"synchronous\"}";
-		
-		 
+
+
 		String rawFile = "src/test/resources/green_screen_1280x720.yuv";
 
 		testBugVideoFilterNotWorking(filterString, rawFile, 1280, 720, 100);
 	}
 
+	@Test
+	public void testCreateFilter() {
+		FiltersManager filtersManager = spy(new FiltersManager());
+
+		FilterAdaptor filterAdaptor = Mockito.mock(FilterAdaptor.class);
+		when(filterAdaptor.createOrUpdateFilter(Mockito.any(), Mockito.any())).thenReturn(new Result(true));
+
+
+		when(filtersManager.getFilterAdaptor(Mockito.anyString(), Mockito.anyMap())).thenReturn(filterAdaptor);
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+
+
+		FilterConfiguration filterConfiguration = new FilterConfiguration();
+		filterConfiguration.setInputStreams(Arrays.asList("stream1"));
+		filterConfiguration.setOutputStreams(Arrays.asList("outputStream1"));
+		filterConfiguration.setVideoFilter("[in0]vflip[out0]");
+		filterConfiguration.setVideoEnabled(true);
+		filterConfiguration.setAudioEnabled(false);
+		filterConfiguration.setType("synchronous");
+
+		AppSettings appSettings = new AppSettings();
+		when(app.getAppSettings()).thenReturn(appSettings);
+
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore);
+
+		ServerSettings serverSettings = spy(new ServerSettings());
+		when(app.getServerSettings()).thenReturn(serverSettings);
+
+		Result result = filtersManager.createFilter(filterConfiguration, app);
+		//it is false because stream1 is not streaming
+		assertFalse(result.isSuccess());
+
+		// save a steam to the database
+		Broadcast broadcast = new Broadcast();
+		try {
+			broadcast.setStreamId("stream1");
+		} catch (Exception e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+		}
+
+		broadcast.setUpdateTime(System.currentTimeMillis());
+		broadcast.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
+
+		dataStore.save(broadcast);
+
+		//create again
+		result = filtersManager.createFilter(filterConfiguration, app);
+		// it is false because stream1 has not origin address
+		assertFalse(result.isSuccess());
+
+
+		BroadcastUpdate broadcastUpdate = new BroadcastUpdate();
+		broadcastUpdate.setOriginAdress("any address"); 
+
+		dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
+
+		assertNotNull(dataStore.get("stream1").getOriginAdress());
+		assertNotEquals(app.getServerSettings().getHostAddress(), dataStore.get("stream1").getOriginAdress());
+
+
+		ArgumentCaptor<String> filterId;
+		ArgumentCaptor<Map<String, Boolean>> mapCaptor;
+		Map<String, Boolean> capturedMap;
+
+		{
+			//create again
+			result = filtersManager.createFilter(filterConfiguration, app);
+			// it is true because stream1 has origin address
+			assertTrue(result.isSuccess());
+			verify(filterAdaptor, Mockito.times(1)).createOrUpdateFilter(filterConfiguration, app);
+
+			filterId = ArgumentCaptor.forClass(String.class);
+			mapCaptor = ArgumentCaptor.forClass(Map.class);
+			verify(filtersManager, Mockito.times(1)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
+			capturedMap = mapCaptor.getValue();
+
+			//this value is true because stream is another origin and there is no adaptive bitrate 
+			assertEquals(Boolean.TRUE, capturedMap.get("stream1"));
+		}
+
+		{
+			//add adaptive bitrate and check the value again
+			appSettings.setEncoderSettings(Arrays.asList(new EncoderSettings(480, 500000, 64000, true)));
+			
+			assertNotNull(app.getAppSettings().getEncoderSettings());
+			
+			filtersManager.createFilter(filterConfiguration, app);
+			// it is true because stream1 has origin address
+			assertTrue(result.isSuccess());
+
+			filterId = ArgumentCaptor.forClass(String.class);
+			mapCaptor = ArgumentCaptor.forClass(Map.class);
+			verify(filtersManager, Mockito.times(2)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
+			capturedMap = mapCaptor.getValue();
+
+			//this value is true because stream is another origin and there is adaptive bitrate 
+			assertEquals(Boolean.TRUE, capturedMap.get("stream1"));
+		}
+
+		{
+			//set the host address to the same value
+			broadcastUpdate = new BroadcastUpdate();
+			broadcastUpdate.setOriginAdress(app.getServerSettings().getHostAddress()); 
+	
+			dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
+	
+			assertNotNull(dataStore.get("stream1").getOriginAdress());
+			assertEquals(app.getServerSettings().getHostAddress(), dataStore.get("stream1").getOriginAdress());
+			
+			filtersManager.createFilter(filterConfiguration, app);
+			
+			filterId = ArgumentCaptor.forClass(String.class);
+			mapCaptor = ArgumentCaptor.forClass(Map.class);
+			verify(filtersManager, Mockito.times(3)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
+			capturedMap = mapCaptor.getValue();
+
+			//this value is false because stream is same origin and there is adaptive bitrate 
+			assertEquals(Boolean.FALSE, capturedMap.get("stream1"));
+			
+		}
+		
+		
+		
+		{
+			appSettings.setEncoderSettings(null);
+			broadcastUpdate = new BroadcastUpdate();
+			
+			broadcastUpdate.setEncoderSettingsList(Arrays.asList(new EncoderSettings(480, 500000, 64000, true)));
+			dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
+			
+			
+			filtersManager.createFilter(filterConfiguration, app);
+			
+
+			filterId = ArgumentCaptor.forClass(String.class);
+			mapCaptor = ArgumentCaptor.forClass(Map.class);
+			verify(filtersManager, Mockito.times(4)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
+			capturedMap = mapCaptor.getValue();
+
+			
+			//this value is false because stream is same origin and there is adaptive bitrate on the broadcast
+			assertEquals(Boolean.FALSE, capturedMap.get("stream1"));
+			
+		}
+		
+		
+		{
+			broadcastUpdate = new BroadcastUpdate();
+			broadcastUpdate.setOriginAdress("another address"); 
+	
+			dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
+						
+			
+			filtersManager.createFilter(filterConfiguration, app);
+			
+
+			filterId = ArgumentCaptor.forClass(String.class);
+			mapCaptor = ArgumentCaptor.forClass(Map.class);
+			verify(filtersManager, Mockito.times(5)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
+			capturedMap = mapCaptor.getValue();
+
+			
+			//this value is true because stream is another origin and there is adaptive bitrate on the broadcast
+			assertEquals(Boolean.TRUE, capturedMap.get("stream1"));
+			
+		}
+		
+
+
+	}
 
 
 
@@ -219,6 +398,7 @@ public class FilterManagerUnitTest {
 		DataStore dataStore = new InMemoryDataStore("test");
 		when(app.getDataStore()).thenReturn(dataStore);
 
+		when(app.getServerSettings()).thenReturn(new ServerSettings());
 
 
 		Result result = filtersManager.createFilter(filterConfiguration, app);
@@ -237,7 +417,7 @@ public class FilterManagerUnitTest {
 
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
 
-		
+
 		FilterAdaptor filterAdaptor = new FilterAdaptor("filter1", decodeStreamMap);
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
 		videoCodecParameters.width(sourceWidth);
@@ -312,10 +492,10 @@ public class FilterManagerUnitTest {
 
 		int sourceWidth = 1280;
 		int sourceHeight = 720;
-		
+
 		testFixVideoPtsInFilter(filterString, rawFile, sourceWidth, sourceHeight);
 	}
-	
+
 	@Test
 	public void testFixVideoPTSInLastPointFilter() {
 		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"test\"],\"videoFilter\":\"movie=src/test/resources/background.png[background];[in0]chromakey=0x6de61b:0.1:0.2[transparent];[background][transparent]overlay[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"lastpoint\"}";
@@ -323,17 +503,17 @@ public class FilterManagerUnitTest {
 
 		int sourceWidth = 1280;
 		int sourceHeight = 720;
-		
+
 		testFixVideoPtsInFilter(filterString, rawFile, sourceWidth, sourceHeight);
 	}
-	
+
 
 	long pts = -1;
 	int callCount = 0;
 
-	
+
 	public void testFixVideoPtsInFilter(String filterString, String rawFile, int sourceWidth, int sourceHeight) {
-		
+
 
 
 		FiltersManager filtersManager = spy(new FiltersManager());
@@ -352,6 +532,8 @@ public class FilterManagerUnitTest {
 		when(app.getAppSettings()).thenReturn(appSettings);
 		DataStore dataStore = new InMemoryDataStore("test");
 		when(app.getDataStore()).thenReturn(dataStore);
+
+		when(app.getServerSettings()).thenReturn(new ServerSettings());
 
 		Broadcast broadcast = new Broadcast();
 		try {
@@ -474,7 +656,7 @@ public class FilterManagerUnitTest {
 			Awaitility.await().atMost(5, TimeUnit.SECONDS).until(() -> callCount == 2);
 			//it was failing before the fix
 			assertEquals(inputPts, pts);
-			
+
 			//it should not throw exception
 			filterAdaptor.onVideoFrame("stream1", null);
 
@@ -575,6 +757,8 @@ public class FilterManagerUnitTest {
 		when(app.getAppSettings()).thenReturn(appSettings);
 		DataStore dataStore = new InMemoryDataStore("test");
 		when(app.getDataStore()).thenReturn(dataStore);
+
+		when(app.getServerSettings()).thenReturn(new ServerSettings());
 
 		Broadcast broadcast = new Broadcast();
 		try {

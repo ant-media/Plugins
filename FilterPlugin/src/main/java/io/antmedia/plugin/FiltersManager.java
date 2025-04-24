@@ -47,31 +47,46 @@ public class FiltersManager {
 			defaultDecodeStreamValue = true;
 		}
 		
+		logger.info("Default decode stream value is {}", defaultDecodeStreamValue);
+		
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<String, Boolean>();
 		
 		for(String streamId : filterConfiguration.getInputStreams()) 
 		{
    			Broadcast broadcast = appAdaptor.getDataStore().get(streamId);
-   			if(broadcast == null || !IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus())) {
-   				logger.error("Cannot add filter because input stream id:{} in filter is not actively streaming", streamId);
+   			if(broadcast == null || !IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus())
+   					|| StringUtils.isBlank(broadcast.getOriginAdress())) {
+   				String status = broadcast != null ? broadcast.getStatus() : "null";
+   				String originAddress = broadcast != null ? broadcast.getOriginAdress() : "null";
+   				logger.error("Cannot add filter because input stream id:{} in filter is not actively streaming or not origin address. It's status is {} and origin address is {}", 
+   						streamId, status, originAddress);
    				return new Result(false, "Input stream ID: "+ streamId +" is not actively streaming");
    			}
    			
    			//if origin stream is not in this instance, we are going to decode stream locally
    			if (!StringUtils.equals(appAdaptor.getServerSettings().getHostAddress(), broadcast.getOriginAdress())) 
    			{
+   				logger.info("Origin stream is not in this instance. We are going to decode stream locally");
    				decodeStreamMap.put(streamId, true);
    			}
    			else 
    			{
    				//if origin stream is in this instance, we are going to decode stream locally
    				boolean decodeStream = defaultDecodeStreamValue;
-   				
-   				if (broadcast.getEncoderSettingsList() != null && broadcast.getEncoderSettingsList().isEmpty()) 
+   				if (broadcast.getEncoderSettingsList() != null) 
    				{
-   					decodeStream = true;
+   					if (broadcast.getEncoderSettingsList().isEmpty()) {
+   	   					logger.info("Encoder settings list is empty. We are going to decode stream locally");
+   						decodeStream = true;
+   					}
+   					else {
+   						decodeStream = false;
+   					}
+   					
+   
    				}
    				
+   				logger.info("Putting decode stream value {} for stream id {}", decodeStream, streamId);
 				decodeStreamMap.put(streamId, decodeStream);
    			}
 		}
