@@ -1,13 +1,17 @@
 package io.antmedia.test;
 
+import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_AAC;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H264;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_unref;
 import static org.bytedeco.ffmpeg.global.avformat.av_read_frame;
 import static org.bytedeco.ffmpeg.global.avformat.avformat_close_input;
 import static org.bytedeco.ffmpeg.global.avformat.avformat_find_stream_info;
 import static org.bytedeco.ffmpeg.global.avformat.avformat_open_input;
+import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
 import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
+import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLTP;
+import static org.bytedeco.ffmpeg.global.avutil.av_channel_layout_default;
 import static org.bytedeco.ffmpeg.global.avutil.av_image_fill_arrays;
 import static org.bytedeco.ffmpeg.global.avutil.av_malloc;
 import static org.bytedeco.ffmpeg.global.avutil.avutil_configuration;
@@ -36,6 +40,7 @@ import org.awaitility.Awaitility;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avformat.AVFormatContext;
+import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVDictionary;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.global.avcodec;
@@ -272,9 +277,9 @@ public class FilterManagerUnitTest {
 		Map<String, Boolean> capturedMap;
 
 		{
-			
+
 			//decode stream when stream is in another origin
-			
+
 			//create again
 			result = filtersManager.createFilter(filterConfiguration, app);
 			// it is true because stream1 has origin address
@@ -293,9 +298,9 @@ public class FilterManagerUnitTest {
 		{
 			//add adaptive bitrate and stream is still in another origin 
 			appSettings.setEncoderSettings(Arrays.asList(new EncoderSettings(480, 500000, 64000, true)));
-			
+
 			assertNotNull(app.getAppSettings().getEncoderSettings());
-			
+
 			filtersManager.createFilter(filterConfiguration, app);
 			// it is true because stream1 has origin address
 			assertTrue(result.isSuccess());
@@ -313,14 +318,14 @@ public class FilterManagerUnitTest {
 			//set the host address to the same value and no decoding
 			broadcastUpdate = new BroadcastUpdate();
 			broadcastUpdate.setOriginAdress(app.getServerSettings().getHostAddress()); 
-	
+
 			dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
-	
+
 			assertNotNull(dataStore.get("stream1").getOriginAdress());
 			assertEquals(app.getServerSettings().getHostAddress(), dataStore.get("stream1").getOriginAdress());
-			
+
 			filtersManager.createFilter(filterConfiguration, app);
-			
+
 			filterId = ArgumentCaptor.forClass(String.class);
 			mapCaptor = ArgumentCaptor.forClass(Map.class);
 			verify(filtersManager, Mockito.times(3)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
@@ -328,84 +333,84 @@ public class FilterManagerUnitTest {
 
 			//this value is false because stream is same origin and there is adaptive bitrate 
 			assertEquals(Boolean.FALSE, capturedMap.get("stream1"));
-			
+
 		}
-		
+
 		{
 			//make the broadcast has a empty adaptive settings
-			
+
 			broadcastUpdate = new BroadcastUpdate();
-			
+
 			broadcastUpdate.setEncoderSettingsList(Arrays.asList());
 			dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
-			
-			
+
+
 			filtersManager.createFilter(filterConfiguration, app);
-			
+
 
 			filterId = ArgumentCaptor.forClass(String.class);
 			mapCaptor = ArgumentCaptor.forClass(Map.class);
 			verify(filtersManager, Mockito.times(4)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
 			capturedMap = mapCaptor.getValue();
 
-			
+
 			//this value is true because stream specific adaptive bitrate settings are empty 
 			assertEquals(Boolean.TRUE, capturedMap.get("stream1"));
 
 		}
-		
-		
-		
+
+
+
 		{
 			//set the app encoder settings to null and set broadcast specific encoder settings
 			appSettings.setEncoderSettings(null);
 			broadcastUpdate = new BroadcastUpdate();
-			
+
 			broadcastUpdate.setEncoderSettingsList(Arrays.asList(new EncoderSettings(480, 500000, 64000, true)));
 			dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
-			
-			
+
+
 			filtersManager.createFilter(filterConfiguration, app);
-			
+
 
 			filterId = ArgumentCaptor.forClass(String.class);
 			mapCaptor = ArgumentCaptor.forClass(Map.class);
 			verify(filtersManager, Mockito.times(5)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
 			capturedMap = mapCaptor.getValue();
 
-			
+
 			//this value is false because stream is same origin and there is adaptive bitrate on the broadcast
 			assertEquals(Boolean.FALSE, capturedMap.get("stream1"));
-			
+
 		}
-		
-		
-		
-		
+
+
+
+
 		{
 			//set another origin address 
 			broadcastUpdate = new BroadcastUpdate();
 			broadcastUpdate.setOriginAdress("another address"); 
-	
+
 			dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
-						
-			
+
+
 			filtersManager.createFilter(filterConfiguration, app);
-			
+
 
 			filterId = ArgumentCaptor.forClass(String.class);
 			mapCaptor = ArgumentCaptor.forClass(Map.class);
 			verify(filtersManager, Mockito.times(6)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
 			capturedMap = mapCaptor.getValue();
 
-			
+
 			//this value is true because stream is another origin and there is adaptive bitrate on the broadcast
 			assertEquals(Boolean.TRUE, capturedMap.get("stream1"));
-			
+
 		}
-		
-		
-		
+
+
+
 
 
 	}
@@ -827,12 +832,30 @@ public class FilterManagerUnitTest {
 		StreamParametersInfo streamParams = new StreamParametersInfo();
 		streamParams.setEnabled(true);
 		streamParams.setTimeBase(Utils.TIME_BASE_FOR_MS);
-
-		filterAdaptor.setAudioStreamInfo("stream1", new StreamParametersInfo());
-		//video parameters are set after 
-
 		//set the codec parameters
 		streamParams.setCodecParameters(videoCodecParameters);
+
+		StreamParametersInfo audioStreamParameters = new StreamParametersInfo();
+		AVCodecParameters audioCodecParameters = new AVCodecParameters();
+
+		audioStreamParameters.setCodecParameters(audioCodecParameters);
+		audioCodecParameters.codec_id(AV_CODEC_ID_AAC);
+
+		audioCodecParameters.codec_type(AVMEDIA_TYPE_AUDIO);		
+		audioCodecParameters.format(AV_SAMPLE_FMT_FLTP);
+		audioCodecParameters.sample_rate(44100);
+		//audioCodecParameters.sample_rate(48000);
+
+		AVChannelLayout channelLayout = new AVChannelLayout();
+		av_channel_layout_default(channelLayout, 1);
+
+		audioCodecParameters.ch_layout(channelLayout);
+
+		audioCodecParameters.codec_tag(0);
+
+		filterAdaptor.setAudioStreamInfo("stream1", audioStreamParameters);
+		//video parameters are set after 
+
 		filterAdaptor.setVideoStreamInfo("stream1", streamParams);
 
 		//create filter

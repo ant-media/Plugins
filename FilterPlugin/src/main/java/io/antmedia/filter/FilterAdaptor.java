@@ -78,7 +78,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		this.decodeStreamMap  = decodeStreamMap;
 		this.filterId = filterId;
 	}
-
+	
 	@Override
 	public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
 
