@@ -30,6 +30,7 @@ public class AudioDecoder
 	protected String streamId;
 	protected AVFrame samplesFrame;
 	protected Logger logger;
+	private boolean running = false;
 	
 	public AudioDecoder(String streamId) {
 		this.streamId = streamId;
@@ -66,9 +67,13 @@ public class AudioDecoder
 			throw new NullPointerException("av_frame_alloc() error: Could not allocate audio frame.");
 		}
 		codec.close();
+		running = true;
 	}
 	
-	public void stop() {
+	public synchronized void stop() {
+		
+		running = false;
+		
 		if (samplesFrame != null) {
 			av_frame_free(samplesFrame);
 			samplesFrame.close();
@@ -82,8 +87,19 @@ public class AudioDecoder
 		}
 	}
 	
-	public AVFrame decodeAudioFrame(AVRational timebase, AVPacket pkt) {
-		
+	public AVCodecContext getAudioContext() {
+		return audioContext;
+	}
+	
+	public AVFrame getSamplesFrame() {
+		return samplesFrame;
+	}
+	
+	public synchronized AVFrame decodeAudioFrame(AVRational timebase, AVPacket pkt) {
+		if (!running) {
+			logger.error("Audio decoder is not running for stream: {}", streamId);
+			return null;
+		}
 		sendAudioPacket(timebase, pkt);
 		
 		return receiveAudioPacket();
@@ -99,7 +115,7 @@ public class AudioDecoder
 					timebase,
 					audioContext.time_base()
 				);
-			logger.trace("sendAudioPacket incoming timebase:{}/{} audioContext timebase:{}/{} for stream:{}", timebase.num(), timebase.den(), 
+			logger.debug("sendAudioPacket pkt pts:{} incoming timebase:{}/{} audioContext timebase:{}/{} for stream:{}", pkt.pts(), timebase.num(), timebase.den(), 
 					audioContext.time_base().num(), audioContext.time_base().den(), streamId);
 			
 		}
@@ -126,5 +142,9 @@ public class AudioDecoder
 
 		samplesFrame.pts(samplesFrame.best_effort_timestamp());
 		return samplesFrame;
+	}
+	
+	public boolean isRunning() {
+		return running;
 	}
 }

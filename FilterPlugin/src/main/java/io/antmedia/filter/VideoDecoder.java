@@ -39,7 +39,7 @@ public class VideoDecoder {
 	private String streamId;
 	private AVFrame decodedFrame;
 	private StreamParametersInfo streamParameters;
-	private boolean initialized = false;
+	private boolean running = false;
 
 	
 	public VideoDecoder(String streamId, StreamParametersInfo streamParameters) {
@@ -91,10 +91,10 @@ public class VideoDecoder {
 		logger.info("video decoder name: {} video context timebase:{}/{} wxh:{}x{}" , name.getString(),  videoContext.time_base().num(), videoContext.time_base().den(), videoContext.width(), videoContext.height());
 		codec.close();
 		
-		initialized = result;
+		running = result;
 		
-		if(!initialized) {
-			release();
+		if(!running) {
+			stop();
 		}
 	}
 
@@ -131,7 +131,11 @@ public class VideoDecoder {
 	
 	public synchronized AVFrame decodeVideoPacket(AVPacket pkt) {
 		
-		logger.trace("Video packet is received for streamId:{} pkt pts:{} timebase:{}/{} target timebase: {}/{}", streamId, pkt.pts(), 
+		if (!isRunning()) {
+			logger.error("Video decoder is not running for streamId: {}" , streamId);
+			return null;
+		}
+		logger.debug("Video packet is received for streamId:{} pkt pts:{} timebase:{}/{} target timebase: {}/{}", streamId, pkt.pts(), 
 				streamParameters.getTimeBase().num(), streamParameters.getTimeBase().den(), Utils.TIME_BASE_FOR_MS.num(), Utils.TIME_BASE_FOR_MS.den());
 		
 	
@@ -148,19 +152,19 @@ public class VideoDecoder {
 		ret = avcodec_receive_frame(videoContext, decodedFrame);
 		
 		if (ret == AVERROR_EAGAIN() || ret == AVERROR_EOF()) {
+			logger.debug("Video decoder is not ready to decode the packet for streamId: {} ret: {}" , streamId, Utils.getErrorDefinition(ret));
 			return null;
 		}
 		else if (ret < 0) {
-			byte[] data = new byte[2048];
-			av_strerror(ret, data, data.length);
-			logger.error("Decode video frame error: {}" , new String(data, 0, data.length));
+			logger.error("Decode video frame error: {}" , Utils.getErrorDefinition(ret));
 			return null;
 		}
 
 		return decodedFrame;
 	}
 	
-	public void release()  {
+	public synchronized void stop()  {
+		running = false;
 		synchronized (org.bytedeco.ffmpeg.presets.avcodec.class) {
 			releaseUnsafe();
 		}
@@ -180,7 +184,7 @@ public class VideoDecoder {
 		}
 	}
 
-	public boolean isInitialized() {
-		return initialized;
+	public boolean isRunning() {
+		return running;
 	}
 }

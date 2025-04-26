@@ -43,6 +43,7 @@ import org.bytedeco.ffmpeg.avformat.AVFormatContext;
 import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVDictionary;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
+import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.ffmpeg.global.avformat;
 import org.bytedeco.ffmpeg.global.avutil;
@@ -715,12 +716,12 @@ public class FilterManagerUnitTest {
 	}
 
 	boolean videoFrameReceived = false;
-
+	boolean audioFrameReceived = false;
 	/**
 	 * This test crashes the JVM before the fix
 	 */
 	@Test
-	public void testVideoDecodeFilter() {
+	public void testVideoAndAudioDecodeFilter() {
 
 		avutil.av_log_set_level(avutil.AV_LOG_INFO);
 
@@ -732,9 +733,10 @@ public class FilterManagerUnitTest {
 
 		int width = 640;  //set the width and height according to the input file
 		int height = 360;
-		String filepath = "src/test/resources/test_video_360p_video_only.ts";
+		String filepath = "src/test/resources/test_video_360p.ts";
 
 		videoFrameReceived = false;
+		audioFrameReceived = false;
 		IFrameListener frameListener = new IFrameListener() {
 
 			@Override
@@ -751,14 +753,12 @@ public class FilterManagerUnitTest {
 
 			@Override
 			public void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
-				// TODO Auto-generated method stub
-
+				// Nothing to do
 			}
 
 			@Override
 			public void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
-				// TODO Auto-generated method stub
-
+				// Nothing to do
 			}
 
 			@Override
@@ -773,7 +773,7 @@ public class FilterManagerUnitTest {
 				assertEquals(640, videoFrame.width());
 				assertEquals(360, videoFrame.height());
 
-				logger.info("line size: {}", videoFrame.linesize(0));
+				//logger.debug("line size: {}", videoFrame.linesize(0));
 
 				//	assertTrue(videoFrame.linesize(0) > 0);
 				Utils.save(videoFrame, streamId);
@@ -784,14 +784,14 @@ public class FilterManagerUnitTest {
 
 			@Override
 			public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
-				// TODO Auto-generated method stub
+				audioFrameReceived = true;
 				return null;
 			}
 		};
 
 		when(app.createCustomBroadcast(Mockito.anyString(), anyInt(), anyInt())).thenReturn(frameListener);
 		//async filter
-		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream2\"],\"videoFilter\":\"[in0]vflip[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"false\",\"type\":\"asynchronous\"}";
+		String filterString = "{\"inputStreams\":[\"stream1\"],\"outputStreams\":[\"stream2\"],\"videoFilter\":\"[in0]vflip[out0]\",\"audioFilter\":\"[in0]acopy[out0]\",\"videoEnabled\":\"true\",\"audioEnabled\":\"true\",\"type\":\"asynchronous\"}";
 		Gson gson = new Gson();
 		FilterConfiguration filterConfiguration = gson.fromJson(filterString, FilterConfiguration.class);
 		assertNull(filterConfiguration.getFilterId());
@@ -836,6 +836,7 @@ public class FilterManagerUnitTest {
 		streamParams.setCodecParameters(videoCodecParameters);
 
 		StreamParametersInfo audioStreamParameters = new StreamParametersInfo();
+		audioStreamParameters.setEnabled(true);
 		AVCodecParameters audioCodecParameters = new AVCodecParameters();
 
 		audioStreamParameters.setCodecParameters(audioCodecParameters);
@@ -844,14 +845,14 @@ public class FilterManagerUnitTest {
 		audioCodecParameters.codec_type(AVMEDIA_TYPE_AUDIO);		
 		audioCodecParameters.format(AV_SAMPLE_FMT_FLTP);
 		audioCodecParameters.sample_rate(44100);
-		//audioCodecParameters.sample_rate(48000);
 
 		AVChannelLayout channelLayout = new AVChannelLayout();
-		av_channel_layout_default(channelLayout, 1);
+		av_channel_layout_default(channelLayout, 2);
 
 		audioCodecParameters.ch_layout(channelLayout);
 
 		audioCodecParameters.codec_tag(0);
+		audioStreamParameters.setTimeBase(new AVRational().num(1).den(90000));
 
 		filterAdaptor.setAudioStreamInfo("stream1", audioStreamParameters);
 		//video parameters are set after 
@@ -879,16 +880,29 @@ public class FilterManagerUnitTest {
 
 		while ((ret = av_read_frame(inputFormatContext, pkt)) == 0) 
 		{
-			assertTrue(Utils.getErrorDefinition(ret), ret >= 0);
-			filterAdaptor.onVideoPacket("stream1", pkt);
-			//int streamIndex = pkt.stream_index();
-			//byte[] data = new byte[pkt.size()];
-			//pkt.data().position(0).get(data);
+			if (inputFormatContext.streams(pkt.stream_index()).codecpar().codec_type() == AVMEDIA_TYPE_VIDEO)
+			{
+				assertTrue(Utils.getErrorDefinition(ret), ret >= 0);
+				filterAdaptor.onVideoPacket("stream1", pkt);
+				//int streamIndex = pkt.stream_index();
+				//byte[] data = new byte[pkt.size()];
+				//pkt.data().position(0).get(data);
+			}
+			else {
+				filterAdaptor.onAudioPacket("stream1", pkt);
+			}
+			
 			av_packet_unref(pkt);
 		}
+		
+		filterAdaptor.close(app);
 
+		//check that if will not crash
+		filterAdaptor.onAudioPacket("stream1", pkt);
+		filterAdaptor.onVideoPacket("stream1", pkt);
 
 		Awaitility.await().atMost(5, TimeUnit.SECONDS).until(() -> videoFrameReceived);
+		Awaitility.await().atMost(5, TimeUnit.SECONDS).until(() -> audioFrameReceived);
 	}
 
 

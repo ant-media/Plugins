@@ -6,6 +6,7 @@ import static org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO;
 import static org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLTP;
 import static org.bytedeco.ffmpeg.global.avutil.av_channel_layout_default;
 import static org.bytedeco.ffmpeg.global.avutil.av_malloc;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
@@ -93,6 +94,23 @@ public class OpusDecoderTest {
 		assertNull(opusDecoder.decodeAudioFrame(new AVRational().num(1).den(1000), packet));
 		
 		
+		assertNotNull(opusDecoder.getSamplesFrame());
+		assertNotNull(opusDecoder.getAudioContext());
+
+		opusDecoder.stop();
+		
+		
+		assertNull(opusDecoder.getSamplesFrame());
+		assertNull(opusDecoder.getAudioContext());
+		
+		assertFalse(opusDecoder.isRunning());
+		
+		assertNull(opusDecoder.decodeAudioFrame(new AVRational().num(1).den(1000), packet));
+		
+		
+		//no crash
+		opusDecoder.stop();
+
 		
 	}
 

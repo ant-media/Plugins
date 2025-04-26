@@ -83,7 +83,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public AVFrame onAudioFrame(String streamId, AVFrame audioFrame) {
 
 		if(audioFilterGraph == null || !audioFilterGraph.isInitiated() || audioFilterGraph.getListener() == null) {
-			//logger.warn("AudioFilter graph is not initialized correctly so returning frame for stream:{} and filter:{}", streamId, filterId);
+			logger.warn("AudioFilter graph is not initialized so returning frame for stream:{} and filter:{}", streamId, filterId);
 			return audioFrame;
 		}
 		AVFrame filterInputframe;
@@ -149,7 +149,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	@Override
 	public AVFrame onVideoFrame(String streamId, AVFrame videoFrame) {
 		if(videoFilterGraph == null || !videoFilterGraph.isInitiated() || videoFilterGraph.getListener() == null) {
-			logger.warn("Videofilter graph is not initialized correctly so returning frame for stream:{} and filter:{}", streamId, filterId);
+			logger.warn("Videofilter graph is not initialized so returning frame for stream:{} and filter:{}", streamId, filterId);
 			return videoFrame;
 		}
 
@@ -257,7 +257,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		if(Boolean.TRUE.equals(decodeStream) || videoStreamInfo.isHostedInOtherNode()) {
 
 			VideoDecoder decoder = new VideoDecoder(streamId, videoStreamInfo);
-			if(decoder.isInitialized()) {
+			if(decoder.isRunning()) {
 				videoDecodersMap.put(streamId, decoder);
 			}
 		}
@@ -537,13 +537,11 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		videoCodecParameters.codec_tag(0);
 
 		AVCodecParameters audioCodecParameters = new AVCodecParameters();
-		//audioCodecParameters.codec_id(AV_CODEC_ID_OPUS);
 		audioCodecParameters.codec_id(AV_CODEC_ID_AAC);
 
 		audioCodecParameters.codec_type(AVMEDIA_TYPE_AUDIO);		
 		audioCodecParameters.format(AV_SAMPLE_FMT_FLTP);
 		audioCodecParameters.sample_rate(44100);
-		//audioCodecParameters.sample_rate(48000);
 
 		channelLayout = new AVChannelLayout();
 		av_channel_layout_default(channelLayout, 1);
@@ -590,7 +588,20 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		if (audioFilterGraph != null){
 			audioFilterGraph.close();
 			audioFilterGraph = null;
-		}		
+		}	
+		//close video decoders
+		videoDecodersMap.forEach((streamId, decoder) -> {
+			decoder.stop();
+		});
+		
+		videoDecodersMap.clear();
+		
+		//close audio decoders
+		audioDecodersMap.forEach((streamId, decoder) -> {
+			decoder.stop();
+		});
+		
+		audioDecodersMap.clear();
 	}
 
 	@Override
@@ -619,7 +630,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				});
 			}
 			else {
-				logger.warn("Decoder is not initialized for {}", streamId);
+				logger.warn("Video Decoder is not initialized for {}", streamId);
 			}
 		}
 		return packet;
@@ -635,7 +646,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		{
 			if(audioDecodersMap.containsKey(streamId)) {
 				
-				logger.info("Audio packet is received for streamId:{} pkt pts:{} timebase:{}/{}", streamId, packet.pts(), 
+				logger.debug("Audio packet is received for streamId:{} pkt pts:{} timebase:{}/{}", streamId, packet.pts(), 
 						audioStreamParams.getTimeBase().num(), audioStreamParams.getTimeBase().den());
 				
 				
@@ -643,6 +654,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				AVFrame frame = audioDecodersMap.get(streamId).decodeAudioFrame(audioStreamParams.getTimeBase(), packet);
 
 				if(frame != null) {
+					logger.debug("Audio frame is received for streamId:{} frame pts:{} best effort pts:{}", streamId, frame.pts(), 
+							frame.best_effort_timestamp());
 					onAudioFrame(streamId, frame);
 				}
 				else {
@@ -650,7 +663,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				}
 			}
 			else {
-				logger.warn("Opus Decoder is not initialized for {}", streamId);
+				logger.warn("Audio Decoder is not initialized for {}", streamId);
 			}
 		}
 		return packet;
