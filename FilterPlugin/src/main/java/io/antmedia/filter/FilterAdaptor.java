@@ -84,20 +84,15 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 		if(audioFilterGraph == null || !audioFilterGraph.isInitiated() || audioFilterGraph.getListener() == null) {
 			//logger.warn("AudioFilter graph is not initialized correctly so returning frame for stream:{} and filter:{}", streamId, filterId);
-
 			return audioFrame;
 		}
 		AVFrame filterInputframe;
 		AVFrame filterOutputFrame = null;
 
-		StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
-
 		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) {
 			//copy the input frame then return it immediately
 			if (audioFrame != null) {
 				filterInputframe = av_frame_clone(audioFrame);
-				rescaleFramePtsToMs(streamId, filterInputframe, audioStreamParams.getTimeBase());
-
 			}
 			else {
 				filterInputframe = null;
@@ -118,8 +113,6 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		{
 			if (audioFrame != null) {
 				filterInputframe = audioFrame;
-				rescaleFramePtsToMs(streamId, filterInputframe, audioStreamParams.getTimeBase());
-
 			}
 			else {
 				filterInputframe = null;
@@ -414,7 +407,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			if(audioFilterGraph != null) {
 				currentAudioPts = audioFilterGraph.getCurrentPts();
 			}
-
+			
 			audioFilterGraph = new FilterGraph(filterConfiguration.getAudioFilter(), audioSourceFiltersMap , audioSinkFiltersMap);
 			if(!audioFilterGraph.isInitiated()) {
 				logger.error("Audio filter graph can not be initiated:{}", filterConfiguration.getAudioFilter());
@@ -489,7 +482,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		// check the inserted or removed streams to the filter as an update
 		List<String> inserted = filterConfiguration.getInputStreams();
 		List<String> removed = new ArrayList<>();
-		for (String streamId : currentInStreams) {
+		for (String streamId : currentInStreams) 
+		{
 			if(filterConfiguration.getInputStreams().contains(streamId)) {
 				inserted.remove(streamId);
 			}
@@ -500,8 +494,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 		boolean noChange = inserted.isEmpty() && removed.isEmpty();
 
-		if(!noChange) {
-
+		if(!noChange) 
+		{
 			// deregister plugin for the streams removed from filter
 			for (String streamId : removed) {
 				app.removeFrameListener(streamId, this);
@@ -609,6 +603,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			{
 				AVPacket tempPacket = new AVPacket();
 				av_packet_ref(tempPacket, packet);
+				
 				vertx.executeBlocking(() -> {
 					AVFrame frame = videoDecodersMap.get(streamId).decodeVideoPacket(tempPacket);
 					av_packet_unref(tempPacket);
@@ -639,6 +634,12 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		if(Boolean.TRUE.equals(decodeStream) || (audioStreamParams != null && audioStreamParams.isHostedInOtherNode())) 
 		{
 			if(audioDecodersMap.containsKey(streamId)) {
+				
+				logger.info("Audio packet is received for streamId:{} pkt pts:{} timebase:{}/{}", streamId, packet.pts(), 
+						audioStreamParams.getTimeBase().num(), audioStreamParams.getTimeBase().den());
+				
+				
+				
 				AVFrame frame = audioDecodersMap.get(streamId).decodeAudioFrame(audioStreamParams.getTimeBase(), packet);
 
 				if(frame != null) {

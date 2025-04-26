@@ -91,6 +91,9 @@ public class AudioDecoder
 	
 	protected void sendAudioPacket(AVRational timebase, AVPacket pkt)
 	{
+		logger.info("sendAudioPacket streamId: {} pts:{} timebase {}/{} audio contex timebase:{}/{}", 
+				streamId, pkt.pts(), timebase.num(), timebase.den(), audioContext.time_base().num(), audioContext.time_base().den());
+		
 		if (timebase.num() != audioContext.time_base().num() || 
 				timebase.den() != audioContext.time_base().den()) 
 		{
@@ -101,6 +104,8 @@ public class AudioDecoder
 				);
 			logger.trace("sendAudioPacket incoming timebase:{}/{} audioContext timebase:{}/{} for stream:{}", timebase.num(), timebase.den(), 
 					audioContext.time_base().num(), audioContext.time_base().den(), streamId);
+			
+			logger.info("rescaled pts:{} to {} for streamId: {}", pkt.pts(), pkt.pts(), streamId);
 		}
 
 		int ret = avcodec_send_packet(audioContext, pkt);

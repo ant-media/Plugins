@@ -130,10 +130,18 @@ public class VideoDecoder {
 	}
 	
 	public synchronized AVFrame decodeVideoPacket(AVPacket pkt) {
+		
+		logger.info("Video packet is received for streamId:{} pkt pts:{} timebase:{}/{}", streamId, pkt.pts(), 
+				streamParameters.getTimeBase().num(), streamParameters.getTimeBase().den());
+		
+	
 		av_packet_rescale_ts(pkt,
 				streamParameters.getTimeBase(),
 				Utils.TIME_BASE_FOR_MS
 				);
+		
+		logger.info("Video packet rescaled pts:{} timebase:{}/{}", pkt.pts(), 
+				Utils.TIME_BASE_FOR_MS.num(), Utils.TIME_BASE_FOR_MS.den());
 		
 		int ret = avcodec_send_packet(videoContext, pkt);
 		if (ret < 0) {

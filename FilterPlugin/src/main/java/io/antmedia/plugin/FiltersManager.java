@@ -46,16 +46,15 @@ public class FiltersManager {
 		else {
 			defaultDecodeStreamValue = true;
 		}
-		
-		logger.info("Default decode stream value is {}", defaultDecodeStreamValue);
-		
+				
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<String, Boolean>();
 		
 		for(String streamId : filterConfiguration.getInputStreams()) 
 		{
    			Broadcast broadcast = appAdaptor.getDataStore().get(streamId);
    			if(broadcast == null || !IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus())
-   					|| StringUtils.isBlank(broadcast.getOriginAdress())) {
+   					|| StringUtils.isBlank(broadcast.getOriginAdress())) 
+   			{
    				String status = broadcast != null ? broadcast.getStatus() : "null";
    				String originAddress = broadcast != null ? broadcast.getOriginAdress() : "null";
    				logger.error("Cannot add filter because input stream id:{} in filter is not actively streaming or not origin address. It's status is {} and origin address is {}", 
@@ -82,8 +81,6 @@ public class FiltersManager {
    					else {
    						decodeStream = false;
    					}
-   					
-   
    				}
    				
    				logger.info("Putting decode stream value {} for stream id {}", decodeStream, streamId);
