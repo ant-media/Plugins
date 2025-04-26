@@ -66,7 +66,7 @@ public class FiltersManager {
    			//if origin stream is not in this instance, we are going to decode stream locally
    			if (!StringUtils.equals(appAdaptor.getServerSettings().getHostAddress(), broadcast.getOriginAdress())) 
    			{
-   				logger.info("Origin stream is not in this instance. We are going to decode stream locally");
+   				logger.info("Origin stream is not in this instance. We are going to decode stream locally for stream id {}", streamId);
    				decodeStreamMap.put(streamId, true);
    			}
    			else 
@@ -76,7 +76,7 @@ public class FiltersManager {
    				if (broadcast.getEncoderSettingsList() != null) 
    				{
    					if (broadcast.getEncoderSettingsList().isEmpty()) {
-   	   					logger.info("Encoder settings list is empty. We are going to decode stream locally");
+   	   					logger.info("Encoder settings list is empty. We are going to decode stream locally for stream id {}", streamId);
    						decodeStream = true;
    					}
    					else {

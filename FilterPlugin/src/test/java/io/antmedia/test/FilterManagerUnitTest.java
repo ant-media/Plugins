@@ -272,6 +272,9 @@ public class FilterManagerUnitTest {
 		Map<String, Boolean> capturedMap;
 
 		{
+			
+			//decode stream when stream is in another origin
+			
 			//create again
 			result = filtersManager.createFilter(filterConfiguration, app);
 			// it is true because stream1 has origin address
@@ -288,7 +291,7 @@ public class FilterManagerUnitTest {
 		}
 
 		{
-			//add adaptive bitrate and check the value again
+			//add adaptive bitrate and stream is still in another origin 
 			appSettings.setEncoderSettings(Arrays.asList(new EncoderSettings(480, 500000, 64000, true)));
 			
 			assertNotNull(app.getAppSettings().getEncoderSettings());
@@ -307,7 +310,7 @@ public class FilterManagerUnitTest {
 		}
 
 		{
-			//set the host address to the same value
+			//set the host address to the same value and no decoding
 			broadcastUpdate = new BroadcastUpdate();
 			broadcastUpdate.setOriginAdress(app.getServerSettings().getHostAddress()); 
 	
@@ -328,13 +331,12 @@ public class FilterManagerUnitTest {
 			
 		}
 		
-		
-		
 		{
-			appSettings.setEncoderSettings(null);
+			//make the broadcast has a empty adaptive settings
+			
 			broadcastUpdate = new BroadcastUpdate();
 			
-			broadcastUpdate.setEncoderSettingsList(Arrays.asList(new EncoderSettings(480, 500000, 64000, true)));
+			broadcastUpdate.setEncoderSettingsList(Arrays.asList());
 			dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
 			
 			
@@ -347,13 +349,41 @@ public class FilterManagerUnitTest {
 			capturedMap = mapCaptor.getValue();
 
 			
+			//this value is true because stream specific adaptive bitrate settings are empty 
+			assertEquals(Boolean.TRUE, capturedMap.get("stream1"));
+
+		}
+		
+		
+		
+		{
+			//set the app encoder settings to null and set broadcast specific encoder settings
+			appSettings.setEncoderSettings(null);
+			broadcastUpdate = new BroadcastUpdate();
+			
+			broadcastUpdate.setEncoderSettingsList(Arrays.asList(new EncoderSettings(480, 500000, 64000, true)));
+			dataStore.updateBroadcastFields(broadcast.getStreamId(), broadcastUpdate);
+			
+			
+			filtersManager.createFilter(filterConfiguration, app);
+			
+
+			filterId = ArgumentCaptor.forClass(String.class);
+			mapCaptor = ArgumentCaptor.forClass(Map.class);
+			verify(filtersManager, Mockito.times(5)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
+			capturedMap = mapCaptor.getValue();
+
+			
 			//this value is false because stream is same origin and there is adaptive bitrate on the broadcast
 			assertEquals(Boolean.FALSE, capturedMap.get("stream1"));
 			
 		}
 		
 		
+		
+		
 		{
+			//set another origin address 
 			broadcastUpdate = new BroadcastUpdate();
 			broadcastUpdate.setOriginAdress("another address"); 
 	
@@ -365,7 +395,7 @@ public class FilterManagerUnitTest {
 
 			filterId = ArgumentCaptor.forClass(String.class);
 			mapCaptor = ArgumentCaptor.forClass(Map.class);
-			verify(filtersManager, Mockito.times(5)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
+			verify(filtersManager, Mockito.times(6)).getFilterAdaptor(filterId.capture(), mapCaptor.capture());
 			capturedMap = mapCaptor.getValue();
 
 			
@@ -373,6 +403,8 @@ public class FilterManagerUnitTest {
 			assertEquals(Boolean.TRUE, capturedMap.get("stream1"));
 			
 		}
+		
+		
 		
 
 

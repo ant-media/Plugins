@@ -1,6 +1,6 @@
 package io.antmedia.filter;
 
-import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_AAC;
+import static org.bytedeco.ffmpeg.global.avcodec.*;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H264;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_ref;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_unref;
@@ -46,7 +46,6 @@ import io.vertx.core.Vertx;
  * It receives the output of FilterGraph and feeds the output through IFilteredFrameListener
  *
  */
-
 public class FilterAdaptor implements IFrameListener, IPacketListener{
 	private FilterGraph videoFilterGraph = null;
 	private FilterGraph audioFilterGraph = null;
@@ -62,7 +61,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	private static final Logger logger = LoggerFactory.getLogger(FilterAdaptor.class);
 
 	private Map<String, VideoDecoder> videoDecodersMap = new LinkedHashMap<>();
-	private Map<String, OpusDecoder> audioDecodersMap = new LinkedHashMap<>();
+	private Map<String, AudioDecoder> audioDecodersMap = new LinkedHashMap<>();
 
 	/*
 	 * In case decoding in the plugin, video frames are generated later than audio.
@@ -72,7 +71,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	private boolean firstVideoReceived = false;
 	private AVChannelLayout channelLayout;
 	private String filterId;
-	
+
 	private Map<String, Boolean> decodeStreamMap;
 
 	public FilterAdaptor(String filterId, Map<String, Boolean> decodeStreamMap) {
@@ -85,15 +84,20 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 		if(audioFilterGraph == null || !audioFilterGraph.isInitiated() || audioFilterGraph.getListener() == null) {
 			//logger.warn("AudioFilter graph is not initialized correctly so returning frame for stream:{} and filter:{}", streamId, filterId);
-			
+
 			return audioFrame;
 		}
 		AVFrame filterInputframe;
 		AVFrame filterOutputFrame = null;
+
+		StreamParametersInfo audioStreamParams = audioStreamParamsMap.get(streamId);
+
 		if(filterConfiguration.getType().equals(FilterConfiguration.ASYNCHRONOUS)) {
 			//copy the input frame then return it immediately
 			if (audioFrame != null) {
 				filterInputframe = av_frame_clone(audioFrame);
+				rescaleFramePtsToMs(streamId, filterInputframe, audioStreamParams.getTimeBase());
+
 			}
 			else {
 				filterInputframe = null;
@@ -101,7 +105,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 			vertx.executeBlocking(()->{
 				audioFilterGraph.doFilter(streamId, filterInputframe, false);
-				
+
 				if (filterInputframe != null) 
 				{
 					av_frame_free(filterInputframe);
@@ -114,6 +118,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		{
 			if (audioFrame != null) {
 				filterInputframe = audioFrame;
+				rescaleFramePtsToMs(streamId, filterInputframe, audioStreamParams.getTimeBase());
+
 			}
 			else {
 				filterInputframe = null;
@@ -135,13 +141,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			else {
 				filterInputframe = null;
 			}
-		
+
 			filterOutputFrame = audioFilterGraph.doFilter(streamId, filterInputframe, true);
 			if(filterOutputFrame != null) 
 			{
-				
+
 				filterOutputFrame.pts(orgPts);
-				
+
 			}
 		}
 		return filterOutputFrame;
@@ -179,7 +185,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			else {
 				filterInputframe = null;
 			}
-			
+
 			vertx.executeBlocking(()->{
 				videoFilterGraph.doFilter(streamId, filterInputframe, false);
 				av_frame_free(filterInputframe);
@@ -237,9 +243,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	}
 
 	public void rescaleFramePtsToMs(String streamId, AVFrame filterInputframe, AVRational timebase) {
-		
+
 		Boolean decodeStream = decodeStreamMap.get(streamId);
-		
+
 		if(Boolean.FALSE.equals(decodeStream)) {
 			filterInputframe.pts(av_rescale_q_rnd(filterInputframe.pts(), timebase, Utils.TIME_BASE_FOR_MS, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX));
 		}
@@ -254,7 +260,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public synchronized void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
 		videoStreamParamsMap.put(streamId, videoStreamInfo);
 		Boolean decodeStream = decodeStreamMap.get(streamId);
-		
+
 		if(Boolean.TRUE.equals(decodeStream) || videoStreamInfo.isHostedInOtherNode()) {
 
 			VideoDecoder decoder = new VideoDecoder(streamId, videoStreamInfo);
@@ -268,12 +274,12 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public synchronized void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
 		audioStreamParamsMap.put(streamId, audioStreamInfo);
 
-		if(audioStreamInfo.isHostedInOtherNode()) {
-			OpusDecoder decoder = new OpusDecoder();
-			decoder.prepare(streamId);
-			if(decoder.isInitialized()) {
-				audioDecodersMap.put(streamId, decoder);
-			}
+		Boolean decodeStream = decodeStreamMap.get(streamId);
+
+		if(Boolean.TRUE.equals(decodeStream)) {
+			AudioDecoder decoder = new AudioDecoder(streamId);
+			decoder.prepareAudioDecoder(audioStreamInfo.getCodecParameters());
+			audioDecodersMap.put(streamId, decoder);
 		}
 	}
 
@@ -326,12 +332,12 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				//I don't have time to understand the cause of this problem. It's at least ok for me if they passed the tests at this stage
 				//I'm just proceeding to handle the other things(spaceport viewer) - mekya - Sep 9, 2024
 				String audioFilterArgs =
-						 "sample_fmt="+audioStreamParams.getCodecParameters().format()+":"
-						+ "time_base="+audioStreamParams.getTimeBase().num()+"/"+audioStreamParams.getTimeBase().den()+":"
-						+ "sample_rate="+audioStreamParams.getCodecParameters().sample_rate() + ":"
-						+ "channel_layout="+ channelLayoutName;
+						"sample_fmt="+audioStreamParams.getCodecParameters().format()+":"
+								+ "time_base="+audioStreamParams.getTimeBase().num()+"/"+audioStreamParams.getTimeBase().den()+":"
+								+ "sample_rate="+audioStreamParams.getCodecParameters().sample_rate() + ":"
+								+ "channel_layout="+ channelLayoutName;
 
-				
+
 				logger.info("Input audio arguments is \"{}\" for filter:{}", audioFilterArgs, filterId);
 
 				if(filterConfiguration.getAudioFilter().contains("["+"in"+i+"]")) {
@@ -469,7 +475,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 					logger.info("Output stream:{} is same as input stream so no new customBroadcast will be created for filterId:{}", streamId, filterId);
 				}
 				else {
-					
+
 					IFrameListener broadcast = app.createCustomBroadcast(streamId, filterConfiguration.getVideoOutputHeight(), filterConfiguration.getVideoOutputBitrate());
 					startBroadcast(streamId, broadcast, filterConfiguration.isVideoEnabled(), filterConfiguration.isAudioEnabled());
 					currentOutStreams.put(streamId, broadcast);
@@ -633,12 +639,13 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		if(Boolean.TRUE.equals(decodeStream) || (audioStreamParams != null && audioStreamParams.isHostedInOtherNode())) 
 		{
 			if(audioDecodersMap.containsKey(streamId)) {
-				AVFrame frame = audioDecodersMap.get(streamId).decode(packet);
+				AVFrame frame = audioDecodersMap.get(streamId).decodeAudioFrame(audioStreamParams.getTimeBase(), packet);
 
 				if(frame != null) {
 					onAudioFrame(streamId, frame);
 				}
 				else {
+					logger.warn("audio decoder does not generate audio frame for streamId:{}", streamId);
 				}
 			}
 			else {
