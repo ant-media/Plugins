@@ -62,6 +62,7 @@ public class VideoDecoderTest {
 		streamParams.setCodecParameters(videoCodecParameters);
 		
 		VideoDecoder videoDecoder = new VideoDecoder("streamId", streamParams);
+		videoDecoder.setDecoderTimeBase(Utils.TIME_BASE_FOR_MS);
 		
 		assertTrue(videoDecoder.isRunning());
 		
