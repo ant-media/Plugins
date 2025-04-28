@@ -105,46 +105,6 @@ public class VideoDecoderTest {
 		
 		//no crash
 		assertNull(videoDecoder.decodeVideoPacket(pkt));
-		/*
-		AVPacket packet = new AVPacket();
-				
-		packet.stream_index(0);
-		packet.pts(1);
-		packet.dts(1);
-		packet.flags(AV_PKT_FLAG_KEY);
-		
-		byte[] data = new byte[]{10, 20, 30};
-		
-		packet.data(new BytePointer(ByteBuffer.allocate(100)));
-		packet.size(100);
-		packet.position(0);
-		
-		assertNotNull(opusDecoder.decodeAudioFrame(new AVRational().num(1).den(1000), packet));
-		
-		data = new byte[]{10, 20, 30};
-		packet.data(new BytePointer(data));
-		packet.size(data.length);
-		assertNull(opusDecoder.decodeAudioFrame(new AVRational().num(1).den(1000), packet));
-		
-		
-		assertNotNull(opusDecoder.getSamplesFrame());
-		assertNotNull(opusDecoder.getAudioContext());
-
-		opusDecoder.stop();
-		
-		
-		assertNull(opusDecoder.getSamplesFrame());
-		assertNull(opusDecoder.getAudioContext());
-		
-		assertFalse(opusDecoder.isRunning());
-		
-		assertNull(opusDecoder.decodeAudioFrame(new AVRational().num(1).den(1000), packet));
-		
-		
-		//no crash
-		opusDecoder.stop();
-		
-		*/
 
 		
 	}
