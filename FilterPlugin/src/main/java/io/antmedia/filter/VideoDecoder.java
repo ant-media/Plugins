@@ -25,6 +25,7 @@ import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avutil.AVDictionary;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
+import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.javacpp.BytePointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +41,8 @@ public class VideoDecoder {
 	private AVFrame decodedFrame;
 	private StreamParametersInfo streamParameters;
 	private boolean running = false;
+	
+	private AVRational decoderTimeBase;
 
 	
 	public VideoDecoder(String streamId, StreamParametersInfo streamParameters) {
@@ -97,6 +100,10 @@ public class VideoDecoder {
 			stop();
 		}
 	}
+	
+	public void setDecoderTimeBase(AVRational decoderTimeBase) {
+		this.decoderTimeBase = decoderTimeBase;
+	}
 
 	public boolean openDecoder(AVCodec codec, AVCodecParameters par) {
 		videoContext = avcodec_alloc_context3(codec);
@@ -136,12 +143,12 @@ public class VideoDecoder {
 			return null;
 		}
 		logger.debug("Video packet is received for streamId:{} pkt pts:{} timebase:{}/{} target timebase: {}/{}", streamId, pkt.pts(), 
-				streamParameters.getTimeBase().num(), streamParameters.getTimeBase().den(), Utils.TIME_BASE_FOR_MS.num(), Utils.TIME_BASE_FOR_MS.den());
+				streamParameters.getTimeBase().num(), streamParameters.getTimeBase().den(), decoderTimeBase.num(), decoderTimeBase.den());
 		
 	
 		av_packet_rescale_ts(pkt,
 				streamParameters.getTimeBase(),
-				Utils.TIME_BASE_FOR_MS
+				decoderTimeBase
 				);
 		
 		int ret = avcodec_send_packet(videoContext, pkt);

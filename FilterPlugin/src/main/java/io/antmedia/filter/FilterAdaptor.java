@@ -74,8 +74,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 	private Map<String, Boolean> decodeStreamMap;
 
-	public FilterAdaptor(String filterId, Map<String, Boolean> decodeStreamMap) {
-		this.decodeStreamMap  = decodeStreamMap;
+	public FilterAdaptor(String filterId) {
 		this.filterId = filterId;
 	}
 	
@@ -257,6 +256,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		if(Boolean.TRUE.equals(decodeStream) || videoStreamInfo.isHostedInOtherNode()) {
 
 			VideoDecoder decoder = new VideoDecoder(streamId, videoStreamInfo);
+			//TODO: Refactor using Utils.TIME_BASE_FOR_MS in several places is hard to understand and seems like a magic number 
+			// Refactor: instead of using Utils.TIME_BASE_FOR_MS either use input timebase or provide a more structed way to set timebase
+			decoder.setDecoderTimeBase(Utils.TIME_BASE_FOR_MS);
 			if(decoder.isRunning()) {
 				videoDecodersMap.put(streamId, decoder);
 			}
@@ -304,7 +306,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 						+ "time_base="+Utils.TIME_BASE_FOR_MS.num()+"/"+Utils.TIME_BASE_FOR_MS.den()+":"
 						+ "pixel_aspect=1/1";
 
-				logger.info("Input video arguments is \"{}\" for filter:{}", videoFilterArgs, filterId);
+				logger.info("Input video arguments is \"{}\" for filter:{} and streamId:{}", videoFilterArgs, filterId, streamId);
 
 				if(filterConfiguration.getVideoFilter().contains("["+"in"+i+"]")) {
 					videoSourceFiltersMap.put(streamId, new Filter("buffer", videoFilterArgs, "in"+i));
@@ -331,7 +333,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 								+ "channel_layout="+ channelLayoutName;
 
 
-				logger.info("Input audio arguments is \"{}\" for filter:{}", audioFilterArgs, filterId);
+				logger.info("Input audio arguments is \"{}\" for filter:{} streamId:{}", audioFilterArgs, filterId, streamId);
 
 				if(filterConfiguration.getAudioFilter().contains("["+"in"+i+"]")) {
 					audioSourceFiltersMap.put(streamId, new Filter("abuffer", audioFilterArgs, "in"+i));
@@ -453,32 +455,6 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 		this.filterConfiguration = filterConfiguration;
 
-		/*
-		 * create custom broadcast for each output and add them to the map
-		 *  if an outputstream is same with an input stream no need the create custombroadcast 
-		 * 		instead we feed input stream with filtered frame
-		 */
-		for (String streamId : filterConfiguration.getOutputStreams()) 
-		{
-			if(!currentOutStreams.containsKey(streamId)) 
-			{
-				if(filterConfiguration.getInputStreams().contains(streamId)) 
-				{
-					currentOutStreams.put(streamId, null);
-					logger.info("Output stream:{} is same as input stream so no new customBroadcast will be created for filterId:{}", streamId, filterId);
-				}
-				else {
-
-					IFrameListener broadcast = app.createCustomBroadcast(streamId, filterConfiguration.getVideoOutputHeight(), filterConfiguration.getVideoOutputBitrate());
-					startBroadcast(streamId, broadcast, filterConfiguration.isVideoEnabled(), filterConfiguration.isAudioEnabled());
-					currentOutStreams.put(streamId, broadcast);
-					logger.info("Output stream:{} will be created for filterId:{} and height:{}", streamId, filterId, filterConfiguration.getVideoOutputHeight());
-				}
-
-			}		
-		}
-
-
 		// check the inserted or removed streams to the filter as an update
 		List<String> inserted = filterConfiguration.getInputStreams();
 		List<String> removed = new ArrayList<>();
@@ -522,12 +498,37 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 			filterConfiguration.setInputStreams(currentInStreams);
 		}
+		
+		/*
+		 * create custom broadcast for each output and add them to the map
+		 *  if an outputstream is same with an input stream no need the create custombroadcast 
+		 * 		instead we feed input stream with filtered frame
+		 */
+		for (String streamId : filterConfiguration.getOutputStreams()) 
+		{
+			if(!currentOutStreams.containsKey(streamId)) 
+			{
+				if(filterConfiguration.getInputStreams().contains(streamId)) 
+				{
+					currentOutStreams.put(streamId, null);
+					logger.info("Output stream:{} is same as input stream so no new customBroadcast will be created for filterId:{}", streamId, filterId);
+				}
+				else {
+
+					IFrameListener customBroadcast = app.createCustomBroadcast(streamId, filterConfiguration.getVideoOutputHeight(), filterConfiguration.getVideoOutputBitrate());
+					startBroadcast(streamId, customBroadcast, filterConfiguration.isVideoEnabled(), filterConfiguration.isAudioEnabled());
+					currentOutStreams.put(streamId, customBroadcast);
+					logger.info("Output stream:{} will be created for filterId:{} and height:{}", streamId, filterId, filterConfiguration.getVideoOutputHeight());
+				}
+
+			}		
+		}
 
 		//we need to update the filter graph to make the configuration changes will be effective
 		return update();
 	}
 
-	private void startBroadcast(String streamId, IFrameListener broadcast, boolean videoEnabled, boolean audioEnabled) {
+	private void startBroadcast(String streamId, IFrameListener customBroadcast, boolean videoEnabled, boolean audioEnabled) {
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
 		videoCodecParameters.height(filterConfiguration.getVideoOutputHeight());
 		videoCodecParameters.width((int) (filterConfiguration.getVideoOutputHeight()*1.5f)); //non 0, it will be overriden by AMS
@@ -544,10 +545,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		audioCodecParameters.sample_rate(44100);
 
 		channelLayout = new AVChannelLayout();
-		av_channel_layout_default(channelLayout, 1);
-
+		av_channel_layout_default(channelLayout, 2);
 		audioCodecParameters.ch_layout(channelLayout);
-
 		audioCodecParameters.codec_tag(0);
 
 		StreamParametersInfo videoStreamParametersInfo = new StreamParametersInfo();
@@ -560,12 +559,12 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 		if(videoEnabled) {
 			videoStreamParametersInfo.setTimeBase(Utils.TIME_BASE_FOR_MS);
-			broadcast.setVideoStreamInfo(streamId, videoStreamParametersInfo);
+			customBroadcast.setVideoStreamInfo(streamId, videoStreamParametersInfo);
 		}
 		if(audioEnabled) {
-			broadcast.setAudioStreamInfo(streamId, audioStreamParametersInfo);
+			customBroadcast.setAudioStreamInfo(streamId, audioStreamParametersInfo);
 		}
-		broadcast.start();
+		customBroadcast.start();
 	}
 
 	public FilterConfiguration getCurrentFilterConfiguration() {
@@ -608,6 +607,8 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 	public AVPacket onVideoPacket(String streamId, AVPacket packet) {
 		StreamParametersInfo videoStreamParams = videoStreamParamsMap.get(streamId);
 		Boolean decodeStream = decodeStreamMap.get(streamId);
+		
+		//I think it is none-sense to check the decodeStreamMap here
 		if(Boolean.TRUE.equals(decodeStream) || (videoStreamParams != null && videoStreamParams.isHostedInOtherNode())) 
 		{
 			if(videoDecodersMap.containsKey(streamId)) 
@@ -679,6 +680,10 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 
 	public void setFilterConfiguration(FilterConfiguration filterConfiguration) {
 		this.filterConfiguration = filterConfiguration;
+	}
+	
+	public void setDecodeStreamMap(Map<String, Boolean> decodeStreamMap) {
+		this.decodeStreamMap = decodeStreamMap;
 	}
 
 }

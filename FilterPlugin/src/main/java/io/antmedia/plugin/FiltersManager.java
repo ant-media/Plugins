@@ -47,7 +47,7 @@ public class FiltersManager {
 			defaultDecodeStreamValue = true;
 		}
 				
-		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<String, Boolean>();
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
 		
 		for(String streamId : filterConfiguration.getInputStreams()) 
 		{
@@ -65,7 +65,7 @@ public class FiltersManager {
    			//if origin stream is not in this instance, we are going to decode stream locally
    			if (!StringUtils.equals(appAdaptor.getServerSettings().getHostAddress(), broadcast.getOriginAdress())) 
    			{
-   				logger.info("Origin stream is not in this instance. We are going to decode stream locally for stream id {}", streamId);
+   				logger.info("Origin stream is not in this instance. We are going to decode stream locally for stream id {} stream origin is {}", streamId, broadcast.getOriginAdress());
    				decodeStreamMap.put(streamId, true);
    			}
    			else 
@@ -75,7 +75,7 @@ public class FiltersManager {
    				if (broadcast.getEncoderSettingsList() != null) 
    				{
    					if (broadcast.getEncoderSettingsList().isEmpty()) {
-   	   					logger.info("Encoder settings list is empty. We are going to decode stream locally for stream id {}", streamId);
+   	   					logger.debug("Encoder settings list is empty. We are going to decode stream locally for stream id {}", streamId);
    						decodeStream = true;
    					}
    					else {
@@ -83,7 +83,7 @@ public class FiltersManager {
    					}
    				}
    				
-   				logger.info("Putting decode stream value {} for stream id {}", decodeStream, streamId);
+   				logger.debug("Putting decode stream value {} for stream id {}", decodeStream, streamId);
 				decodeStreamMap.put(streamId, decodeStream);
    			}
 		}
@@ -94,12 +94,17 @@ public class FiltersManager {
 			filterConfiguration.setFilterId(filterId);
 		}
 		
-		return getFilterAdaptor(filterId, decodeStreamMap).createOrUpdateFilter(filterConfiguration, appAdaptor);
+		logger.info("Creating filter with id: {} and input streams: {} and this:{}", filterId, filterConfiguration.getInputStreams(), this.hashCode());
+		FilterAdaptor filterAdaptor = getFilterAdaptor(filterId);
+		//Always update the decode stream map because it may be changed
+		filterAdaptor.setDecodeStreamMap(decodeStreamMap);
+		
+		return filterAdaptor.createOrUpdateFilter(filterConfiguration, appAdaptor);
 	}
 	
 	
-	public FilterAdaptor getFilterAdaptor(String filterId, Map<String, Boolean> decodeStreams) {
-		return filterList.computeIfAbsent(filterId, key -> new FilterAdaptor(filterId, decodeStreams));
+	public FilterAdaptor getFilterAdaptor(String filterId) {
+		return filterList.computeIfAbsent(filterId, key -> new FilterAdaptor(filterId));
 	}
 	
 	

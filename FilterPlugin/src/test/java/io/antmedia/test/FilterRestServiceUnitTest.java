@@ -73,7 +73,8 @@ public class FilterRestServiceUnitTest {
 
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
 
-		FilterAdaptor filterAdaptor = filtersManger.getFilterAdaptor(filterConfiguration.getFilterId(), decodeStreamMap);
+		FilterAdaptor filterAdaptor = filtersManger.getFilterAdaptor(filterConfiguration.getFilterId());
+		filterAdaptor.setDecodeStreamMap(decodeStreamMap);
 		filterAdaptor.setFilterConfiguration(filterConfiguration);
 		
 		result = filterService.delete(filterConfiguration.getFilterId());

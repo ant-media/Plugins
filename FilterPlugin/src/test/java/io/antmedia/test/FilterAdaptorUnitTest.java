@@ -81,7 +81,8 @@ public class FilterAdaptorUnitTest {
 	@Test
 	public void testNullFrame() {
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12)));
+		filterAdaptor.setDecodeStreamMap(decodeStreamMap);
 		doReturn(new Result(true)).when(filterAdaptor).update();
 		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
@@ -124,7 +125,9 @@ public class FilterAdaptorUnitTest {
 	public void testFilterGraphVideoFeed() {
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
 
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12)));
+		filterAdaptor.setDecodeStreamMap(decodeStreamMap);
+
 		doReturn(new Result(true)).when(filterAdaptor).update();
 		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
@@ -170,7 +173,9 @@ public class FilterAdaptorUnitTest {
 	public void testFilterGraphAudioFeed() {
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
 
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12)));
+		filterAdaptor.setDecodeStreamMap(decodeStreamMap);
+
 		doReturn(new Result(true)).when(filterAdaptor).update();
 		FilterConfiguration filterConf = new FilterConfiguration();
 		filterConf.setInputStreams(new ArrayList<>());
@@ -230,7 +235,9 @@ public class FilterAdaptorUnitTest {
 	public void testFiltering(boolean videoEnabled, String videoFilter, boolean audioEnabled, String audioFilter) {
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
 
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12)));
+		filterAdaptor.setDecodeStreamMap(decodeStreamMap);
+
 		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
 		when(app.createCustomBroadcast(anyString(), anyInt(), anyInt())).thenReturn(mock(IFrameListener.class));
 
@@ -310,7 +317,9 @@ public class FilterAdaptorUnitTest {
 	public void testTimeBaseInSyncMode() {
 		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
 
-		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12), decodeStreamMap));
+		FilterAdaptor filterAdaptor = spy(new FilterAdaptor(RandomStringUtils.randomAlphanumeric(12)));
+		filterAdaptor.setDecodeStreamMap(decodeStreamMap);
+
 		doReturn(new Result(true)).when(filterAdaptor).update();
 		doNothing().when(filterAdaptor).rescaleFramePtsToMs(any(), any(), any());
 		FilterConfiguration filterConf = new FilterConfiguration();
