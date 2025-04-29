@@ -58,12 +58,15 @@ public class FilterGraph {
 	private boolean initiated = false;
 	private IFilteredFrameListener listener;
 
-	private long currentPts = 0; 
+	private long currentPts = 0;
+
+	private String filterDescription; 
 
 
 	public FilterGraph(String filterDescription, Map<String, Filter> sourceFiltersMap, Map<String, Filter> sinkFiltersMap) {
 		this.sourceFiltersMap = sourceFiltersMap;
 		this.sinkFiltersMap = sinkFiltersMap;
+		this.filterDescription = filterDescription;
 		
 		filterOutputFrame = av_frame_alloc();
 		filterGraph = avfilter_graph_alloc();
@@ -96,6 +99,7 @@ public class FilterGraph {
 		
 		int ret;
 		if ((ret = avfilter_graph_parse(filterGraph, filterDescription, listOfInputs, listOfOutputs, null)) < 0) {
+			
 			logger.error("error avfilter_graph_parse: {}", Utils.getErrorDefinition(ret));
 			return;
 		}
@@ -161,7 +165,7 @@ public class FilterGraph {
 			
 			if (!isInitiated()) 
 			{
-				logger.warn("Video filter graph is not initated yet for stream:{}", streamId);
+				logger.warn("Filter graph is not initated yet for stream:{}", streamId);
 				return null;
 			}
 						
@@ -233,6 +237,7 @@ public class FilterGraph {
 							else {
 								listener.onFilteredFrame(outStreamId, filterOutputFrame);
 							}
+							logger.info("Filtered frame is sent to listener for streamId: {} and for filter config:{}", outStreamId, filterDescription);
 						}
 					}
 					av_frame_unref(filterOutputFrame);

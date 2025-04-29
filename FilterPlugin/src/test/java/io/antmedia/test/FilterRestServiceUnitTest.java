@@ -3,6 +3,9 @@ package io.antmedia.test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import jakarta.servlet.ServletContext;
 
 import org.junit.Test;
@@ -67,8 +70,11 @@ public class FilterRestServiceUnitTest {
 		
 		Result result = filterService.delete(filterConfiguration.getFilterId());
 		assertFalse(result.isSuccess());
-		
-		FilterAdaptor filterAdaptor = filtersManger.getFilterAdaptor(filterConfiguration.getFilterId(), false);
+
+		Map<String, Boolean> decodeStreamMap = new ConcurrentHashMap<>();
+
+		FilterAdaptor filterAdaptor = filtersManger.getFilterAdaptor(filterConfiguration.getFilterId());
+		filterAdaptor.setDecodeStreamMap(decodeStreamMap);
 		filterAdaptor.setFilterConfiguration(filterConfiguration);
 		
 		result = filterService.delete(filterConfiguration.getFilterId());

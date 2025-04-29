@@ -20,14 +20,14 @@ import io.antmedia.filter.utils.FilterGraph;
 
 public class Utils {
 	
-	private static final Logger logger = LoggerFactory.getLogger(Utils.class);
-
+	
 	public static final  AVRational TIME_BASE_FOR_MS;
 	static {
 		TIME_BASE_FOR_MS = new AVRational();
 		TIME_BASE_FOR_MS.num(1);
 		TIME_BASE_FOR_MS.den(1000);
 	}
+	
 	
 
 	public static void save(AVFrame frame, String name) {
