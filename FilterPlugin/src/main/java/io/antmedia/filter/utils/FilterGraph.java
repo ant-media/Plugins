@@ -237,7 +237,7 @@ public class FilterGraph {
 							else {
 								listener.onFilteredFrame(outStreamId, filterOutputFrame);
 							}
-							logger.info("Filtered frame is sent to listener for streamId: {} and for filter config:{}", outStreamId, filterDescription);
+							logger.debug("Filtered frame is sent to listener for streamId: {} and for filter config:{}", outStreamId, filterDescription);
 						}
 					}
 					av_frame_unref(filterOutputFrame);
