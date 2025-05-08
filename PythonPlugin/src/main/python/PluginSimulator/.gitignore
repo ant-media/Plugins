@@ -1,0 +1,8 @@
+/.cache
+/output.jpg
+/pluginsimulator
+/compile_commands.json
+/pluginsimulator
+/build/*
+/__pycache__
+/models/

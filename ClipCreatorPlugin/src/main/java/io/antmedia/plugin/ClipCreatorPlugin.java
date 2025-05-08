@@ -298,9 +298,11 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		Mp4CreationResponse response = new Mp4CreationResponse();
 		String streamId = broadcast.getStreamId();
 
+		long startTimeGetM3u8File = System.currentTimeMillis();
 		File m3u8File = getM3u8File(streamId);
 		if (m3u8File == null) {
-			logger.error("No m3u8 file found for stream {}", streamId);
+			long elapsedTimeMs = System.currentTimeMillis() - startTimeGetM3u8File;
+			logger.error("No m3u8 file found for stream {} and took {}ms", streamId, elapsedTimeMs);
 			response.setMessage("No m3u8 file found for stream " + streamId);
 			return response;
 		}

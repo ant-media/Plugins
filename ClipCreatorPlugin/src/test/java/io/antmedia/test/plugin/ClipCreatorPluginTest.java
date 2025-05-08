@@ -25,6 +25,7 @@ import org.junit.Test;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.red5.server.api.scope.IScope;
@@ -56,6 +57,46 @@ public class ClipCreatorPluginTest {
 
 
 	private static Logger logger = LoggerFactory.getLogger(ClipCreatorPluginTest.class);
+	
+	public static void delete(File file) throws IOException {
+
+		if (file.isDirectory()) {
+
+			// directory is empty, then delete it
+			if (file.list().length == 0) {
+
+				file.delete();
+				// System.out.println("Directory is deleted : "
+				// + file.getAbsolutePath());
+
+			} else {
+
+				// list all the directory contents
+				String files[] = file.list();
+
+				for (String temp : files) {
+					// construct the file structure
+					File fileDelete = new File(file, temp);
+
+					// recursive delete
+					delete(fileDelete);
+				}
+
+				// check the directory again, if empty then delete it
+				if (file.list().length == 0) {
+					file.delete();
+					// System.out.println("Directory is deleted : "
+					// + file.getAbsolutePath());
+				}
+			}
+
+		} else {
+			// if file, then delete it
+			file.delete();
+			// System.out.println("File is deleted : " +
+			// file.getAbsolutePath());
+		}
+	}
 	
 	@Rule
 	public TestRule watcher = new TestWatcher() {
@@ -118,6 +159,8 @@ public class ClipCreatorPluginTest {
 		ApplicationContext context = Mockito.mock(ApplicationContext.class);
 
 		when(context.getBean("vertxCore")).thenReturn(vertx);
+		
+		when(context.getBean(ServerSettings.BEAN_NAME)).thenReturn(new ServerSettings());
 
 		AntMediaApplicationAdapter applicationAdapter = Mockito.mock(AntMediaApplicationAdapter.class);
 		when(applicationAdapter.getScope()).thenReturn(Mockito.mock(org.red5.server.api.scope.IScope.class));
@@ -203,11 +246,18 @@ public class ClipCreatorPluginTest {
 
 		Broadcast broadcast = new Broadcast();
 		broadcast.setStreamId(streamId);
+		
+		//delete the stream folder if it exists
+		delete(new File(plugin.getStreamsFolder()));			
 
 		plugin.streamFinished(broadcast);
 
+		ArgumentCaptor<Broadcast> broadcastCaptor = ArgumentCaptor.forClass(Broadcast.class);
+		ArgumentCaptor<Boolean> booleanCaptor = ArgumentCaptor.forClass(Boolean.class);
 		//sometimes the below timeout value does not work and test fails. I don't know why so I've changed with after - @mekya
-		verify(plugin, Mockito.after(5000)).convertHlsToMp4(eq(broadcast), eq(true), anyLong());
+		verify(plugin, Mockito.after(5000)).convertHlsToMp4(broadcastCaptor.capture(), booleanCaptor.capture(), anyLong());
+		assertEquals(streamId, broadcastCaptor.getValue().getStreamId());
+		assertTrue(booleanCaptor.getValue());
 
 		//it should be null because it is removed
 		assertNull(plugin.getLastMp4CreateTimeForStream().get(streamId));

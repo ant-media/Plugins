@@ -96,7 +96,8 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		else if (!roomsHasCustomFilters.contains(roomId)) 
 		{
 			//Update room filter if there is no custom filter
-			try {
+			try 
+			{
 				List<String> streams = new ArrayList<>();
 				streams.addAll(room.getSubTrackStreamIds());
 
