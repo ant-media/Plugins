@@ -207,7 +207,7 @@ public class ClipCreatorPluginTest {
 		plugin.streamFinished(broadcast);
 
 		//sometimes the below timeout value does not work and test fails. I don't know why so I've changed with after - @mekya
-		verify(plugin, Mockito.after(5000)).convertHlsToMp4(broadcast, true);
+		verify(plugin, Mockito.after(5000)).convertHlsToMp4(eq(broadcast), eq(true), anyLong());
 
 		//it should be null because it is removed
 		assertNull(plugin.getLastMp4CreateTimeForStream().get(streamId));
@@ -244,7 +244,7 @@ public class ClipCreatorPluginTest {
 
 		plugin.setClipCreatorSettings(new ClipCreatorSettings());
 
-		Mp4CreationResponse createMp4Response = plugin.convertHlsToMp4(broadcast, true);
+		Mp4CreationResponse createMp4Response = plugin.convertHlsToMp4(broadcast, true, System.currentTimeMillis());
 		assertFalse(createMp4Response.isSuccess());
 
 		//it should not be called because deleteTSFiles by default is false
@@ -253,7 +253,7 @@ public class ClipCreatorPluginTest {
 
 		plugin.getLastMp4CreateTimeForStream().put(streamId, 0L);
 
-		createMp4Response = plugin.convertHlsToMp4(broadcast, true);
+		createMp4Response = plugin.convertHlsToMp4(broadcast, true, System.currentTimeMillis());
 		assertNotNull(createMp4Response.getFile());
 		assertTrue(createMp4Response.getFile().getTotalSpace() > 0);
 		assertTrue(createMp4Response.getFile().delete());
@@ -262,7 +262,7 @@ public class ClipCreatorPluginTest {
 		//check it calls the deleteTSFiles
 		plugin.getLastMp4CreateTimeForStream().put(streamId, 0L);
 		plugin.getClipCreatorSettings().setDeleteHLSFilesAfterCreatedMp4(true);
-		plugin.convertHlsToMp4(broadcast, true);
+		plugin.convertHlsToMp4(broadcast, true, System.currentTimeMillis());
 		verify(plugin, times(1)).deleteFiles(Mockito.any());
 		
 		String[] list = streamFolder.list();
