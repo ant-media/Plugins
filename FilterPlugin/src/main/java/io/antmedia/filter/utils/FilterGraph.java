@@ -61,7 +61,6 @@ public class FilterGraph {
 	private long currentPts = 0;
 
 	private String filterDescription; 
-	private String initializationError;
 
 
 	public FilterGraph(String filterDescription, Map<String, Filter> sourceFiltersMap, Map<String, Filter> sinkFiltersMap) {
@@ -84,6 +83,7 @@ public class FilterGraph {
 			}
 			prev = source;
 		}
+		
 		prev = null;
 		for (Filter sink : this.sinkFiltersMap.values()) {
 			sink.initFilterContex(filterGraph);
@@ -100,18 +100,12 @@ public class FilterGraph {
 		int ret;
 		if ((ret = avfilter_graph_parse(filterGraph, filterDescription, listOfInputs, listOfOutputs, null)) < 0) {
 			
-			String errorDefinition = Utils.getErrorDefinition(ret);
-			int nullCharIndex = errorDefinition.indexOf('\0');
-            this.initializationError = (nullCharIndex == -1) ? errorDefinition : errorDefinition.substring(0, nullCharIndex);
-			logger.error("error avfilter_graph_parse: {}", this.initializationError);
+			logger.error("error avfilter_graph_parse: {}", Utils.getErrorDefinition(ret));
 			return;
 		}
 
 		if ((ret = avfilter_graph_config(filterGraph, null)) < 0) {
-			String errorDefinition = Utils.getErrorDefinition(ret);
-			int nullCharIndex = errorDefinition.indexOf('\0');
-            this.initializationError = (nullCharIndex == -1) ? errorDefinition : errorDefinition.substring(0, nullCharIndex);
-			logger.error("error avfilter_graph_config: {}", this.initializationError);
+			logger.error("error avfilter_graph_config: {}", Utils.getErrorDefinition(ret));
 			return;
 		}
 		setInitiated(true);
@@ -317,9 +311,5 @@ public class FilterGraph {
 
 	public AVFrame getPicture() {
 		return picture;
-	}
-
-	public String getInitializationError() {
-		return initializationError;
 	}
 }
