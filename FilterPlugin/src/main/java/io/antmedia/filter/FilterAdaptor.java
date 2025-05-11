@@ -373,7 +373,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			videoFilterGraph = new FilterGraph(filterConfiguration.getVideoFilter(), videoSourceFiltersMap , videoSinkFiltersMap);
 			if(!videoFilterGraph.isInitiated()) {
 				logger.error("Video filter graph can not be initiated: {}", filterConfiguration.getVideoFilter());
-				result.setMessage("Video filter graph can not be initiated:" + filterConfiguration.getVideoFilter());
+				result.setMessage("Video filter graph can not be initiated: " + filterConfiguration.getVideoFilter() + ". Reason: " + videoFilterGraph.getInitializationError());
 				return result;
 			}
 			videoFilterGraph.setCurrentPts(currentVideoPts);
