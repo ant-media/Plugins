@@ -68,7 +68,7 @@ public class FilterPluginIntegrationTest {
 	public static final int WINDOWS = 2;
 	public static boolean audioExists;
 	public static boolean videoExists;
-    
+
 	private static final String ROOT_SERVICE_URL = "http://localhost:5080/LiveApp/rest";
 
 
@@ -149,7 +149,6 @@ public class FilterPluginIntegrationTest {
 
 	@Test
 	public void testScaleAndPadFilter() throws Exception {
-		// AppSettings appSettings = callGetAppSettings(appName); // May not be needed unless specific app settings affect filters
 
 		String inputStreamId = "inputStream_" + RandomStringUtils.randomAlphanumeric(5);
 		String outputStreamId = "outputStream_" + RandomStringUtils.randomAlphanumeric(5);
@@ -159,10 +158,10 @@ public class FilterPluginIntegrationTest {
 		filterConfig.setInputStreams(List.of(inputStreamId));
 		filterConfig.setOutputStreams(List.of(outputStreamId));
 		filterConfig.setVideoFilter("[in0]scale=360:240:force_original_aspect_ratio=decrease,pad=720:480:(ow-iw)/2:(oh-ih)/2:color=blue[out0]"); // Example: scale and pad filter
-		filterConfig.setAudioFilter("[in0]anull[out0]"); // Example: audio passthrough
-		filterConfig.setType(FilterConfiguration.ASYNCHRONOUS); // Or SYNCHRONOUS, LASTPOINT depending on test case
+		filterConfig.setAudioFilter("[in0]anull[out0]"); 
+		filterConfig.setType(FilterConfiguration.ASYNCHRONOUS); 
 		filterConfig.setVideoEnabled(true);
-		filterConfig.setAudioEnabled(true); // Enable or disable based on what you want to test
+		filterConfig.setAudioEnabled(true); 
         filterConfig.setVideoOutputHeight(480);
 
 		//send the stream to the input stream ID
@@ -197,9 +196,7 @@ public class FilterPluginIntegrationTest {
 			return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8", 0, false);
 		});
 
-		// Add assertions here to verify filter effects if possible
-		// For example, if using a scale filter, you might want to use ffprobe on the output stream
-		// to check its resolution. This is more advanced and might require a separate utility method.
+
 		StreamResolution resolution = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8");
 		assertNotNull("Could not get resolution for output stream: " + outputStreamId, resolution);
 		assertEquals("Output stream height does not match filter.", 480, resolution.height);
@@ -275,8 +272,6 @@ public class FilterPluginIntegrationTest {
 					});
 
 			Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> {
-				// adaptive m3u8 can be ..., streamId_adaptive.m3u8 or streamId.m3u8
-				// let's check streamId.m3u8 first then streamId_adaptive.m3u8
 				boolean playable = testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + ".m3u8", 0, false);
 				if (!playable) {
 					playable = testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8", 0, false);
@@ -287,7 +282,6 @@ public class FilterPluginIntegrationTest {
 			// The output resolution should be the resolution of the base stream (in1), which is 640x360
 			StreamResolution resolution = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8");
 			if (resolution == null) {
-				// Fallback if adaptive is not immediately available or if primary manifest is the one with resolution
 				resolution = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + ".m3u8");
 			}
 
@@ -379,19 +373,15 @@ public class FilterPluginIntegrationTest {
 			});
 			logger.info("Output stream 2 ({}) is playable.", outputStreamId2);
 
-			// Verify resolutions of output streams (should match the input 640x360 or the specified videoOutputHeight if scaling occurs)
-			// The input test_video_360p.flv is 640x360.
 			StreamResolution resolution1 = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId1 + "_adaptive.m3u8");
 			assertNotNull("Could not get resolution for output stream 1: " + outputStreamId1, resolution1);
 			assertEquals("Output stream 1 height does not match expected.", 360, resolution1.height);
-			// Width can vary with adaptive streaming, height is more reliable for basic check without specific scaling.
-			// assertEquals("Output stream 1 width does not match expected.", 640, resolution1.width);
+
 			logger.info("Verified output stream 1 resolution: {}x{}", resolution1.width, resolution1.height);
 
 			StreamResolution resolution2 = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId2 + "_adaptive.m3u8");
 			assertNotNull("Could not get resolution for output stream 2: " + outputStreamId2, resolution2);
 			assertEquals("Output stream 2 height does not match expected.", 360, resolution2.height);
-			// assertEquals("Output stream 2 width does not match expected.", 640, resolution2.width);
 			logger.info("Verified output stream 2 resolution: {}x{}", resolution2.width, resolution2.height);
 
 			// Cleanup: delete the filter
@@ -448,19 +438,13 @@ public class FilterPluginIntegrationTest {
 				assertTrue(codecpar.width() != 0);
 				assertTrue(codecpar.height() != 0);
 				assertTrue(codecpar.format() != AV_PIX_FMT_NONE);
-				// videoStartTimeMs = av_rescale_q(inputFormatContext.streams(i).start_time(), inputFormatContext.streams(i).time_base(), MuxAdaptor.TIME_BASE_FOR_MS); // Commenting out unused variable
-
-				// videoDuration = av_rescale_q(inputFormatContext.streams(i).duration(),  inputFormatContext.streams(i).time_base(), MuxAdaptor.TIME_BASE_FOR_MS); // Commenting out unused variable
-
 
 				videoExists = true;
 				streamExists = true;
 			} else if (codecpar.codec_type() == AVMEDIA_TYPE_AUDIO)
 			{
 				assertTrue(codecpar.sample_rate() != 0);
-				// audioStartTimeMs = av_rescale_q(inputFormatContext.streams(i).start_time(), inputFormatContext.streams(i).time_base(), MuxAdaptor.TIME_BASE_FOR_MS); // Commenting out unused variable
 
-				// audioDuration = av_rescale_q(inputFormatContext.streams(i).duration(),  inputFormatContext.streams(i).time_base(), MuxAdaptor.TIME_BASE_FOR_MS); // Commenting out unused variable
 				audioExists = true;
 				streamExists = true;
 			}
@@ -1101,9 +1085,6 @@ public class FilterPluginIntegrationTest {
 			}
 
 			Gson gson = new Gson();
-			// Parse the JSON output to find video stream dimensions
-			// This is a simplified parsing structure; might need to be more robust
-			// Example ffprobe JSON: { "streams": [ { "codec_type": "video", "width": 1280, "height": 720 }, ... ] }
 			com.google.gson.JsonObject jsonObject = gson.fromJson(output.toString(), com.google.gson.JsonObject.class);
 			com.google.gson.JsonArray streams = jsonObject.getAsJsonArray("streams");
 			for (com.google.gson.JsonElement streamElement : streams) {
@@ -1116,9 +1097,9 @@ public class FilterPluginIntegrationTest {
 			}
 		} catch (IOException | InterruptedException e) {
 			logger.error("Error getting stream resolution for URL: " + streamUrl, e);
-			Thread.currentThread().interrupt(); // Restore interruption status
+			Thread.currentThread().interrupt();
 		}
-		return null; // Return null if resolution can't be determined
+		return null; 
 	}
 
 } 
