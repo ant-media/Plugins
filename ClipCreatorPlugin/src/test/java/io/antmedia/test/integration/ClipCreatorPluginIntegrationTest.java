@@ -77,8 +77,8 @@ public class ClipCreatorPluginIntegrationTest {
 	private static String TEST_USER_EMAIL = "test@antmedia.io";
 	private static String TEST_USER_PASS = "05a671c66aefea124cc08b76ea6d30bb";
 	private static BasicCookieStore httpCookieStore;
-
-
+	
+	
 	private static  String DEFAULT_INSTALLATION_PATH = "/usr/local/antmedia/";
 	static {
 		String osName = System.getProperty("os.name", "").toLowerCase();
@@ -157,11 +157,9 @@ public class ClipCreatorPluginIntegrationTest {
 			ffprobePath = "/usr/local/bin/ffprobe";
 		}
 
-		try {
-			SERVER_ADDR =  InetAddress.getLocalHost().getHostAddress();
-		} catch (UnknownHostException e) {
-			e.printStackTrace();
-		}
+		
+			SERVER_ADDR = "127.0.0.1";
+		
 	}
 
 	@Test
@@ -807,7 +805,7 @@ public class ClipCreatorPluginIntegrationTest {
 	}
 
 	public static AppSettings callGetAppSettings(String appName) throws Exception {
-		String rootUrl = "http://" + InetAddress.getLocalHost().getHostAddress() + ":5080/rest/v2";
+		String rootUrl = "http://" + SERVER_ADDR + ":5080/rest/v2";
 
 		String url = rootUrl + "/applications/settings/" + appName;
 
@@ -832,7 +830,7 @@ public class ClipCreatorPluginIntegrationTest {
 	}
 
 	public static Result callisFirstLogin() throws Exception {
-		String rootUrl = "http://" + InetAddress.getLocalHost().getHostAddress() + ":5080/rest/v2";
+		String rootUrl = "http://" + SERVER_ADDR + ":5080/rest/v2";
 
 		String url = rootUrl + "/first-login-status";
 		HttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy()).build();
@@ -855,7 +853,7 @@ public class ClipCreatorPluginIntegrationTest {
 	}
 
 	public static Result callCreateInitialUser(User user) throws Exception {
-		String rootUrl = "http://" + InetAddress.getLocalHost().getHostAddress() + ":5080/rest/v2";
+		String rootUrl = "http://" + SERVER_ADDR + ":5080/rest/v2";
 
 
 		String url = rootUrl + "/users/initial";
@@ -878,7 +876,7 @@ public class ClipCreatorPluginIntegrationTest {
 	}
 
 	private static Result callAuthenticateUser(User user) throws Exception {
-		String rootUrl = "http://" + InetAddress.getLocalHost().getHostAddress() + ":5080/rest/v2";
+		String rootUrl = "http://" + SERVER_ADDR + ":5080/rest/v2";
 
 		String url = rootUrl + "/users/authenticate";
 		HttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy())
@@ -901,7 +899,7 @@ public class ClipCreatorPluginIntegrationTest {
 	}
 
 	public static Result callSetAppSettings(String appName, AppSettings appSettingsModel) throws Exception {
-		String rootUrl = "http://" + InetAddress.getLocalHost().getHostAddress() + ":5080/rest/v2";
+		String rootUrl = "http://" + SERVER_ADDR + ":5080/rest/v2";
 
 		String url = rootUrl + "/applications/settings/" + appName;
 		try (CloseableHttpClient client = HttpClients.custom().setRedirectStrategy(new LaxRedirectStrategy())
