@@ -203,7 +203,19 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			vertx.executeBlocking(() -> 
 			{
 				long endTime = System.currentTimeMillis();
-				vertx.setTimer(2100, (l) -> {
+				// Get TS segment duration from appSettings (hlsTime) and add 100ms
+				long segmentDurationMs = 2100; // default fallback
+				try {
+					String hlsTimeStr = appSettings.getHlsTime();
+					if (hlsTimeStr != null) {
+						logger.info("The HLS segment duration is:{}", hlsTimeStr);
+						double hlsTime = Double.parseDouble(hlsTimeStr);
+						segmentDurationMs = (long)(hlsTime * 1000) + 200;
+					}
+				} catch (Exception e) {
+					logger.warn("Could not parse hlsTime from appSettings, using default 2100ms", e);
+				}
+				vertx.setTimer(segmentDurationMs, (l) -> {
 					convertHlsToMp4(broadcast, true, endTime);
 				});
 
