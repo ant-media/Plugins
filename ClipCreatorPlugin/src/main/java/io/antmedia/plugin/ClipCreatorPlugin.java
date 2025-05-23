@@ -202,7 +202,23 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		{
 			vertx.executeBlocking(() -> 
 			{
-				convertHlsToMp4(broadcast, true);
+				long endTime = System.currentTimeMillis();
+				// Get TS segment duration from appSettings (hlsTime) and add 100ms
+				long segmentDurationMs = 2100; // default fallback
+				try {
+					String hlsTimeStr = appSettings.getHlsTime();
+					if (hlsTimeStr != null) {
+						logger.info("The HLS segment duration is:{}", hlsTimeStr);
+						double hlsTime = Double.parseDouble(hlsTimeStr);
+						segmentDurationMs = (long)(hlsTime * 1000) + 200;
+					}
+				} catch (Exception e) {
+					logger.warn("Could not parse hlsTime from appSettings, using default 2100ms", e);
+				}
+				vertx.setTimer(segmentDurationMs, (l) -> {
+					convertHlsToMp4(broadcast, true, endTime);
+				});
+
 				return null;
 			}, false);
 
@@ -285,8 +301,11 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		}
 		return null;
 	}
-
 	public synchronized Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime) {
+		return convertHlsToMp4(broadcast, updateLastMp4CreateTime, System.currentTimeMillis());
+	}
+
+	public synchronized Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime, long endTime) {
 
 		Mp4CreationResponse response = new Mp4CreationResponse();
 		String streamId = broadcast.getStreamId();
@@ -310,7 +329,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 		Long startTime = lastMp4CreateTimeMSForStream.get(streamId);
 
-		long endTime = System.currentTimeMillis();
 
 		if (startTime == null) {
 			startTime = endTime - (clipCreatorSettings.getMp4CreationIntervalSeconds() * 1000);
@@ -334,7 +352,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 			String mp4FilePath = m3u8File.getParentFile().getAbsolutePath() + File.separator + vodId + ".mp4";
 
-			if (ClipCreatorConverter.createMp4(tsFileListTextFile, mp4FilePath)) 
+			if (ClipCreatorConverter.createMp4(tsFileListTextFile, mp4FilePath, startTime, endTime)) 
 			{
 
 				File mp4File = new File(mp4FilePath);
@@ -626,7 +644,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			vertx.executeBlocking(() -> {
 				logger.info("stream finished for streamId:{}. It will create final recording", broadcast.getStreamId());
 
-				convertHlsToMp4(broadcast, true);
+				convertHlsToMp4(broadcast, true, System.currentTimeMillis());
 				lastMp4CreateTimeMSForStream.remove(broadcast.getStreamId());
 				return null;
 			}, false);
