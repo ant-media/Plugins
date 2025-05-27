@@ -26,7 +26,7 @@ fi
 
 echo -e "${YELLOW}📡 Starting test stream for ${TEST_DURATION} seconds...${NC}"
 echo -e "Stream ID: ${STREAM_ID}"
-echo -e "SRT Target: srt://127.0.0.1:${SRT_PORT}?streamid=${STREAM_ID}"
+echo -e "SRT Target: srt://127.0.0.1:${SRT_PORT}?streamid=WebRTCAppEE/${STREAM_ID}"
 echo ""
 
 # Create a simple test stream with metadata
@@ -38,7 +38,7 @@ ffmpeg -hide_banner -loglevel warning \
     -f mpegts \
     -metadata service_name="SCTE35 Quick Test" \
     -metadata service_provider="Ant Media Test" \
-    "srt://127.0.0.1:${SRT_PORT}?streamid=${STREAM_ID}&mode=caller" &
+    "srt://127.0.0.1:${SRT_PORT}?streamid=WebRTCAppEE/${STREAM_ID}&mode=caller" &
 
 FFMPEG_PID=$!
 

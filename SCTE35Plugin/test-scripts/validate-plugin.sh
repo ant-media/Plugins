@@ -69,7 +69,7 @@ check_log_pattern() {
         return $?
     else
         # Try common log locations
-        for log_path in "/opt/antmedia/log/antmedia.log" "/usr/local/antmedia/log/antmedia.log" "../../log/antmedia.log"; do
+        for log_path in "/opt/antmedia/log/ant-media-server.log" "/usr/local/antmedia/log/ant-media-server.log" "../../log/ant-media-server.log"; do
             if [ -f "$log_path" ]; then
                 grep -q "$pattern" "$log_path"
                 return $?
@@ -143,11 +143,10 @@ run_test "Can access broadcast list" \
          "make_request 'http://$AMS_HOST:$AMS_PORT/$AMS_APP/rest/v2/broadcasts/list/0/10' '200'" \
          "Should be able to access broadcast list via REST API"
 
-# Test 10: Check plugin-specific endpoints (if they exist)
-# Note: This assumes the plugin exposes REST endpoints
-run_test "Plugin REST endpoints accessible" \
-         "make_request 'http://$AMS_HOST:$AMS_PORT/$AMS_APP/rest/v2/plugins' '200' || make_request 'http://$AMS_HOST:$AMS_PORT/$AMS_APP/rest/v2/broadcasts' '200'" \
-         "Plugin or general REST endpoints should be accessible"
+# Test 10: Check basic REST API functionality
+run_test "Basic REST API accessible" \
+         "make_request 'http://$AMS_HOST:$AMS_PORT/$AMS_APP/rest/v2/broadcasts/count' '200'" \
+         "Basic REST API endpoints should be accessible"
 
 echo ""
 echo -e "${BLUE}========================================${NC}"

@@ -28,7 +28,7 @@ if ! command -v ffmpeg &> /dev/null; then
 fi
 
 echo -e "${YELLOW}Configuration:${NC}"
-echo -e "SRT Target: srt://${SRT_HOST}:${SRT_PORT}?streamid=${STREAM_ID}"
+echo -e "SRT Target: srt://${SRT_HOST}:${SRT_PORT}?streamid=WebRTCAppEE/${STREAM_ID}"
 echo -e "Duration: ${VIDEO_DURATION} seconds"
 echo -e "Segment Duration: ${SEGMENT_DURATION} seconds"
 echo ""
@@ -89,7 +89,7 @@ ffmpeg -f lavfi -i testsrc2=duration=${VIDEO_DURATION}:size=1280x720:rate=25 \
        -metadata service_name="SCTE35 Test Stream" \
        -metadata service_provider="Ant Media Test" \
        -t ${VIDEO_DURATION} \
-       "srt://${SRT_HOST}:${SRT_PORT}?streamid=${STREAM_ID}&mode=caller" \
+       "srt://${SRT_HOST}:${SRT_PORT}?streamid=WebRTCAppEE/${STREAM_ID}&mode=caller" \
        -y
 
 echo -e "${GREEN}Test stream completed!${NC}"
