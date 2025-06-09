@@ -1,7 +1,5 @@
 package io.antmedia.scte35;
 
-import java.nio.ByteBuffer;
-import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -25,6 +23,7 @@ public class SCTE35PacketListener implements IPacketListener {
     
     // SCTE-35 stream type identifier in MPEG-TS
     private static final int SCTE35_STREAM_TYPE = 0x86;
+    private static final int SCTE35_STREAM_ID = 0x06;
     
     private final String streamId;
     private final IAntMediaStreamHandler streamHandler;
@@ -56,8 +55,10 @@ public class SCTE35PacketListener implements IPacketListener {
     /**
      * Process data packets that may contain SCTE-35 information
      */
+    @Override
     public AVPacket onDataPacket(String streamId, AVPacket packet) {
         try {
+            logger.info("Processing SCTE-35 data for stream: {}", streamId);
             // Extract packet data
             byte[] data = new byte[packet.size()];
             packet.data().position(0).get(data, 0, data.length);
@@ -74,49 +75,100 @@ public class SCTE35PacketListener implements IPacketListener {
         return packet;
     }
 
+    // -----------------------------------------------------------
+    // Bit-level helper for parsing SCTE-35 binary payloads
+    // -----------------------------------------------------------
+    private static class BitReader {
+        private final byte[] data;
+        private int bytePos = 0;
+        private int bitPos = 0; // next bit index inside current byte (0-7)
+
+        BitReader(byte[] data) {
+            this.data = data;
+        }
+
+        public boolean readBit() {
+            if (bytePos >= data.length) {
+                throw new IndexOutOfBoundsException("Read past end of data");
+            }
+            boolean bit = ((data[bytePos] >> (7 - bitPos)) & 0x01) == 1;
+            bitPos++;
+            if (bitPos == 8) {
+                bitPos = 0;
+                bytePos++;
+            }
+            return bit;
+        }
+
+        public void skipBits(int n) {
+            for (int i = 0; i < n; i++) {
+                readBit();
+            }
+        }
+
+        public int readBits(int n) {
+            if (n > 32) {
+                throw new IllegalArgumentException("Cannot read more than 32 bits as int");
+            }
+            int value = 0;
+            for (int i = 0; i < n; i++) {
+                value = (value << 1) | (readBit() ? 1 : 0);
+            }
+            return value;
+        }
+
+        public long readBitsLong(int n) {
+            long value = 0;
+            for (int i = 0; i < n; i++) {
+                value = (value << 1) | (readBit() ? 1 : 0);
+            }
+            return value;
+        }
+    }
+
     /**
      * Parse SCTE-35 data from packet payload
      */
     private SCTE35Message parseSCTE35Data(byte[] data) {
-        if (data.length < 14) { // Minimum SCTE-35 message size
-            return null;
+        if (data == null || data.length < 14) {
+            return null; // Too short to be a valid SCTE-35 message
         }
 
         try {
-            ByteBuffer buffer = ByteBuffer.wrap(data);
-            
-            // Parse SCTE-35 header
-            int tableId = buffer.get() & 0xFF;
-            if (tableId != 0xFC) { // SCTE-35 table ID
+            BitReader reader = new BitReader(data);
+
+            int tableId = reader.readBits(8);
+            if (tableId != 0xFC) {
+                logger.warn("Not an SCTE-35 table (id={})", tableId);
                 return null;
             }
 
-            // Skip section syntax indicator, private indicator, reserved bits
-            int sectionLength = buffer.getShort() & 0x0FFF;
-            
-            // Protocol version
-            int protocolVersion = buffer.get() & 0xFF;
+            reader.skipBits(4);                 // section_syntax_indicator, private_indicator, reserved
+            int sectionLength = reader.readBits(12);
+
+            int protocolVersion = reader.readBits(8);
             if (protocolVersion != 0) {
                 logger.warn("Unsupported SCTE-35 protocol version: {}", protocolVersion);
                 return null;
             }
 
-            // Encrypted packet, encryption algorithm, PTS adjustment
-            int encryptedPacket = buffer.get() & 0xFF;
-            long ptsAdjustment = buffer.getLong() & 0x1FFFFFFFFL;
-            
-            // CW index, tier, splice command length
-            int cwIndex = buffer.get() & 0xFF;
-            int tier = (buffer.getShort() & 0x0FFF);
-            int spliceCommandLength = buffer.getShort() & 0x0FFF;
-            
-            // Splice command type
-            int spliceCommandType = buffer.get() & 0xFF;
-            
-            return parseSpliceCommand(buffer, spliceCommandType, spliceCommandLength, ptsAdjustment);
-            
+            boolean encryptedPacket = reader.readBit();
+            int encryptionAlgorithm = reader.readBits(6);
+            long ptsAdjustment = reader.readBitsLong(33);
+            logger.info("Pts adjustment: {}", ptsAdjustment);
+
+            int cwIndex = reader.readBits(8);
+            int tier = reader.readBits(12);
+            int spliceCommandLength = reader.readBits(12);
+            int spliceCommandType = reader.readBits(8);
+
+            logger.info("Splice command type: {}", spliceCommandType);
+            logger.info("Splice command length: {}", spliceCommandLength);
+
+            SCTE35Message message = parseSpliceCommand(reader, spliceCommandType, spliceCommandLength, ptsAdjustment);
+            return message;
         } catch (Exception e) {
-            logger.error("Error parsing SCTE-35 data: {}", e.getMessage());
+            logger.error("Error parsing SCTE-35 data: {}", e.toString());
             return null;
         }
     }
@@ -124,14 +176,17 @@ public class SCTE35PacketListener implements IPacketListener {
     /**
      * Parse specific splice command types
      */
-    private SCTE35Message parseSpliceCommand(ByteBuffer buffer, int commandType, int commandLength, long ptsAdjustment) {
+    private SCTE35Message parseSpliceCommand(BitReader reader, int commandType, int commandLength, long ptsAdjustment) {
+        logger.info("Parsing splice command: type={}, length={}, ptsAdjustment={}", commandType, commandLength, ptsAdjustment);
         switch (commandType) {
             case 0x05: // splice_insert
-                return parseSpliceInsert(buffer, ptsAdjustment);
+                return parseSpliceInsert(reader, ptsAdjustment);
             case 0x06: // time_signal
-                return parseTimeSignal(buffer, ptsAdjustment);
+                return parseTimeSignal(reader, ptsAdjustment);
             default:
-                logger.debug("Unsupported SCTE-35 command type: {}", commandType);
+                // Skip unknown command payload
+                reader.skipBits(commandLength * 8);
+                logger.warn("Unsupported SCTE-35 command type: {}", commandType);
                 return null;
         }
     }
@@ -139,44 +194,58 @@ public class SCTE35PacketListener implements IPacketListener {
     /**
      * Parse splice_insert command
      */
-    private SCTE35Message parseSpliceInsert(ByteBuffer buffer, long ptsAdjustment) {
+    private SCTE35Message parseSpliceInsert(BitReader reader, long ptsAdjustment) {
         try {
-            int spliceEventId = buffer.getInt();
-            int spliceEventCancelIndicator = (buffer.get() & 0x80) >> 7;
-            
-            if (spliceEventCancelIndicator == 1) {
-                // Event cancellation
+            logger.info("Parsing splice insert");
+            int spliceEventId = (int) reader.readBitsLong(32);
+            boolean spliceEventCancelIndicator = reader.readBit();
+            reader.skipBits(7);
+
+            if (spliceEventCancelIndicator) {
                 return new SCTE35Message(SCTE35Message.Type.SPLICE_INSERT_CANCEL, spliceEventId, -1, -1, false);
             }
 
-            int outOfNetworkIndicator = (buffer.get(-1) & 0x40) >> 6;
-            int programSpliceFlag = (buffer.get(-1) & 0x20) >> 5;
-            int durationFlag = (buffer.get(-1) & 0x10) >> 4;
-            int spliceImmediateFlag = (buffer.get(-1) & 0x08) >> 3;
-            
+            boolean outOfNetworkIndicator = reader.readBit();
+            boolean programSpliceFlag = reader.readBit();
+            boolean durationFlag = reader.readBit();
+            boolean spliceImmediateFlag = reader.readBit();
+            reader.skipBits(4);
+
             long spliceTime = -1;
             long breakDuration = -1;
-            
-            // Parse splice time if not immediate
-            if (spliceImmediateFlag == 0) {
-                int timeSpecifiedFlag = (buffer.get() & 0x80) >> 7;
-                if (timeSpecifiedFlag == 1) {
-                    spliceTime = buffer.getLong() & 0x1FFFFFFFFL;
-                    spliceTime += ptsAdjustment;
+
+            // Read splice time when needed
+            if (programSpliceFlag && !spliceImmediateFlag) {
+                boolean timeSpecifiedFlag = reader.readBit();
+                reader.skipBits(6);
+                if (timeSpecifiedFlag) {
+                    spliceTime = reader.readBitsLong(33) + ptsAdjustment;
+                }
+            } else if (!programSpliceFlag) {
+                int componentCount = reader.readBits(8);
+                for (int i = 0; i < componentCount; i++) {
+                    reader.skipBits(8); // component_tag
+                    boolean timeSpecifiedFlag = reader.readBit();
+                    reader.skipBits(6);
+                    if (timeSpecifiedFlag) {
+                        reader.skipBits(33); // pts_time (we ignore per-component timing)
+                    }
                 }
             }
-            
-            // Parse break duration if present
-            if (durationFlag == 1) {
-                int autoReturn = (buffer.get() & 0x80) >> 7;
-                breakDuration = buffer.getLong() & 0x1FFFFFFFFL;
+
+            // Read break duration if present
+            if (durationFlag) {
+                boolean autoReturn = reader.readBit();
+                reader.skipBits(6);
+                breakDuration = reader.readBitsLong(33);
             }
-            
-            boolean isOut = outOfNetworkIndicator == 1;
-            SCTE35Message.Type type = isOut ? SCTE35Message.Type.CUE_OUT : SCTE35Message.Type.CUE_IN;
-            
-            return new SCTE35Message(type, spliceEventId, spliceTime, breakDuration, spliceImmediateFlag == 1);
-            
+
+            // Skip unique_program_id, avail_num, avails_expected
+            reader.skipBits(16 + 8 + 8);
+
+            SCTE35Message.Type type = outOfNetworkIndicator ? SCTE35Message.Type.CUE_OUT : SCTE35Message.Type.CUE_IN;
+            logger.info("Splice insert parsed: type={}, eventId={}, spliceTime={}, breakDuration={}, immediate={}", type, spliceEventId, spliceTime, breakDuration, spliceImmediateFlag);
+            return new SCTE35Message(type, spliceEventId, spliceTime, breakDuration, spliceImmediateFlag);
         } catch (Exception e) {
             logger.error("Error parsing splice_insert: {}", e.getMessage());
             return null;
@@ -186,18 +255,18 @@ public class SCTE35PacketListener implements IPacketListener {
     /**
      * Parse time_signal command (simplified)
      */
-    private SCTE35Message parseTimeSignal(ByteBuffer buffer, long ptsAdjustment) {
+    private SCTE35Message parseTimeSignal(BitReader reader, long ptsAdjustment) {
         try {
-            int timeSpecifiedFlag = (buffer.get() & 0x80) >> 7;
+            logger.info("Parsing time signal");
+            boolean timeSpecifiedFlag = reader.readBit();
+            reader.skipBits(6);
             long spliceTime = -1;
-            
-            if (timeSpecifiedFlag == 1) {
-                spliceTime = buffer.getLong() & 0x1FFFFFFFFL;
-                spliceTime += ptsAdjustment;
+
+            if (timeSpecifiedFlag) {
+                spliceTime = reader.readBitsLong(33) + ptsAdjustment;
             }
-            
+            logger.info("Time signal parsed: spliceTime={}", spliceTime);
             return new SCTE35Message(SCTE35Message.Type.TIME_SIGNAL, -1, spliceTime, -1, false);
-            
         } catch (Exception e) {
             logger.error("Error parsing time_signal: {}", e.getMessage());
             return null;

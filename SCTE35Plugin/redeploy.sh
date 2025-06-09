@@ -4,7 +4,7 @@
 # This script builds and deploys the SCTE-35 plugin to your local Ant Media Server installation
 
 # Configuration - Update these paths according to your setup
-AMS_DIR=/usr/local/antmedia
+AMS_DIR=~/sofwares/ant-media-server
 PLUGIN_NAME="ant-media-scte35-plugin"
 
 # Colors for output
