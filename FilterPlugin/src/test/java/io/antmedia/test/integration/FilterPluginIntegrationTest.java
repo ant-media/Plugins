@@ -400,6 +400,447 @@ public class FilterPluginIntegrationTest {
 		}
 	}
 
+	@Test
+	public void testMovieLogoFilter() throws Exception {
+		String inputStreamId = "inputStream_logo_" + RandomStringUtils.randomAlphanumeric(5);
+		String outputStreamId = "outputStream_logo_" + RandomStringUtils.randomAlphanumeric(5);
+
+		FilterConfiguration filterConfig = new FilterConfiguration();
+		filterConfig.setFilterId("logoFilter_" + RandomStringUtils.randomAlphanumeric(5));
+		filterConfig.setInputStreams(List.of(inputStreamId));
+		filterConfig.setOutputStreams(List.of(outputStreamId));
+		// Use a simple colored rectangle as logo since we can't assume logo files exist
+		filterConfig.setVideoFilter("color=red:size=100x50[logo];[in0][logo]overlay=W-w-10:10[out0]");
+		filterConfig.setAudioFilter("[in0]acopy[out0]");
+		filterConfig.setType(FilterConfiguration.ASYNCHRONOUS);
+		filterConfig.setVideoEnabled(true);
+		filterConfig.setAudioEnabled(true);
+		filterConfig.setVideoOutputHeight(360);
+
+		//send the stream to the input stream ID
+		rtmpSendingProcess = execute(ffmpegPath
+				+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+				+ inputStreamId);
+
+		//check that the input stream is publishing
+		Awaitility.await().atMost(15, TimeUnit.SECONDS)
+		.pollInterval(1, TimeUnit.SECONDS)
+		.until(() -> {
+			Broadcast broadcast = getBroadcast(inputStreamId);
+			return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+		});
+		logger.info("Input stream {} is broadcasting.", inputStreamId);
+
+		Result creationResult = callCreateFilter(filterConfig);
+		assertTrue("Filter creation failed: " + creationResult.getMessage(), creationResult.isSuccess());
+		String createdFilterId = creationResult.getDataId();
+		assertNotNull(createdFilterId);
+
+		//check that the output stream is also broadcasting and playable
+		Awaitility.await().atMost(20, TimeUnit.SECONDS)
+		.pollInterval(1, TimeUnit.SECONDS)
+		.until(() -> {
+			Broadcast broadcast = getBroadcast(outputStreamId);
+			logger.info("Output stream {} status: {}", outputStreamId, broadcast != null ? broadcast.getStatus() : "null");
+			return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+		});
+
+		Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> {
+			return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8", 0, false);
+		});
+
+		StreamResolution resolution = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8");
+		assertNotNull("Could not get resolution for output stream: " + outputStreamId, resolution);
+		assertEquals("Output stream height does not match expected.", 360, resolution.height);
+		logger.info("Verified logo overlay output stream resolution: {}x{}", resolution.width, resolution.height);
+
+		// Cleanup: delete the filter
+		Result deleteResult = callDeleteFilter(createdFilterId);
+		assertTrue("Filter deletion failed: " + deleteResult.getMessage(), deleteResult.isSuccess());
+	}
+
+	@Test
+	public void testTextFilter() throws Exception {
+		String inputStreamId = "inputStream_text_" + RandomStringUtils.randomAlphanumeric(5);
+		String outputStreamId = "outputStream_text_" + RandomStringUtils.randomAlphanumeric(5);
+
+		FilterConfiguration filterConfig = new FilterConfiguration();
+		filterConfig.setFilterId("textFilter_" + RandomStringUtils.randomAlphanumeric(5));
+		filterConfig.setInputStreams(List.of(inputStreamId));
+		filterConfig.setOutputStreams(List.of(outputStreamId));
+		// Use basic drawtext without specific font file to ensure compatibility
+		filterConfig.setVideoFilter("[in0]drawtext=fontsize=24:fontcolor=white:text='Test Stream':x=10:y=10[out0]");
+		filterConfig.setAudioFilter("[in0]acopy[out0]");
+		filterConfig.setType(FilterConfiguration.ASYNCHRONOUS);
+		filterConfig.setVideoEnabled(true);
+		filterConfig.setAudioEnabled(true);
+		filterConfig.setVideoOutputHeight(360);
+
+		//send the stream to the input stream ID
+		rtmpSendingProcess = execute(ffmpegPath
+				+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+				+ inputStreamId);
+
+		//check that the input stream is publishing
+		Awaitility.await().atMost(15, TimeUnit.SECONDS)
+		.pollInterval(1, TimeUnit.SECONDS)
+		.until(() -> {
+			Broadcast broadcast = getBroadcast(inputStreamId);
+			return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+		});
+		logger.info("Input stream {} is broadcasting.", inputStreamId);
+
+		Result creationResult = callCreateFilter(filterConfig);
+		assertTrue("Filter creation failed: " + creationResult.getMessage(), creationResult.isSuccess());
+		String createdFilterId = creationResult.getDataId();
+		assertNotNull(createdFilterId);
+
+		//check that the output stream is also broadcasting and playable
+		Awaitility.await().atMost(20, TimeUnit.SECONDS)
+		.pollInterval(1, TimeUnit.SECONDS)
+		.until(() -> {
+			Broadcast broadcast = getBroadcast(outputStreamId);
+			logger.info("Output stream {} status: {}", outputStreamId, broadcast != null ? broadcast.getStatus() : "null");
+			return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+		});
+
+		Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> {
+			return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8", 0, false);
+		});
+
+		StreamResolution resolution = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8");
+		assertNotNull("Could not get resolution for output stream: " + outputStreamId, resolution);
+		assertEquals("Output stream height does not match expected.", 360, resolution.height);
+		logger.info("Verified text overlay output stream resolution: {}x{}", resolution.width, resolution.height);
+
+		// Cleanup: delete the filter
+		Result deleteResult = callDeleteFilter(createdFilterId);
+		assertTrue("Filter deletion failed: " + deleteResult.getMessage(), deleteResult.isSuccess());
+	}
+
+	@Test
+	public void testVStackFilter() throws Exception {
+		List<Process> ffmpegProcesses = new java.util.ArrayList<>();
+		String inputStreamId1 = "inputStream1_vstack_" + RandomStringUtils.randomAlphanumeric(5);
+		String inputStreamId2 = "inputStream2_vstack_" + RandomStringUtils.randomAlphanumeric(5);
+		String outputStreamId = "outputStream_vstack_" + RandomStringUtils.randomAlphanumeric(5);
+
+		try {
+			FilterConfiguration filterConfig = new FilterConfiguration();
+			filterConfig.setFilterId("vstackFilter_" + RandomStringUtils.randomAlphanumeric(5));
+			filterConfig.setInputStreams(List.of(inputStreamId1, inputStreamId2));
+			filterConfig.setOutputStreams(List.of(outputStreamId));
+			filterConfig.setVideoFilter("[in0]scale=360:240[s0];[in1]scale=360:240[s1];[s0][s1]vstack=inputs=2[out0]");
+			filterConfig.setAudioFilter("[in0][in1]amix=inputs=2[out0]");
+			filterConfig.setType(FilterConfiguration.ASYNCHRONOUS);
+			filterConfig.setVideoEnabled(true);
+			filterConfig.setAudioEnabled(true);
+			filterConfig.setVideoOutputHeight(480); // 240 + 240 = 480
+
+			// Start publishing to input streams
+			Process rtmpSendingProcess1 = execute(ffmpegPath
+					+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+					+ inputStreamId1);
+			ffmpegProcesses.add(rtmpSendingProcess1);
+
+			Process rtmpSendingProcess2 = execute(ffmpegPath
+					+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+					+ inputStreamId2);
+			ffmpegProcesses.add(rtmpSendingProcess2);
+
+			// Check that input streams are publishing
+			Awaitility.await().atMost(15, TimeUnit.SECONDS)
+					.pollInterval(1, TimeUnit.SECONDS)
+					.until(() -> {
+						Broadcast broadcast1 = getBroadcast(inputStreamId1);
+						Broadcast broadcast2 = getBroadcast(inputStreamId2);
+						return broadcast1 != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast1.getStatus()) &&
+								broadcast2 != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast2.getStatus());
+					});
+			logger.info("Input streams {} and {} are broadcasting.", inputStreamId1, inputStreamId2);
+
+			Result creationResult = callCreateFilter(filterConfig);
+			assertTrue("Filter creation failed: " + creationResult.getMessage(), creationResult.isSuccess());
+			String createdFilterId = creationResult.getDataId();
+			assertNotNull(createdFilterId);
+
+			//check that the output stream is also broadcasting and playable
+			Awaitility.await().atMost(20, TimeUnit.SECONDS)
+					.pollInterval(1, TimeUnit.SECONDS)
+					.until(() -> {
+						Broadcast broadcast = getBroadcast(outputStreamId);
+						logger.info("Output stream {} status: {}", outputStreamId, broadcast != null ? broadcast.getStatus() : "null");
+						return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+					});
+
+			Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> {
+				return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8", 0, false);
+			});
+
+			StreamResolution resolution = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8");
+			assertNotNull("Could not get resolution for output stream: " + outputStreamId, resolution);
+			assertEquals("Output stream height does not match vstack expected height.", 480, resolution.height);
+			assertEquals("Output stream width does not match expected.", 360, resolution.width);
+			logger.info("Verified vstack output stream resolution: {}x{}", resolution.width, resolution.height);
+
+			// Cleanup: delete the filter
+			Result deleteResult = callDeleteFilter(createdFilterId);
+			assertTrue("Filter deletion failed: " + deleteResult.getMessage(), deleteResult.isSuccess());
+		} finally {
+			for (Process proc : ffmpegProcesses) {
+				if (proc != null && proc.isAlive()) {
+					proc.destroy();
+					proc.waitFor(5, TimeUnit.SECONDS);
+					if (proc.isAlive()) {
+						proc.destroyForcibly();
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	public void testHStackFilter() throws Exception {
+		List<Process> ffmpegProcesses = new java.util.ArrayList<>();
+		String inputStreamId1 = "inputStream1_hstack_" + RandomStringUtils.randomAlphanumeric(5);
+		String inputStreamId2 = "inputStream2_hstack_" + RandomStringUtils.randomAlphanumeric(5);
+		String outputStreamId = "outputStream_hstack_" + RandomStringUtils.randomAlphanumeric(5);
+
+		try {
+			FilterConfiguration filterConfig = new FilterConfiguration();
+			filterConfig.setFilterId("hstackFilter_" + RandomStringUtils.randomAlphanumeric(5));
+			filterConfig.setInputStreams(List.of(inputStreamId1, inputStreamId2));
+			filterConfig.setOutputStreams(List.of(outputStreamId));
+			filterConfig.setVideoFilter("[in0]scale=320:240[s0];[in1]scale=320:240[s1];[s0][s1]hstack=inputs=2[out0]");
+			filterConfig.setAudioFilter("[in0][in1]amix=inputs=2[out0]");
+			filterConfig.setType(FilterConfiguration.ASYNCHRONOUS);
+			filterConfig.setVideoEnabled(true);
+			filterConfig.setAudioEnabled(true);
+			filterConfig.setVideoOutputHeight(240);
+
+			// Start publishing to input streams
+			Process rtmpSendingProcess1 = execute(ffmpegPath
+					+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+					+ inputStreamId1);
+			ffmpegProcesses.add(rtmpSendingProcess1);
+
+			Process rtmpSendingProcess2 = execute(ffmpegPath
+					+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+					+ inputStreamId2);
+			ffmpegProcesses.add(rtmpSendingProcess2);
+
+			// Check that input streams are publishing
+			Awaitility.await().atMost(15, TimeUnit.SECONDS)
+					.pollInterval(1, TimeUnit.SECONDS)
+					.until(() -> {
+						Broadcast broadcast1 = getBroadcast(inputStreamId1);
+						Broadcast broadcast2 = getBroadcast(inputStreamId2);
+						return broadcast1 != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast1.getStatus()) &&
+								broadcast2 != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast2.getStatus());
+					});
+			logger.info("Input streams {} and {} are broadcasting.", inputStreamId1, inputStreamId2);
+
+			Result creationResult = callCreateFilter(filterConfig);
+			assertTrue("Filter creation failed: " + creationResult.getMessage(), creationResult.isSuccess());
+			String createdFilterId = creationResult.getDataId();
+			assertNotNull(createdFilterId);
+
+			//check that the output stream is also broadcasting and playable
+			Awaitility.await().atMost(20, TimeUnit.SECONDS)
+					.pollInterval(1, TimeUnit.SECONDS)
+					.until(() -> {
+						Broadcast broadcast = getBroadcast(outputStreamId);
+						logger.info("Output stream {} status: {}", outputStreamId, broadcast != null ? broadcast.getStatus() : "null");
+						return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+					});
+
+			Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> {
+				return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8", 0, false);
+			});
+
+			StreamResolution resolution = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8");
+			assertNotNull("Could not get resolution for output stream: " + outputStreamId, resolution);
+			assertEquals("Output stream height does not match expected.", 240, resolution.height);
+			assertEquals("Output stream width does not match hstack expected width.", 640, resolution.width); // 320 + 320 = 640
+			logger.info("Verified hstack output stream resolution: {}x{}", resolution.width, resolution.height);
+
+			// Cleanup: delete the filter
+			Result deleteResult = callDeleteFilter(createdFilterId);
+			assertTrue("Filter deletion failed: " + deleteResult.getMessage(), deleteResult.isSuccess());
+		} finally {
+			for (Process proc : ffmpegProcesses) {
+				if (proc != null && proc.isAlive()) {
+					proc.destroy();
+					proc.waitFor(5, TimeUnit.SECONDS);
+					if (proc.isAlive()) {
+						proc.destroyForcibly();
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	public void testGreenBackgroundReplacementFilter() throws Exception {
+		List<Process> ffmpegProcesses = new java.util.ArrayList<>();
+		String inputStreamId1 = "inputStream1_green_" + RandomStringUtils.randomAlphanumeric(5);
+		String inputStreamId2 = "inputStream2_green_" + RandomStringUtils.randomAlphanumeric(5);
+		String outputStreamId = "outputStream_green_" + RandomStringUtils.randomAlphanumeric(5);
+
+		try {
+			FilterConfiguration filterConfig = new FilterConfiguration();
+			filterConfig.setFilterId("greenReplacementFilter_" + RandomStringUtils.randomAlphanumeric(5));
+			filterConfig.setInputStreams(List.of(inputStreamId1, inputStreamId2));
+			filterConfig.setOutputStreams(List.of(outputStreamId));
+			filterConfig.setVideoFilter("[in0]scale=640:360[s0];[s0]colorkey=0x00ff00:0.3:0.2[ck0];[in1]scale=640:360[s1];[s1][ck0]overlay[out0]");
+			filterConfig.setAudioFilter("[in0][in1]amix=inputs=2[out0]");
+			filterConfig.setType(FilterConfiguration.ASYNCHRONOUS);
+			filterConfig.setVideoEnabled(true);
+			filterConfig.setAudioEnabled(true);
+			filterConfig.setVideoOutputHeight(360);
+
+			// Start publishing to input streams
+			Process rtmpSendingProcess1 = execute(ffmpegPath
+					+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+					+ inputStreamId1);
+			ffmpegProcesses.add(rtmpSendingProcess1);
+
+			Process rtmpSendingProcess2 = execute(ffmpegPath
+					+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+					+ inputStreamId2);
+			ffmpegProcesses.add(rtmpSendingProcess2);
+
+			// Check that input streams are publishing
+			Awaitility.await().atMost(15, TimeUnit.SECONDS)
+					.pollInterval(1, TimeUnit.SECONDS)
+					.until(() -> {
+						Broadcast broadcast1 = getBroadcast(inputStreamId1);
+						Broadcast broadcast2 = getBroadcast(inputStreamId2);
+						return broadcast1 != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast1.getStatus()) &&
+								broadcast2 != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast2.getStatus());
+					});
+			logger.info("Input streams {} and {} are broadcasting.", inputStreamId1, inputStreamId2);
+
+			Result creationResult = callCreateFilter(filterConfig);
+			assertTrue("Filter creation failed: " + creationResult.getMessage(), creationResult.isSuccess());
+			String createdFilterId = creationResult.getDataId();
+			assertNotNull(createdFilterId);
+
+			//check that the output stream is also broadcasting and playable
+			Awaitility.await().atMost(20, TimeUnit.SECONDS)
+					.pollInterval(1, TimeUnit.SECONDS)
+					.until(() -> {
+						Broadcast broadcast = getBroadcast(outputStreamId);
+						logger.info("Output stream {} status: {}", outputStreamId, broadcast != null ? broadcast.getStatus() : "null");
+						return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+					});
+
+			Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> {
+				return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8", 0, false);
+			});
+
+			StreamResolution resolution = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8");
+			assertNotNull("Could not get resolution for output stream: " + outputStreamId, resolution);
+			assertEquals("Output stream resolution does not match expected.", 360, resolution.height);
+			assertEquals("Output stream width does not match expected.", 640, resolution.width);
+			logger.info("Verified green background replacement output stream resolution: {}x{}", resolution.width, resolution.height);
+
+			// Cleanup: delete the filter
+			Result deleteResult = callDeleteFilter(createdFilterId);
+			assertTrue("Filter deletion failed: " + deleteResult.getMessage(), deleteResult.isSuccess());
+		} finally {
+			for (Process proc : ffmpegProcesses) {
+				if (proc != null && proc.isAlive()) {
+					proc.destroy();
+					proc.waitFor(5, TimeUnit.SECONDS);
+					if (proc.isAlive()) {
+						proc.destroyForcibly();
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	public void testMergingVideoAudioFilter() throws Exception {
+		List<Process> ffmpegProcesses = new java.util.ArrayList<>();
+		String inputStreamId1 = "inputStream1_merge_" + RandomStringUtils.randomAlphanumeric(5);
+		String inputStreamId2 = "inputStream2_merge_" + RandomStringUtils.randomAlphanumeric(5);
+		String outputStreamId = "outputStream_merge_" + RandomStringUtils.randomAlphanumeric(5);
+
+		try {
+			FilterConfiguration filterConfig = new FilterConfiguration();
+			filterConfig.setFilterId("mergeFilter_" + RandomStringUtils.randomAlphanumeric(5));
+			filterConfig.setInputStreams(List.of(inputStreamId1, inputStreamId2));
+			filterConfig.setOutputStreams(List.of(outputStreamId));
+			filterConfig.setVideoFilter("[in0]copy[out0]"); // Take video from first stream
+			filterConfig.setAudioFilter("[in1]acopy[out0]"); // Take audio from second stream
+			filterConfig.setType(FilterConfiguration.ASYNCHRONOUS);
+			filterConfig.setVideoEnabled(true);
+			filterConfig.setAudioEnabled(true);
+			filterConfig.setVideoOutputHeight(360);
+
+			// Start publishing to input streams
+			Process rtmpSendingProcess1 = execute(ffmpegPath
+					+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+					+ inputStreamId1);
+			ffmpegProcesses.add(rtmpSendingProcess1);
+
+			Process rtmpSendingProcess2 = execute(ffmpegPath
+					+ " -re -i src/test/resources/test_video_360p.flv -codec copy -f flv rtmp://localhost/LiveApp/"
+					+ inputStreamId2);
+			ffmpegProcesses.add(rtmpSendingProcess2);
+
+			// Check that input streams are publishing
+			Awaitility.await().atMost(15, TimeUnit.SECONDS)
+					.pollInterval(1, TimeUnit.SECONDS)
+					.until(() -> {
+						Broadcast broadcast1 = getBroadcast(inputStreamId1);
+						Broadcast broadcast2 = getBroadcast(inputStreamId2);
+						return broadcast1 != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast1.getStatus()) &&
+								broadcast2 != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast2.getStatus());
+					});
+			logger.info("Input streams {} and {} are broadcasting.", inputStreamId1, inputStreamId2);
+
+			Result creationResult = callCreateFilter(filterConfig);
+			assertTrue("Filter creation failed: " + creationResult.getMessage(), creationResult.isSuccess());
+			String createdFilterId = creationResult.getDataId();
+			assertNotNull(createdFilterId);
+
+			//check that the output stream is also broadcasting and playable
+			Awaitility.await().atMost(20, TimeUnit.SECONDS)
+					.pollInterval(1, TimeUnit.SECONDS)
+					.until(() -> {
+						Broadcast broadcast = getBroadcast(outputStreamId);
+						logger.info("Output stream {} status: {}", outputStreamId, broadcast != null ? broadcast.getStatus() : "null");
+						return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+					});
+
+			Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> {
+				return testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8", 0, false);
+			});
+
+			StreamResolution resolution = getStreamResolution("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + outputStreamId + "_adaptive.m3u8");
+			assertNotNull("Could not get resolution for output stream: " + outputStreamId, resolution);
+			assertEquals("Output stream height does not match expected.", 360, resolution.height);
+			logger.info("Verified merged video/audio output stream resolution: {}x{}", resolution.width, resolution.height);
+
+			// Cleanup: delete the filter
+			Result deleteResult = callDeleteFilter(createdFilterId);
+			assertTrue("Filter deletion failed: " + deleteResult.getMessage(), deleteResult.isSuccess());
+		} finally {
+			for (Process proc : ffmpegProcesses) {
+				if (proc != null && proc.isAlive()) {
+					proc.destroy();
+					proc.waitFor(5, TimeUnit.SECONDS);
+					if (proc.isAlive()) {
+						proc.destroyForcibly();
+					}
+				}
+			}
+		}
+	}
+
 	public static boolean testFile(String absolutePath, int expectedDurationInMS, boolean fullRead) {
 		int ret;
 		audioExists = false;
