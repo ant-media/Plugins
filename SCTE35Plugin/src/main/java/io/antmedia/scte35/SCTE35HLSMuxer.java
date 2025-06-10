@@ -34,10 +34,12 @@ public class SCTE35HLSMuxer extends HLSMuxer {
     private static final Logger logger = LoggerFactory.getLogger(SCTE35HLSMuxer.class);
     
     // SCTE-35 related fields
-    private boolean scte35Enabled = false;
+    private boolean scte35Enabled = true;
     private final ConcurrentMap<Integer, SCTE35CueState> activeCues = new ConcurrentHashMap<>();
     private long currentSegmentStartTime = 0;
     private int segmentSequence = 0;
+    // Timer id for periodic CUE-OUT-CONT updates
+    private long cueContTimerId = -1;
     
     // HLS tag types for SCTE-35
     public enum SCTE35TagType {
@@ -54,17 +56,19 @@ public class SCTE35HLSMuxer extends HLSMuxer {
      */
     private static class SCTE35CueState {
         final int eventId;
-        final long startTime;
+        final long startPts;
         final long duration;
         final boolean isCueOut;
         final String base64Data;
+        final long wallClockStartMs; // when we injected CUE-OUT (system time)
         
-        SCTE35CueState(int eventId, long startTime, long duration, boolean isCueOut, String base64Data) {
+        SCTE35CueState(int eventId, long startPts, long duration, boolean isCueOut, String base64Data) {
             this.eventId = eventId;
-            this.startTime = startTime;
+            this.startPts = startPts;
             this.duration = duration;
             this.isCueOut = isCueOut;
             this.base64Data = base64Data;
+            this.wallClockStartMs = System.currentTimeMillis();
         }
     }
 
@@ -88,11 +92,13 @@ public class SCTE35HLSMuxer extends HLSMuxer {
     public void disableSCTE35() {
         this.scte35Enabled = false;
         this.activeCues.clear();
+        stopCueContTimerIfNeeded();
         logger.info("SCTE-35 support disabled for stream {}", streamId);
     }
 
     @Override
     public synchronized void writeMetaData(String data, long dts) {
+        logger.info("writeMetaData: data: {}, dts: {}", data, dts);
         // Check if this is SCTE-35 metadata
         if (scte35Enabled && isSCTE35Metadata(data)) {
             handleSCTE35Metadata(data, dts);
@@ -109,6 +115,7 @@ public class SCTE35HLSMuxer extends HLSMuxer {
         try {
             JSONParser parser = new JSONParser();
             JSONObject json = (JSONObject) parser.parse(data);
+            logger.info("isSCTE35Metadata: json: {}", json);
             return "scte35".equals(json.get("type"));
         } catch (Exception e) {
             return false;
@@ -127,26 +134,37 @@ public class SCTE35HLSMuxer extends HLSMuxer {
             long pts = (Long) json.get("pts");
             boolean isCueOut = (Boolean) json.get("isCueOut");
             Long duration = (Long) json.get("duration");
+
+            logger.info("handleSCTE35Metadata: eventId: {}, pts: {}, isCueOut: {}, duration: {}", eventId, pts, isCueOut, duration);
             
             if (isCueOut) {
+                logger.info("handleSCTE35Metadata: CUE-OUT");
                 // Handle CUE-OUT
                 long cueOutDuration = duration != null ? duration : -1;
                 String base64Data = generateSCTE35Base64(eventId, pts, cueOutDuration, true);
-                
+                logger.info("handleSCTE35Metadata: base64Data: {}, eventId: {}, pts: {}, cueOutDuration: {}", base64Data, eventId, pts, cueOutDuration);
+
                 SCTE35CueState cueState = new SCTE35CueState(eventId, pts, cueOutDuration, true, base64Data);
                 activeCues.put(eventId, cueState);
+
+                startCueContTimerIfNeeded();
                 
                 injectCueOutTag(cueState);
                 logger.info("SCTE-35 CUE-OUT injected for stream {}: eventId={}, duration={}", streamId, eventId, cueOutDuration);
                 
             } else {
                 // Handle CUE-IN
+                logger.info("handleSCTE35Metadata: CUE-IN");
                 SCTE35CueState cueState = activeCues.remove(eventId);
                 if (cueState != null) {
                     String base64Data = generateSCTE35Base64(eventId, pts, -1, false);
+                    logger.info("handleSCTE35Metadata: base64Data: {}, eventId: {}, pts: {}, cueInDuration: {}", base64Data, eventId, pts, -1);
+
                     injectCueInTag(eventId, base64Data);
                     logger.info("SCTE-35 CUE-IN injected for stream {}: eventId={}", streamId, eventId);
                 }
+
+                stopCueContTimerIfNeeded();
             }
             
         } catch (Exception e) {
@@ -210,6 +228,7 @@ public class SCTE35HLSMuxer extends HLSMuxer {
     private void injectCueOutTag(SCTE35CueState cueState) {
         try {
             String m3u8Path = getOutputURL();
+            logger.info("injectCueOutTag: m3u8Path: {}", m3u8Path);
             if (m3u8Path != null && new File(m3u8Path).exists()) {
                 modifyM3U8WithCueOut(m3u8Path, cueState);
             }
@@ -224,6 +243,7 @@ public class SCTE35HLSMuxer extends HLSMuxer {
     private void injectCueInTag(int eventId, String base64Data) {
         try {
             String m3u8Path = getOutputURL();
+            logger.info("injectCueInTag: m3u8Path: {}", m3u8Path);
             if (m3u8Path != null && new File(m3u8Path).exists()) {
                 modifyM3U8WithCueIn(m3u8Path, eventId, base64Data);
             }
@@ -247,8 +267,8 @@ public class SCTE35HLSMuxer extends HLSMuxer {
             String line = lines[i];
             
             // Check if this is the last segment (before adding new segment)
-            if (line.startsWith("#EXTINF:") && i + 1 < lines.length && 
-                lines[i + 1].endsWith(".ts") || lines[i + 1].endsWith(".fmp4")) {
+            if (line.startsWith("#EXTINF:") && i + 1 < lines.length &&
+                (lines[i + 1].endsWith(".ts") || lines[i + 1].endsWith(".fmp4"))) {
                 
                 // Add SCTE-35 tags based on configured type
                 switch (scte35TagType) {
@@ -276,8 +296,8 @@ public class SCTE35HLSMuxer extends HLSMuxer {
                         String startDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new Date());
                         if (cueState.duration > 0) {
                             newContent.append(String.format("#EXT-X-DATERANGE:ID=\"%d\",START-DATE=\"%s\",PLANNED-DURATION=%.3f,SCTE35-OUT=%s\n",
-                                    cueState.eventId, startDate, cueState.duration / 90000.0, 
-                                    "0x" + Base64.getDecoder().decode(cueState.base64Data)));
+                                    cueState.eventId, startDate, cueState.duration / 90000.0,
+                                    "0x" + bytesToHex(Base64.getDecoder().decode(cueState.base64Data))));
                         } else {
                             newContent.append(String.format("#EXT-X-DATERANGE:ID=\"%d\",START-DATE=\"%s\",SCTE35-OUT=%s\n",
                                     cueState.eventId, startDate, "0x" + bytesToHex(Base64.getDecoder().decode(cueState.base64Data))));
@@ -309,7 +329,7 @@ public class SCTE35HLSMuxer extends HLSMuxer {
             String line = lines[i];
             
             // Check if this is the last segment (before adding new segment)
-            if (line.startsWith("#EXTINF:") && i + 1 < lines.length && 
+            if (line.startsWith("#EXTINF:") && i + 1 < lines.length &&
                 (lines[i + 1].endsWith(".ts") || lines[i + 1].endsWith(".fmp4"))) {
                 
                 // Add SCTE-35 CUE-IN tags based on configured type
@@ -381,9 +401,58 @@ public class SCTE35HLSMuxer extends HLSMuxer {
      * Update M3U8 file with CUE-OUT-CONT tags
      */
     private void updateM3U8WithCueOutCont(String m3u8Path) throws IOException {
-        // Implementation for CUE-OUT-CONT updates
-        // This is more complex and would require tracking segment timing
-        // and calculating elapsed time since CUE-OUT started
+        if (activeCues.isEmpty()) {
+            return;
+        }
+
+        Path path = new File(m3u8Path).toPath();
+        String content = new String(Files.readAllBytes(path));
+
+        String[] lines = content.split("\n");
+        StringBuilder newContent = new StringBuilder();
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            newContent.append(line).append("\n");
+
+            // Inject immediately before the last segment URI (same rule we use for OUT/IN)
+            if (line.startsWith("#EXTINF:") && i + 1 < lines.length &&
+                (lines[i + 1].endsWith(".ts") || lines[i + 1].endsWith(".fmp4"))) {
+
+                long nowMs = System.currentTimeMillis();
+
+                for (SCTE35CueState cueState : activeCues.values()) {
+                    double elapsedSec = (nowMs - cueState.wallClockStartMs) / 1000.0;
+                    switch (scte35TagType) {
+                        case EXT_X_CUE_OUT_IN:
+                            if (cueState.duration > 0) {
+                                newContent.append(String.format("#EXT-X-CUE-OUT-CONT:Elapsed=%.3f,Duration=%.3f\n",
+                                        elapsedSec, cueState.duration / 90000.0));
+                            } else {
+                                newContent.append(String.format("#EXT-X-CUE-OUT-CONT:Elapsed=%.3f\n", elapsedSec));
+                            }
+                            break;
+
+                        case EXT_X_SCTE35:
+                            newContent.append(String.format("#EXT-X-SCTE35:CUE=\"%s\",CUE-OUT-CONT=YES,ELAPSED=%.3f\n",
+                                    cueState.base64Data, elapsedSec));
+                            break;
+
+                        case EXT_X_SPLICEPOINT_SCTE35:
+                            // No official CONT variant, reuse same tag type
+                            newContent.append(String.format("#EXT-X-SPLICEPOINT-SCTE35:%s\n", cueState.base64Data));
+                            break;
+
+                        case EXT_X_DATERANGE:
+                            newContent.append(String.format("#EXT-X-DATERANGE:ID=\"%d\",ELAPSED=%.3f,SCTE35-OUT-CONT=%s\n",
+                                    cueState.eventId, elapsedSec, "0x" + bytesToHex(Base64.getDecoder().decode(cueState.base64Data))));
+                            break;
+                    }
+                }
+            }
+        }
+
+        Files.write(path, newContent.toString().getBytes(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
     }
 
     /**
@@ -419,5 +488,34 @@ public class SCTE35HLSMuxer extends HLSMuxer {
     protected synchronized void clearResource() {
         super.clearResource();
         activeCues.clear();
+        stopCueContTimerIfNeeded();
+    }
+
+    /**
+     * Start periodic timer if it is not already running
+     */
+    private void startCueContTimerIfNeeded() {
+        if (cueContTimerId == -1 && vertx != null) {
+            // run roughly once per second (adjustable)
+            cueContTimerId = vertx.setPeriodic(1000, tid -> {
+                try {
+                    updateCueOutCont();
+                } catch (Exception ex) {
+                    logger.error("Error in periodic CueOutCont update for stream {}: {}", streamId, ex.getMessage());
+                }
+            });
+            logger.debug("Started CUE-OUT-CONT timer for stream {}", streamId);
+        }
+    }
+
+    /**
+     * Stop periodic timer if there are no active cues or SCTE-35 disabled
+     */
+    private void stopCueContTimerIfNeeded() {
+        if (cueContTimerId != -1 && (activeCues.isEmpty() || !scte35Enabled) && vertx != null) {
+            vertx.cancelTimer(cueContTimerId);
+            cueContTimerId = -1;
+            logger.debug("Stopped CUE-OUT-CONT timer for stream {}", streamId);
+        }
     }
 } 
