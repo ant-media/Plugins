@@ -13,7 +13,11 @@ import org.springframework.stereotype.Component;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.api.IStreamListener;
+import io.antmedia.scte35.SCTE35HLSMuxer;
 import io.antmedia.scte35.SCTE35PacketListener;
+import io.antmedia.AppSettings;
+import io.antmedia.muxer.MuxAdaptor;
+import io.antmedia.storage.StorageClient;
 import io.vertx.core.Vertx;
 
 /**
@@ -56,14 +60,46 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
         
         IAntMediaStreamHandler app = getApplication();
         SCTE35PacketListener scte35Listener = new SCTE35PacketListener(streamId, app);
-        
-        boolean result = app.addPacketListener(streamId, scte35Listener);
-        if (result) {
-            scte35ListenerMap.put(streamId, scte35Listener);
-            logger.info("SCTE-35 packet listener added successfully for stream: {}", streamId);
-        } else {
+
+        // Attach packet listener first
+        boolean plResult = app.addPacketListener(streamId, scte35Listener);
+        if (!plResult) {
             logger.warn("Failed to add SCTE-35 packet listener for stream: {}", streamId);
+            return;
         }
+        scte35ListenerMap.put(streamId, scte35Listener);
+
+        // Retrieve mux adaptor for this stream
+        MuxAdaptor muxAdaptor = app.getMuxAdaptor(streamId);
+        if (muxAdaptor == null) {
+            logger.warn("MuxAdaptor not found for stream: {}. Cannot attach SCTE35HLSMuxer", streamId);
+            return;
+        }
+
+        AppSettings settings = app.getAppSettings();
+        StorageClient storageClient = ((AntMediaApplicationAdapter) app).getStorageClient();
+
+        SCTE35HLSMuxer scte35HLSMuxer = new SCTE35HLSMuxer(
+                vertx,
+                storageClient,
+                settings.getS3StreamsFolderPath(),
+                settings.getUploadExtensionsToS3(),
+                settings.getHlsHttpEndpoint(),
+                settings.isAddDateTimeToHlsFileName());
+
+        // Pass some basic HLS parameters
+        scte35HLSMuxer.setHlsParameters(settings.getHlsListSize(), settings.getHlsTime(),
+                settings.getHlsPlayListType(), settings.getHlsflags(), settings.getHlsEncryptionKeyInfoFile(), settings.getHlsSegmentType());
+
+        scte35HLSMuxer.setId3Enabled(false); // change to true if you want ID3
+
+        int videoHeight = 0;
+        if (muxAdaptor.getVideoCodecParameters() != null) {
+            videoHeight = muxAdaptor.getVideoCodecParameters().height();
+        }
+
+        boolean muxerAdded = muxAdaptor.addMuxer(scte35HLSMuxer, videoHeight);
+        logger.info("Result of adding SCTE35HLSMuxer to stream {} is {}", streamId, muxerAdded);
     }
 
     @Override
