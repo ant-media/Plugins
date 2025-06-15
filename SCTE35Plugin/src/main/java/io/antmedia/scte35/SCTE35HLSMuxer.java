@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 import org.json.simple.JSONObject;
@@ -54,7 +55,7 @@ public class SCTE35HLSMuxer extends HLSMuxer {
     /**
      * Represents the state of an active SCTE-35 cue
      */
-    private static class SCTE35CueState {
+    public static class SCTE35CueState {
         final int eventId;
         final long startPts;
         final long duration;
@@ -269,7 +270,6 @@ public class SCTE35HLSMuxer extends HLSMuxer {
             // Check if this is the last segment (before adding new segment)
             if (line.startsWith("#EXTINF:") && i + 1 < lines.length &&
                 (lines[i + 1].endsWith(".ts") || lines[i + 1].endsWith(".fmp4"))) {
-                
                 // Add SCTE-35 tags based on configured type
                 switch (scte35TagType) {
                     case EXT_X_CUE_OUT_IN:
@@ -331,7 +331,6 @@ public class SCTE35HLSMuxer extends HLSMuxer {
             // Check if this is the last segment (before adding new segment)
             if (line.startsWith("#EXTINF:") && i + 1 < lines.length &&
                 (lines[i + 1].endsWith(".ts") || lines[i + 1].endsWith(".fmp4"))) {
-                
                 // Add SCTE-35 CUE-IN tags based on configured type
                 switch (scte35TagType) {
                     case EXT_X_CUE_OUT_IN:
@@ -384,16 +383,52 @@ public class SCTE35HLSMuxer extends HLSMuxer {
         if (!scte35Enabled || activeCues.isEmpty()) {
             return;
         }
-        
+
         try {
             String m3u8Path = getOutputURL();
-            if (m3u8Path != null && new File(m3u8Path).exists()) {
-                // Implementation for updating CUE-OUT-CONT tags
-                // This would be called periodically during segment creation
-                updateM3U8WithCueOutCont(m3u8Path);
+            if (m3u8Path == null) {
+                return;
             }
+
+            File playlistFile = new File(m3u8Path);
+            if (!playlistFile.exists()) {
+                return; // playlist not created yet
+            }
+
+            // Read once for tag-presence checks
+            String content = new String(Files.readAllBytes(playlistFile.toPath()));
+
+            // Ensure opening CUE-OUT tag exists for every active cue
+            for (SCTE35CueState cueState : activeCues.values()) {
+                if (!isCueOutTagPresent(content, cueState)) {
+                    modifyM3U8WithCueOut(m3u8Path, cueState);
+                    // refresh content so we do not add twice for the same call
+                    content = new String(Files.readAllBytes(playlistFile.toPath()));
+                }
+            }
+
+            // Always refresh continuation tag(s)
+            updateM3U8WithCueOutCont(m3u8Path);
         } catch (Exception e) {
             logger.error("Error updating CUE-OUT-CONT for stream {}: {}", streamId, e.getMessage());
+        }
+    }
+
+    /**
+     * Check if the playlist already contains an opening cue-out tag for the given cue
+     */
+    private boolean isCueOutTagPresent(String playlistContent, SCTE35CueState cue) {
+        switch (scte35TagType) {
+            case EXT_X_CUE_OUT_IN:
+                return playlistContent.contains("#EXT-X-CUE-OUT");
+            case EXT_X_SCTE35:
+                return playlistContent.contains(cue.base64Data) && playlistContent.contains("CUE-OUT=YES");
+            case EXT_X_SPLICEPOINT_SCTE35:
+                return playlistContent.contains("#EXT-X-SPLICEPOINT-SCTE35:" + cue.base64Data);
+            case EXT_X_DATERANGE:
+                return playlistContent.contains("ID=\"" + cue.eventId + "\"") && playlistContent.contains("SCTE35-OUT");
+            default:
+                return false;
         }
     }
 
@@ -517,5 +552,12 @@ public class SCTE35HLSMuxer extends HLSMuxer {
             cueContTimerId = -1;
             logger.debug("Stopped CUE-OUT-CONT timer for stream {}", streamId);
         }
+    }
+
+    /**
+     * Expose current active cue map for external helpers (e.g. Manifest filter)
+     */
+    public Map<Integer, SCTE35CueState> getActiveCues() {
+        return activeCues;
     }
 } 

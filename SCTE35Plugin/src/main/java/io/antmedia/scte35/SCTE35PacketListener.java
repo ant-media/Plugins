@@ -62,9 +62,10 @@ public class SCTE35PacketListener implements IPacketListener {
             // Extract packet data
             byte[] data = new byte[packet.size()];
             packet.data().position(0).get(data, 0, data.length);
-            
+            logger.info("SCTE-35 data: {}", data);
             // Parse SCTE-35 data
             SCTE35Message scte35Message = parseSCTE35Data(data);
+            logger.info("SCTE-35 message: {}", scte35Message);
             if (scte35Message != null) {
                 handleSCTE35Message(scte35Message, packet.pts());
             }
@@ -202,6 +203,7 @@ public class SCTE35PacketListener implements IPacketListener {
             reader.skipBits(7);
 
             if (spliceEventCancelIndicator) {
+                logger.warn("Splice event cancel indicator: {}", spliceEventCancelIndicator);
                 return new SCTE35Message(SCTE35Message.Type.SPLICE_INSERT_CANCEL, spliceEventId, -1, -1, false);
             }
 
@@ -299,6 +301,12 @@ public class SCTE35PacketListener implements IPacketListener {
      * Handle CUE-OUT (ad break start)
      */
     private void handleCueOut(SCTE35Message message, long currentPts) {
+        logger.info("handleCueOut: message: {}", message);
+        logger.info("handleCueOut: currentPts: {}", currentPts);
+        logger.info("handleCueOut: inCueOut: {}", inCueOut);
+        logger.info("handleCueOut: cueOutStartTime: {}", cueOutStartTime);
+        logger.info("handleCueOut: cueOutDuration: {}", cueOutDuration);
+        logger.info("handleCueOut: currentEventId: {}", currentEventId);
         if (!inCueOut) {
             inCueOut = true;
             cueOutStartTime = currentPts;
@@ -308,7 +316,7 @@ public class SCTE35PacketListener implements IPacketListener {
             // Add SCTE-35 event for HLS processing
             SCTE35Event event = new SCTE35Event(message.getEventId(), currentPts, message.getBreakDuration(), true);
             activeEvents.put(message.getEventId(), event);
-            
+            logger.info("handleCueOut: event: {}, activeEvents: {}", event, activeEvents);
             // Notify HLS muxer about cue-out
             notifyHLSMuxer(event);
             
@@ -360,13 +368,15 @@ public class SCTE35PacketListener implements IPacketListener {
         try {
             // Get the mux adaptor for this stream
             var muxAdaptor = streamHandler.getMuxAdaptor(streamId);
+            logger.info("notifyHLSMuxer: muxAdaptor: {}", muxAdaptor);
             if (muxAdaptor != null) {
                 // Send SCTE-35 metadata to HLS muxer
                 String scte35Data = createSCTE35Metadata(event);
-                
+                logger.info("notifyHLSMuxer: scte35Data: {}", scte35Data);
                 // Find HLS muxer and send metadata
                 for (Muxer muxer : muxAdaptor.getMuxerList()) {
-                    if (muxer instanceof HLSMuxer) {
+                    logger.info("notifyHLSMuxer: muxer: {}", muxer instanceof SCTE35HLSMuxer);
+                    if (muxer instanceof SCTE35HLSMuxer) {
                         muxer.writeMetaData(scte35Data, event.getPts());
                         logger.debug("SCTE-35 metadata sent to HLS muxer for stream: {}", streamId);
                     }
