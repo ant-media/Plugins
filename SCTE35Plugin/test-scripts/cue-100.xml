@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tsduck>
+  <!-- Splice OUT, 30-s break, event id 100, unique program id 1 -->
+  <splice_information_table>
+    <splice_insert splice_event_id="100"
+                   unique_program_id="1"
+                   out_of_network="true"
+                   program_splice="true"
+                   duration_flag="true"
+                   auto_return="true"
+                   break_duration="30000"
+                   pts_time="1061686"/>
+  </splice_information_table>
+</tsduck>
