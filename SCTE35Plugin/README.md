@@ -30,14 +30,16 @@ During testing, FFMPEG was found to have limitations when transmitting SCTE-35 p
 #### Recommended Alternative Approach
 For reliable SCTE-35 transmission, use alternative tools that can properly handle SCTE-35 data in SRT streams.
 
+Download stream with scte35 here: https://drive.google.com/file/d/1fVERcuoeaZSz4VMJEZBjpiRN0_F8Ytpm/view?usp=drive_link
+
 **Example using srt-live-transmit:**
 ```bash
 # Stream a transport stream file with SCTE-35 data at controlled bitrate
-cat scte35_data_demo.ts | pv -L 19K | srt-live-transmit file://con "srt://your-server:4200?streamid=WebRTCAppEE/your_stream"
+cat scte35_spliceInsert_2hour_demo.ts | pv -L 19K | srt-live-transmit file://con "srt://your-server:4200?streamid=WebRTCAppEE/your_stream"
 ```
 
 Replace the following parameters in the example above:
-- `scte35_data_demo.ts`: Your MPEG-TS file containing SCTE-35 data
+- `scte35_spliceInsert_2hour_demo.ts`: Your MPEG-TS file containing SCTE-35 data
 - `19K`: Desired bitrate (adjust based on your content)
 - `your-server`: Your Ant Media Server hostname or IP
 - `4200`: SRT port (default is 4200)
