@@ -14,7 +14,6 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.app.RTCPStatsPacketListener;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.api.IStreamListener;
-import io.vertx.core.Vertx;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,7 +21,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component(value="plugin.rtcp-stats")
 public class RTCPStatsPlugin implements ApplicationContextAware, IStreamListener {
 
-	protected static Logger logger = LoggerFactory.getLogger(RTCPStatsPlugin.class);
+	private static Logger logger = LoggerFactory.getLogger(RTCPStatsPlugin.class);
+
+	public final static String RTCP_SENDER_REPORT_EVENT = "rtcpSr";
 
 	private ApplicationContext applicationContext;
 	private RTCPStatsPluginSettings settings;

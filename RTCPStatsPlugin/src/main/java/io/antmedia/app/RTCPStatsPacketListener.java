@@ -2,10 +2,11 @@ package io.antmedia.app;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.enterprise.webrtc.WebRTCApplication;
+import io.antmedia.enterprise.webrtc.datachannel.DataChannelConstants;
 import io.antmedia.enterprise.webrtc.datachannel.DataChannelRouter;
+import io.antmedia.plugin.RTCPStatsPlugin;
 import io.antmedia.plugin.api.IPacketListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
-import io.antmedia.websocket.WebSocketConstants;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avcodec.AVProducerReferenceTime;
 import org.bytedeco.javacpp.BytePointer;
@@ -81,8 +82,7 @@ public class RTCPStatsPacketListener implements IPacketListener {
 			}
 
 			jsonResponse.clear();
-			jsonResponse.put(WebSocketConstants.COMMAND, WebSocketConstants.NOTIFICATION_COMMAND);
-			jsonResponse.put(WebSocketConstants.DEFINITION, "rtcpSr");
+			jsonResponse.put(DataChannelConstants.EVENT_TYPE, RTCPStatsPlugin.RTCP_SENDER_REPORT_EVENT);
 			jsonResponse.put("trackIndex", streamIndex);
 			jsonResponse.put("pts", packet.pts());
 			jsonResponse.put("ntpTime", rtcpNtpTime);

@@ -34,9 +34,7 @@ Once installed, for every SRT broadcast, viewers receive status reports via data
 ```json
 {
  
- "command": "notification",
- 
- "definition": "rtcpSr",
+ "eventType": "rtcpSr",
  
  "packetCount": 2080, # Packets count from SR
  
@@ -49,3 +47,37 @@ Once installed, for every SRT broadcast, viewers receive status reports via data
  "pts": 2457581 # Presentation time of the packet on which SR was send 
 }
 ```
+
+
+### Usage with JS SDK
+To access this data in JS-SDK, follow [example](https://github.com/ant-media/StreamApp/blob/93aba178622b72475d6be414eb71d09462149398/src/main/webapp/samples/publish_webrtc.html#L683), and handle events on WebRTCAdatptor callback.
+
+```javascript
+new WebRTCAdaptor({
+   .........
+   .........
+   dataChannelEnabled: true,
+   callback: (info, obj) => {
+      if (info === "data_received") {
+         try {
+            let notificationEvent = JSON.parse(data);
+            if(notificationEvent != null && typeof(notificationEvent) == "object") {
+                let eventType = notificationEvent.eventType;
+                if (eventType == "rtcpSr") {
+                    // We have SR object here!
+                }
+            }
+         } catch (exception) {
+            $("#all-messages").append("Received: " + data + "<br>");
+         }
+      }
+   }
+```
+
+
+
+
+
+
+
+
