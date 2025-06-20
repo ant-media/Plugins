@@ -568,7 +568,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		customBroadcast.start();
 
 		// This ensures plugins like LowLatencyHLSPlugin get notified about the filter output stream and hooks etc. works
-		app.startPublish(streamId, System.currentTimeMillis(), IAntMediaStreamHandler.PUBLISH_TYPE_WEBRTC, null);
+		app.startPublish(streamId, System.currentTimeMillis(), IAntMediaStreamHandler.PUBLISH_TYPE_WEBRTC, null, null);
 		logger.info("Stream notifications triggered for custom broadcast filter output: {}", streamId);
 	}
 
