@@ -22,7 +22,31 @@ import java.util.Map;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_PKT_DATA_PRFT;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_get_side_data;
 
-// REMAINDER: Time between two SRs must be at least 1 sec apart for this to work
+/*
+ * Algorithm:
+ *
+ * RTCP Sender Reports (SR) are sent on interval ~1-5 sec and contain synchronized NTP and RTP timestamps.
+ * This data is embeded in 'AVProducerReferenceTime' packet sidedata by custom FFMPEG build.
+ * To get NTP timestamp for every RTP frame, we interpolate on timing relationship established by data from TWO SRs
+ *
+ * How it works:
+ * 1. - Clock Rate Detection (requires TWO SRs):
+ *  - Wait for first SR: store its NTP and RTP timestamps
+ *  - Wait for second SR: calculate time differences between the two SRs
+ *  - clock rate = RTP_time_diff / NTP_time_diff (Usually 90kHz - video, 48kHz - audio)
+ * 
+ * 2. - Interpolation (uses most recent SR as reference):
+ *  - For every RTP packet with timestamp Z, use most recent SR as reference point
+ *  - Calculate: Z - SR_RTP_time = RTP time elapsed since last SR
+ *  - Convert to seconds: elapsed_seconds = RTP_time_elapsed / detected_clock_rate
+ *  - Interpolated NTP time = SR_NTP_time + elapsed_seconds
+ * 
+ * !!!!!!!!!!!!!!!!!!!!!!!!!!!
+ * REMAINDER: Time between two SRs must be at least 1 sec apart for this to work
+ * Improvement 1: Re-Detect clock-rate periodically to account for possible clock drift 
+ * Improvement 2: To have clock immidiately after first SR, we could do an less precise deteciton algorithm, and later switch to precise when SRs are received
+ * !!!!!!!!!!!!!!!!!!!!!!!!!!!
+ */
 public class RTCPStatsPacketListener implements IPacketListener {
 
 	private static final Logger logger = LoggerFactory.getLogger(RTCPStatsPacketListener.class);
@@ -39,10 +63,6 @@ public class RTCPStatsPacketListener implements IPacketListener {
 	private final Map<Integer, Long> lastSrNtpTime = new HashMap<>();
 	private final Map<Integer, Long> lastSrRtpTime = new HashMap<>();
 	private final Map<Integer, Long> detectedClockRate = new HashMap<>();
-
-
-	private StreamParametersInfo videoStreamInfo;
-	private StreamParametersInfo audioStreamInfo;
 
 	public RTCPStatsPacketListener(String streamId, AntMediaApplicationAdapter appAdapter, RTCPStatsPluginSettings settings) {
 		this.streamId = streamId;
@@ -79,51 +99,40 @@ public class RTCPStatsPacketListener implements IPacketListener {
 			return;
 		}
 
+		int streamIndex = packet.stream_index(); // Stream index (0 = video, 1+ = audio typically)
+		long rtpDetectedClockRate = detectedClockRate.getOrDefault(streamIndex, -1L);
+		if (rtpDetectedClockRate < 0) {
+			// Clock rate not detected yet
+			return;
+		}
+
 		try {
 			AVProducerReferenceTime prft = new AVProducerReferenceTime(sideData);
 
-			// ===== DATA EXTRACTION =====
 			long rtcpNtpTime = prft.last_rtcp_ntp_time(); // NTP timestamp from RTCP Sender Report (64-bit: upper 32 bits = seconds since 1900, lower 32 bits = fraction)
 			long rtcpRtpTime = prft.last_rtcp_timestamp(); // RTP timestamp from RTCP Sender Report (32-bit RTP clock units)
 			long packetRtpTime = prft.last_rtp_timestamp(); // Current packet's RTP timestamp (32-bit RTP clock units)
-			int streamIndex = packet.stream_index(); // Stream index (0 = video, 1+ = audio typically)
 			if (rtcpNtpTime == 0 || rtcpRtpTime == 0) {
-				return; // No data...
+				// No data...
+				return;
 			}
-
-			long rtpClockRate = detectedClockRate.getOrDefault(streamIndex, -1L);
-			if (rtpClockRate < 0) {
-				return; // Clock rate not detected yet
-			}
-
-			// calculate RTP timestamp difference
+			
+			// Calculate RTP timestamp difference
+			// Note: RTP timestamps are 32-bit unsigned values, but Java long is signed.
+			// We mask with 0xFFFFFFFFL to treat them as unsigned for proper arithmetic,
+			// then handle potential wraparound (RTP timestamps wrap from 0xFFFFFFFF back to 0x00000000)
 			long rtpDiff = (packetRtpTime & 0xFFFFFFFFL) - (rtcpRtpTime & 0xFFFFFFFFL);
 			rtpDiff = handleRtpTimestampWraparound(rtpDiff);
 
 			// RTP ticks to seconds
-			double timeDiffSeconds = (double) rtpDiff / rtpClockRate;
+			double timeDiffSeconds = (double) rtpDiff / rtpDetectedClockRate;
 
 			// Convert time difference to NTP fraction units (2^32 fractions per second)
 			// and and add to the RTCP NTP timestamp
 			long ntpFractionDiff = (long) (timeDiffSeconds * 4294967296.0);
 			long interpolatedNtpTime = rtcpNtpTime + ntpFractionDiff;
 
-//			{
-//				// DEBUG stuff
-//				long interpNtpSeconds = (interpolatedNtpTime >>> 32) & 0xFFFFFFFFL;
-//				long interpNtpFraction = interpolatedNtpTime & 0xFFFFFFFFL;
-//
-//				long rawNtpSeconds = (rtcpNtpTime >>> 32) & 0xFFFFFFFFL;
-//				long rawNtpFraction = rtcpNtpTime & 0xFFFFFFFFL;
-//
-//				logger.info("DEBUG - Interpolated NTP Time: {} seconds, {} fraction (raw: {})",
-//						interpNtpSeconds, interpNtpFraction, interpolatedNtpTime);
-//
-//				logger.info("DEBUG - Raw NTP Time: {} seconds, {} fraction (raw: {})",
-//						rawNtpSeconds, rawNtpFraction, rtcpNtpTime);
-//			}
 
-			// Send interpolated timing data
 			jsonResponse.clear();
 			jsonResponse.put(DataChannelConstants.EVENT_TYPE, RTCPStatsPlugin.RTCP_SENDER_REPORT_EVENT);
 			jsonResponse.put("trackIndex", streamIndex);
@@ -135,6 +144,7 @@ public class RTCPStatsPacketListener implements IPacketListener {
 			byte[] dataBytes = jsonResponse.toJSONString().getBytes(Charset.defaultCharset());
 			DataChannelRouter dataChannelRouter = appAdapter.getDataChannelRouter();
 			dataChannelRouter.publisherMessageReceived(streamId, dataBytes, false);
+
 
 		} catch (Exception e) {
 			logger.warn("Error in timing interpolation for stream: {} - {}", streamId, e.getMessage());
@@ -152,7 +162,6 @@ public class RTCPStatsPacketListener implements IPacketListener {
 
 		long currentNtpTime = prft.last_rtcp_ntp_time(); // NTP timestamp from RTCP Sender Report (64-bit: upper 32 bits = seconds since 1900, lower 32 bits = fraction)
 		long currentRtpTime = prft.last_rtcp_timestamp(); // RTP timestamp from RTCP Sender Report (32-bit RTP clock units)
-		long packetRtpTime = prft.last_rtp_timestamp(); // Current packet's RTP timestamp (32-bit RTP clock units)
 		int trackIndex = packet.stream_index();
 
 		Long lastNtp = lastSrNtpTime.get(trackIndex);
@@ -173,9 +182,8 @@ public class RTCPStatsPacketListener implements IPacketListener {
 			// Calculate NTP time difference in seconds
 			double ntpDiffSeconds = convertNtpDiffToSeconds(currentNtpTime - lastNtp);
 
-			// Calculate RTP time difference (handle wraparound)
-			long rtpDiff = currentRtpTime - lastRtp;
-			rtpDiff = handleRtpTimestampWraparound(rtpDiff);
+			// Calculate RTP time difference
+			long rtpDiff = handleRtpTimestampWraparound(currentRtpTime - lastRtp);
 
 			// SR time diff is too small (unreliable)
 			if (ntpDiffSeconds < 1.0) {
@@ -193,7 +201,7 @@ public class RTCPStatsPacketListener implements IPacketListener {
 			detectedClockRate.put(trackIndex, detectedRate);
 
 			logger.info("=== RTCP SR CLOCK RATE DETECTION === Stream: {} Track: {}", streamId, trackIndex);
-			logger.info("Stream {}: Detected RTP clock rate: {} Hz", trackIndex, detectedRate);
+			logger.info("Detected RTP clock rate: {} Hz", detectedRate);
 			logger.info("Based on RTCP SR interval: {} s, RTP diff: {}", String.format("%.3f", ntpDiffSeconds), rtpDiff);
 			logger.info("Previous SR - NTP: {}, RTP: {}", lastNtp, lastRtp);
 			logger.info("Current SR  - NTP: {}, RTP: {}", currentNtpTime, currentRtpTime);
@@ -236,13 +244,10 @@ public class RTCPStatsPacketListener implements IPacketListener {
 
 	@Override
 	public void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
-//		logger.info("Video timeBase: {}/{}", videoStreamInfo.getTimeBase().num(), videoStreamInfo.getTimeBase().den());
-		this.videoStreamInfo = videoStreamInfo;
 	}
 
 	@Override
 	public void setAudioStreamInfo(String streamId, StreamParametersInfo audioStreamInfo) {
-		this.audioStreamInfo = audioStreamInfo;
 	}
 
 	@Override

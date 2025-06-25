@@ -27,7 +27,6 @@ public class RTCPStatsPlugin implements ApplicationContextAware, IStreamListener
 
 	private ApplicationContext applicationContext;
 	private RTCPStatsPluginSettings settings;
-	private Gson gson = new Gson();
 
 	private final Map<String, RTCPStatsPacketListener> packetListeners = new ConcurrentHashMap<>();
 
@@ -56,7 +55,6 @@ public class RTCPStatsPlugin implements ApplicationContextAware, IStreamListener
 			return;
 		}
 
-		this.refreshSettings();
 		RTCPStatsPacketListener packetListener = new RTCPStatsPacketListener(streamId, app, settings);
 		if (app.addPacketListener(streamId, packetListener)) {
 			packetListeners.put(streamId, packetListener);
@@ -100,7 +98,8 @@ public class RTCPStatsPlugin implements ApplicationContextAware, IStreamListener
 		try {
 			Object customSetting = getApplication().getAppSettings().getCustomSetting("plugin.rtcp-stats");
 			if (customSetting != null) {
-				this.settings = this.gson.fromJson(customSetting.toString(), RTCPStatsPluginSettings.class);
+				Gson gson = new Gson();
+				this.settings = gson.fromJson(customSetting.toString(), RTCPStatsPluginSettings.class);
 			}
 		} catch (Exception e) {
 			logger.error("Error refreshing plugin settings, using defaults", e);
