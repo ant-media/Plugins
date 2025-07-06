@@ -38,7 +38,7 @@ jobs:
             gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
 
         - run: sudo apt-get update -qq
-        - run: sudo apt-get install ffmpeg -qq -y
+        - run: sudo apt-get install ffmpeg gawk -qq -y
 
         - name: Build Ant Media Server Parent project
           run: |
@@ -56,10 +56,12 @@ jobs:
         
         - name: Get latest snapshot
           run: | 
-            wget -O maven-metadata.xml https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/ant-media-server/maven-metadata.xml
+            wget -O maven-metadata.xml https://central.sonatype.com/repository/maven-snapshots/io/antmedia/ant-media-server/maven-metadata.xml
             export LATEST_SNAPSHOT=$(grep -o '<version>[^<]*</version>' maven-metadata.xml | tail -n 1 | sed 's/<\/\?version>//g')
-            wget -O ant-media-server-community.zip "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.antmedia&a=ant-media-server&v=${LATEST_SNAPSHOT}&c=community&e=zip"
-
+            wget -O maven-metadata-latest-snapshot.xml https://central.sonatype.com/repository/maven-snapshots/io/antmedia/ant-media-server/${LATEST_SNAPSHOT}/maven-metadata.xml
+            VERSION_DATE=$(awk '/<snapshotVersion>/,/<\/snapshotVersion>/' maven-metadata-latest-snapshot.xml | grep -A2 '<classifier>community</classifier>' | grep -A1 '<extension>zip</extension>' | grep '<value>' | sed -E 's/.*<value>([^<]+)<\/value>.*/\1/')
+            echo "Latest snapshot version: ${LATEST_SNAPSHOT}"
+            wget -O ant-media-server-community.zip "https://central.sonatype.com/repository/maven-snapshots/io/antmedia/ant-media-server/${LATEST_SNAPSHOT}/ant-media-server-${VERSION_DATE}-community.zip"
         - name: Install Ant Media Server
           run: |
             wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh -O install_ant-media-server.sh  && chmod 755 install_ant-media-server.sh
