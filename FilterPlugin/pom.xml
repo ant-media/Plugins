@@ -93,6 +93,8 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/ma
 	          <extensions>true</extensions>
 	          <configuration>
 	            <publishingServerId>central</publishingServerId>
+	            <autoPublish>true</autoPublish>
+            	<waitUntil>published</waitUntil>
 	          </configuration>
 	        </plugin>
 			<plugin>
