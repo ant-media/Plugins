@@ -50,7 +50,7 @@ fi
 echo "Google Chrome installation is complete."
 
 # Release URL
-releaseUrl="https://oss.sonatype.org/service/local/repositories/releases/content/io/antmedia/plugin/media-push/maven-metadata.xml"
+releaseUrl="https://repo1.maven.org/maven2/io/antmedia/plugin/media-push/maven-metadata.xml"
 # Snapshot URL
 snapshotUrl="https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/plugin/media-push/maven-metadata.xml"
 
