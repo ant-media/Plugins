@@ -91,7 +91,7 @@ fi
 
 export LATEST_VERSION=$(grep -o '<version>[^<]*</version>' maven-metadata.xml | tail -n 1 | sed 's/<\/\?version>//g')
 
-wget -O media-push.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar" 
+wget -O media-push.jar "https://repo1.maven.org/maven2/io/antmedia/plugin/media-push/${LATEST_VERSION}/media-push-${LATEST_VERSION}.jar"
 
 if [ $? -ne 0 ]; then
     echo "There is a problem in downloading the media push plugin. Please send the log of this console to support@antmedia.io"
