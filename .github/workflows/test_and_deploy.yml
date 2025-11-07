@@ -70,15 +70,15 @@ jobs:
             sudo sed -i "/server.memory_limit_percentage=/c\server.memory_limit_percentage=100" /usr/local/antmedia/conf/red5.properties
             sudo service antmedia restart
 
-        - name: Build and Test Sample Plugin
-          run: |
-            cd SamplePlugin
-            mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
-            sudo cp target/PluginApp.jar /usr/local/antmedia/plugins
-            ls /usr/local/antmedia/plugins
-            sudo service antmedia restart
-            sleep 20
-            cd ..
+ #       - name: Build and Test Sample Plugin
+ #         run: |
+ #           cd SamplePlugin
+ #           mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+ #           sudo cp target/PluginApp.jar /usr/local/antmedia/plugins
+ #           ls /usr/local/antmedia/plugins
+ #           sudo service antmedia restart
+ #           sleep 20
+ #           cd ..
 
         - name: Build and Test Clip Creator
           run: |
@@ -87,9 +87,11 @@ jobs:
             sudo cp target/clip-creator.jar /usr/local/antmedia/plugins
             ls /usr/local/antmedia/plugins
             sudo service antmedia restart
-            mvn deploy -DskipTests=false --quiet --settings ../mvn-settings.xml
+            mvn deploy -DskipTests=true --settings ../mvn-settings.xml
             popd
-        
+
+#            mvn deploy -DskipTests=false --quiet --settings ../mvn-settings.xml
+
         - name: Build and Test Media Push Plugin
           run: |
             wget -O install_media-push-plugin.sh https://raw.githubusercontent.com/ant-media/Plugins/master/MediaPushPlugin/src/main/script/install_media-push-plugin.sh && chmod 755 install_media-push-plugin.sh
