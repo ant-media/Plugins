@@ -33,6 +33,7 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.filter.utils.Filter;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.FilterGraph;
+import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.IPacketListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
@@ -516,7 +517,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				else {
 
 					IFrameListener customBroadcast = app.createCustomBroadcast(streamId, filterConfiguration.getVideoOutputHeight(), filterConfiguration.getVideoOutputBitrate());
-					startBroadcast(streamId, customBroadcast, filterConfiguration.isVideoEnabled(), filterConfiguration.isAudioEnabled());
+					startBroadcast(streamId, customBroadcast, filterConfiguration.isVideoEnabled(), filterConfiguration.isAudioEnabled(), app);
 					currentOutStreams.put(streamId, customBroadcast);
 					logger.info("Output stream:{} will be created for filterId:{} and height:{}", streamId, filterId, filterConfiguration.getVideoOutputHeight());
 				}
@@ -528,7 +529,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 		return update();
 	}
 
-	private void startBroadcast(String streamId, IFrameListener customBroadcast, boolean videoEnabled, boolean audioEnabled) {
+	private void startBroadcast(String streamId, IFrameListener customBroadcast, boolean videoEnabled, boolean audioEnabled, AntMediaApplicationAdapter app) {
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
 		videoCodecParameters.height(filterConfiguration.getVideoOutputHeight());
 		videoCodecParameters.width((int) (filterConfiguration.getVideoOutputHeight()*1.5f)); //non 0, it will be overriden by AMS
@@ -565,6 +566,10 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 			customBroadcast.setAudioStreamInfo(streamId, audioStreamParametersInfo);
 		}
 		customBroadcast.start();
+
+		// This ensures plugins like LowLatencyHLSPlugin get notified about the filter output stream and hooks etc. works
+		app.startPublish(streamId, System.currentTimeMillis(), IAntMediaStreamHandler.PUBLISH_TYPE_WEBRTC, null, null);
+		logger.info("Stream notifications triggered for custom broadcast filter output: {}", streamId);
 	}
 
 	public FilterConfiguration getCurrentFilterConfiguration() {
