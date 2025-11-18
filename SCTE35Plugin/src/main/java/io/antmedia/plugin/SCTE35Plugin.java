@@ -1,8 +1,16 @@
 package io.antmedia.plugin;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import io.antmedia.EncoderSettings;
+import io.antmedia.datastore.db.DataStore;
+import io.antmedia.datastore.db.types.Broadcast;
+import io.antmedia.muxer.Muxer;
 import jakarta.servlet.FilterRegistration;
 import jakarta.servlet.ServletContext;
 import org.slf4j.Logger;
@@ -23,6 +31,8 @@ import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.storage.StorageClient;
 import io.vertx.core.Vertx;
 
+import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_H265;
+
 /**
  * SCTE-35 Plugin for Ant Media Server
  * 
@@ -39,6 +49,8 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
     private ApplicationContext applicationContext;
     private final ConcurrentMap<String, SCTE35PacketListener> scte35ListenerMap = new ConcurrentHashMap<>();
 
+    private DataStore dataStore;
+
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
@@ -49,7 +61,9 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
         
         // Check if SCTE35ManifestModifierFilter is registered in web.xml
         checkFilterRegistration();
-        
+
+        this.dataStore = app.getDataStore();
+
         logger.info("SCTE-35 Plugin initialized!");
     }
 
@@ -110,7 +124,6 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
             logger.warn("Failed to add SCTE-35 packet listener for stream: {}", streamId);
             return;
         }
-        scte35ListenerMap.put(streamId, scte35Listener);
 
         // Retrieve mux adaptor for this stream
         MuxAdaptor muxAdaptor = app.getMuxAdaptor(streamId);
@@ -119,6 +132,21 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
             return;
         }
 
+        Broadcast broadcast = dataStore.get(streamId);
+        List<EncoderSettings> encoderSettingsList = null;
+
+        if (broadcast != null) {
+            encoderSettingsList = broadcast.getEncoderSettingsList();
+            if (encoderSettingsList == null) {
+                encoderSettingsList = app.getAppSettings().getEncoderSettings();
+            }
+        } else {
+            logger.error("No broadcast found for streamId:{}!", streamId);
+            return;
+        }
+
+
+        scte35ListenerMap.put(streamId, scte35Listener);
         AppSettings settings = app.getAppSettings();
         StorageClient storageClient = ((AntMediaApplicationAdapter) app).getStorageClient();
 
@@ -143,6 +171,40 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
 
         boolean muxerAdded = muxAdaptor.addMuxer(scte35HLSMuxer, videoHeight);
         logger.info("Result of adding SCTE35HLSMuxer to stream {} is {}", streamId, muxerAdded);
+
+        if (encoderSettingsList == null || encoderSettingsList.isEmpty()) {
+            // If there are no encoders, we need to create _adaptive.m3u8 file, since ad servers expect 'master' playlist,
+            // and won't be created unless we use ABR. So we need to do that manually here
+            try {
+                File adaptiveHLSFile = Muxer.getRecordFile(this.getApplication().getScope(),
+                        streamId + MuxAdaptor.ADAPTIVE_SUFFIX, ".m3u8", MuxAdaptor.getSubfolder(broadcast, app.getAppSettings()));
+                
+                PrintWriter out = new PrintWriter(adaptiveHLSFile);
+                out.println("#EXTM3U");
+
+                out.print("#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=800000");
+                
+                if (muxAdaptor.getVideoCodecParameters() != null) {
+                    int width = muxAdaptor.getVideoCodecParameters().width();
+                    int height = muxAdaptor.getVideoCodecParameters().height();
+                    boolean isH265 = scte35HLSMuxer.getVideoCodecId() == AV_CODEC_ID_H265;
+                    
+                    out.print(",RESOLUTION=" + width + "x" + height);
+                    out.println(",CODECS=\"" + (isH265 ? "hvc1.1.4.L60.B01" : "avc1.42e00a") + ",mp4a.40.2\"");
+                } else {
+                    out.println("");
+                }
+                
+                out.println(streamId + ".m3u8");
+                
+                out.flush();
+                out.close();
+                
+                logger.info("Created adaptive playlist for stream {} with no encoder settings", streamId);
+            } catch (FileNotFoundException e) {
+                logger.error("Failed to create adaptive playlist for stream {}: {}", streamId, e.getMessage());
+            }
+        }
     }
 
     @Override
