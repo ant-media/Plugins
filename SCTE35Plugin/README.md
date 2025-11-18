@@ -11,6 +11,55 @@ The SCTE-35 Plugin automatically detects SCTE-35 messages embedded in SRT stream
 - **Automatic SCTE-35 Detection**: Monitors SRT streams for SCTE-35 data packets
 - **Real-time Processing**: Modifies M3U8 manifests in real-time as cue points are detected
 
+## Installation
+
+### 1. Deploy the Plugin JAR
+
+Copy the SCTE35Plugin JAR file to your Ant Media Server's application plugins directory:
+```bash
+cp SCTE35Plugin.jar /usr/local/ant-media-server/plugins/
+```
+
+### 2. Configure the Servlet Filter
+
+The plugin requires the `SCTE35ManifestModifierFilter` to be registered in your application's `web.xml` configuration file. This filter intercepts M3U8 manifest requests and injects SCTE-35 tags on the fly.
+
+**Add the following to your application's `/usr/local/ant-media-server/webapps/AppName/WEB-INF/web.xml`** (after the `HlsManifestModifierFilter` entry):
+
+```xml
+<filter>
+    <filter-name>SCTE35ManifestModifierFilter</filter-name>
+    <filter-class>io.antmedia.scte35.SCTE35ManifestModifierFilter</filter-class>
+    <async-supported>true</async-supported>
+</filter>
+<filter-mapping>
+    <filter-name>SCTE35ManifestModifierFilter</filter-name>
+    <url-pattern>/streams/*</url-pattern>
+</filter-mapping>
+```
+
+**Important:** The filter should be placed **after** the `HlsManifestModifierFilter` entry in the filter chain to ensure correct execution order.
+
+### 3. Restart Ant Media Server
+
+After deploying the plugin and updating the web.xml configuration:
+```bash
+sudo systemctl restart antmedia
+```
+
+### 4. Verify Installation
+
+Check the application logs to confirm the plugin and filter are properly initialized:
+```bash
+tail -f /path/to/ant-media-server/log/ant-media-server.log
+```
+
+You should see:
+- `SCTE-35 Plugin initialized successfully`
+- `SCTE35ManifestModifierFilter is properly registered in web.xml`
+
+If the filter is not registered, you'll see a detailed error message with configuration instructions.
+
 ## Usage
 
 ### SRT Stream Setup
@@ -59,8 +108,47 @@ segment001.ts
 segment002.ts
 ```
 
+## Testing with AWS Elemental MediaTailor
+
+You can test SCTE-35 ad insertion using Amazon MediaTailor:
+
+### 1. Configure MediaTailor
+
+Create a new AWS Elemental MediaTailor configuration:
+
+- **Video content source**: `http://ServerIP/WebRTCAppEE/`
+  - ⚠️ **Important**: Port must be **80** (HTTP), MediaTailor does not support custom ports
+- **Ad Decision Server (ADS) URL**: Use Google's test ad server or your own VAST/VMAP endpoint
+
+**Example ADS URL (Google DoubleClick test ads):**
+```
+https://pubads.g.doubleclick.net/gampad/ads?sz=640x480&iu=/124319096/external/ad_rule_samples&ciu_szs=640x480&ad_rule=1&impl=s&gdfp_req=1&env=vp&output=vmap&unviewed_position_start=1&cust_params=deployment%3Ddevsite%26sample_ar%3Dpremidpost&cmsid=496&vid=short_onecue&correlator=[avail.random]
+```
+
+- **Alternatively**, you can create and serve your own VAST/VMAP XML with custom ad videos. [See this post for more details](https://aws.amazon.com/blogs/media/build-your-own-vast-3-0-response-xml-to-test-with-aws-elemental-mediatailor/)
+
+### 2. Play the Stream
+
+Once configured, access your stream through MediaTailor's playback URL:
+
+```
+https://<mediatailor-hls-playback-prefix>/streams/<streamName>_adaptive.m3u8
+```
+
+Replace:
+- `<mediatailor-hls-playback-prefix>`: Your MediaTailor HLS playback prefix from the configuration
+- `<streamName>`: Your Ant Media Server stream name
+
+### 3. Verify Ad Insertion
+
+When a SCTE-35 cue-out event is detected in your SRT stream:
+1. The plugin injects SCTE-35 markers into the HLS manifest
+2. MediaTailor detects these markers
+3. MediaTailor automatically replaces content with ads from your ADS
+4. After the ad break duration expires (cue-in), content resumes
+
 ## Changelog
 
-### Version 0.1.0
+### Version 1.0.0
 - Initial release
 - Basic SCTE-35 detection and HLS tag injection

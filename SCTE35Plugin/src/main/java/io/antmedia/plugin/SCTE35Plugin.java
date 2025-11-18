@@ -3,12 +3,15 @@ package io.antmedia.plugin;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import jakarta.servlet.FilterRegistration;
+import jakarta.servlet.ServletContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.WebApplicationContext;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.muxer.IAntMediaStreamHandler;
@@ -44,7 +47,47 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
         IAntMediaStreamHandler app = getApplication();
         app.addStreamListener(this);
         
-        logger.info("SCTE-35 Plugin initialized successfully");
+        // Check if SCTE35ManifestModifierFilter is registered in web.xml
+        checkFilterRegistration();
+        
+        logger.info("SCTE-35 Plugin initialized!");
+    }
+
+    /**
+     * Check if SCTE35ManifestModifierFilter is registered in the ServletContext
+     */
+    private void checkFilterRegistration() {
+        try {
+            WebApplicationContext webAppContext = (WebApplicationContext) applicationContext;
+            ServletContext servletContext = webAppContext.getServletContext();
+            
+            if (servletContext != null) {
+                FilterRegistration filterReg = servletContext.getFilterRegistration("SCTE35ManifestModifierFilter");
+                
+                if (filterReg == null) {
+                    logger.error("*************************************************************");
+                    logger.error("SCTE35ManifestModifierFilter is NOT registered in web.xml!");
+                    logger.error("Please add the following to your application's WEB-INF/web.xml:");
+                    logger.error("");
+                    logger.error("    <filter>");
+                    logger.error("        <filter-name>SCTE35ManifestModifierFilter</filter-name>");
+                    logger.error("        <filter-class>io.antmedia.scte35.SCTE35ManifestModifierFilter</filter-class>");
+                    logger.error("        <async-supported>true</async-supported>");
+                    logger.error("    </filter>");
+                    logger.error("    <filter-mapping>");
+                    logger.error("        <filter-name>SCTE35ManifestModifierFilter</filter-name>");
+                    logger.error("        <url-pattern>/streams/*</url-pattern>");
+                    logger.error("    </filter-mapping>");
+                    logger.error("");
+                    logger.error("Add this AFTER HlsManifestModifierFilter for correct order.");
+                    logger.error("*************************************************************");
+                } else {
+                    logger.info("SCTE35ManifestModifierFilter is properly registered in web.xml");
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not check filter registration: {}", e.getMessage());
+        }
     }
 
     /**
@@ -160,4 +203,4 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
     public String getStats() {
         return String.format("Active SCTE-35 listeners: %d", scte35ListenerMap.size());
     }
-} 
+}
