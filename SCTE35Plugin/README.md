@@ -152,3 +152,4 @@ When a SCTE-35 cue-out event is detected in your SRT stream:
 ### Version 1.0.0
 - Initial release
 - Basic SCTE-35 detection and HLS tag injection
+
