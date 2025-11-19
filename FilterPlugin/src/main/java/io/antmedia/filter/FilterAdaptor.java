@@ -47,7 +47,7 @@ import io.vertx.core.Vertx;
  * It receives the output of FilterGraph and feeds the output through IFilteredFrameListener
  *
  */
-public class FilterAdaptor implements IFrameListener, IPacketListener{
+public class FilterAdaptor implements IFrameListener, IPacketListener {
 	private FilterGraph videoFilterGraph = null;
 	private FilterGraph audioFilterGraph = null;
 
@@ -672,6 +672,11 @@ public class FilterAdaptor implements IFrameListener, IPacketListener{
 				logger.warn("Audio Decoder is not initialized for {}", streamId);
 			}
 		}
+		return packet;
+	}
+
+	@Override
+	public AVPacket onDataPacket(String streamId, AVPacket packet) {
 		return packet;
 	}
 
