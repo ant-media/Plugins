@@ -5,7 +5,7 @@ import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import io.antmedia.plugin.api.IPacketListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
 
-public class SamplePacketListener implements IPacketListener{
+public class SamplePacketListener implements IPacketListener {
 
 	private int packetCount = 0;
 
@@ -24,6 +24,11 @@ public class SamplePacketListener implements IPacketListener{
 	@Override
 	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
 		packetCount++;
+		return packet;
+	}
+
+	@Override
+	public AVPacket onDataPacket(String streamId, AVPacket packet) {
 		return packet;
 	}
 

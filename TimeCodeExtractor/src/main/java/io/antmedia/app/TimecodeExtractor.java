@@ -16,7 +16,7 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.plugin.api.IPacketListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
 
-public class TimecodeExtractor implements IPacketListener{
+public class TimecodeExtractor implements IPacketListener {
 
 	private int packetCount = 0;
 	private String streamId;
@@ -60,6 +60,11 @@ public class TimecodeExtractor implements IPacketListener{
 	@Override
 	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
 		packetCount++;
+		return packet;
+	}
+
+	@Override
+	public AVPacket onDataPacket(String streamId, AVPacket packet) {
 		return packet;
 	}
 

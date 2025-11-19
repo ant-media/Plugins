@@ -12,7 +12,7 @@ import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.api.IPacketListener;
 import io.antmedia.plugin.api.StreamParametersInfo;
 
-public class SEItoID3Converter implements IPacketListener{
+public class SEItoID3Converter implements IPacketListener {
 
 	private int packetCount = 0;
 	private String streamId;
@@ -62,6 +62,11 @@ public class SEItoID3Converter implements IPacketListener{
 	@Override
 	public AVPacket onAudioPacket(String streamId, AVPacket packet) {
 		packetCount++;
+		return packet;
+	}
+
+	@Override
+	public AVPacket onDataPacket(String streamId, AVPacket packet) {
 		return packet;
 	}
 
