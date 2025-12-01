@@ -42,7 +42,11 @@ jobs:
 
         - name: Build Ant Media Server Parent project
           run: |
-            git clone --depth=1 -b ${{ github.ref_name }} https://github.com/ant-media/ant-media-server-parent.git || git clone --depth=1 https://github.com/ant-media/ant-media-server-parent.git
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              git clone --depth=1 https://github.com/ant-media/ant-media-server-parent.git
+            else
+              git clone --depth=1 -b "${{ github.ref_name }}" https://github.com/ant-media/ant-media-server-parent.git
+            fi
             cd ant-media-server-parent
             mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
             cd ..
