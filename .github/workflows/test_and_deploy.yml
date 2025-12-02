@@ -53,7 +53,11 @@ jobs:
 
         - name: Build Ant Media Server project
           run: |
-             git clone --depth=1 -b ${{ github.ref_name }} https://github.com/ant-media/Ant-Media-Server.git || git clone --depth=1 https://github.com/ant-media/Ant-Media-Server.git
+             BRANCH="${{ github.ref_name }}"
+             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+               BRANCH="${{ github.head_ref }}"
+             fi
+             git clone --depth=1 -b "$BRANCH" https://github.com/ant-media/Ant-Media-Server.git || git clone --depth=1 https://github.com/ant-media/Ant-Media-Server.git
              cd Ant-Media-Server
              mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
              cd ..
