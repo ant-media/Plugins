@@ -34,6 +34,11 @@ public class PythonWrapPacketListener implements IPacketListener {
   }
 
   @Override
+  public AVPacket onDataPacket(String streamId, AVPacket packet) {
+    return packet;
+  }
+
+  @Override
   public void setVideoStreamInfo(String streamId, StreamParametersInfo videoStreamInfo) {
   }
 
