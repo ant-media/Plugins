@@ -46,7 +46,7 @@ jobs:
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
               BRANCH="${{ github.head_ref }}"
             fi
-            git clone --depth=1 -b "$BRANCH" https://github.com/ant-media/ant-media-server-parent.git || git clone --depth=1 -b master https://github.com/ant-media/ant-media-server-parent.git
+            git clone --depth=1 -b "$BRANCH" https://github.com/ant-media/ant-media-server-parent.git || git clone --depth=1 https://github.com/ant-media/ant-media-server-parent.git
             cd ant-media-server-parent
             mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
             cd ..
