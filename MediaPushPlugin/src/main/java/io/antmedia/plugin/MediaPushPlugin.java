@@ -117,8 +117,7 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 					"--disable-gpu-vsync",
 					"--disable-audio-output",
 					"--disable-background-timer-throttling",
-					"--headless=new",
-					"--start-fullscreen");
+					"--headless=new");
 
 	public static final int TIMEOUT_IN_SECONDS = 30;
 
