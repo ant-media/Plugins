@@ -555,7 +555,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		ChromeDriver chromeDriver = new ChromeDriver(options);
 
 		if (height > 0 && width > 0) {
-			try {
 				chromeDriver.manage().window().setSize(new Dimension(width, height));
 
 				try {
@@ -570,9 +569,6 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 				} catch (Exception cdpException) {
 					logger.warn("CDP command failed, using Selenium API only: {}", cdpException.getMessage());
 				}
-			} catch (Exception e) {
-				logger.warn("Failed to set window size: {}", e.getMessage());
-			}
 		}
 
 		return chromeDriver;
