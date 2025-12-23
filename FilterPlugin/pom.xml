@@ -17,6 +17,11 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/ma
 		<sonar.projectKey>ant-media_plugins</sonar.projectKey>
 		<sonar.organization>ant-media-plugins</sonar.organization>
 		<argLine></argLine> <!-- Empty default value -->
+		<sonar.exclusions>
+	        **/.github/**,
+	        **/*.yml,
+	        **/*.yaml
+	    </sonar.exclusions>
 	</properties>
 	<developers>
     		<developer>
@@ -159,6 +164,11 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/ma
 			        </execution>
 			    </executions>
 			</plugin>
+			<plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>${sonar-maven-plugin.version}</version>
+            </plugin>
 		</plugins>
 	</build>
 	<dependencies>

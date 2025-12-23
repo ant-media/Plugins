@@ -15,6 +15,11 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<sonar.projectKey>io.antmedia.plugin:media-push</sonar.projectKey>
 		<sonar.organization>ant-media-plugins</sonar.organization>
+		<sonar.exclusions>
+	        **/.github/**,
+	        **/*.yml,
+	        **/*.yaml
+	    </sonar.exclusions>
 	</properties>
 	<developers>
     		<developer>
@@ -123,6 +128,11 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>${sonar-maven-plugin.version}</version>
+            </plugin>
 		</plugins>
 		<resources>
 			<resource>
