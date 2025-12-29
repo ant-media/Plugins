@@ -36,10 +36,12 @@ import org.junit.runner.Description;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.openqa.selenium.Dimension;
 import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebDriver.TargetLocator;
+import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
@@ -103,6 +105,105 @@ public class MediaPushPluginUnitTest  {
 		}
 
 	}
+    @Test
+    public void testWindowSizeWithDifferentDimensions() throws IOException {
+        MediaPushPlugin plugin = new MediaPushPlugin();
+        
+        // Test with different common resolutions
+        int[][] testDimensions = {
+            {1920, 1080},  // Full HD
+            {1280, 720},   // HD
+            {640, 360},    // Low resolution
+            {800, 600}     // Standard resolution
+        };
+        
+        for (int[] dims : testDimensions) {
+            int expectedWidth = dims[0];
+            int expectedHeight = dims[1];
+            String streamId = "testDim_" + expectedWidth + "x" + expectedHeight + "_" + System.currentTimeMillis();
+            
+            RemoteWebDriver driver = null;
+            try {
+                driver = plugin.createDriver(expectedWidth, expectedHeight, streamId, null);
+                
+                // Navigate to a simple page to ensure JavaScript can execute
+                driver.get("data:text/html,<html><body></body></html>");
+                
+                Dimension actualSize = driver.manage().window().getSize();
+                assertEquals("Width mismatch for " + expectedWidth + "x" + expectedHeight, 
+                    expectedWidth, actualSize.getWidth());
+                assertEquals("Height mismatch for " + expectedWidth + "x" + expectedHeight, 
+                    expectedHeight, actualSize.getHeight());
+                
+                // Verify viewport size
+                JavascriptExecutor js = (JavascriptExecutor) driver;
+                Long viewportWidth = (Long) js.executeScript("return window.innerWidth");
+                Long viewportHeight = (Long) js.executeScript("return window.innerHeight");
+                
+                assertTrue("Viewport width should match for " + expectedWidth + "x" + expectedHeight + 
+                    ". Expected: " + expectedWidth + ", Actual: " + viewportWidth,
+                    Math.abs(viewportWidth - expectedWidth) <= 10);
+                assertTrue("Viewport height should match for " + expectedWidth + "x" + expectedHeight + 
+                    ". Expected: " + expectedHeight + ", Actual: " + viewportHeight,
+                    Math.abs(viewportHeight - expectedHeight) <= 10);
+                    
+            } finally {
+                if (driver != null) {
+                    driver.quit();
+                }
+            }
+        }
+    }
+    
+    @Test
+    public void testWindowSizeWithDefaultDimensions() throws IOException {
+        MediaPushPlugin plugin = new MediaPushPlugin();
+        String streamId = "testDefaultDim_" + System.currentTimeMillis();
+        
+        RemoteWebDriver driver = null;
+        try {
+            // Test with zero dimensions (should use default)
+            driver = plugin.createDriver(0, 0, streamId, null);
+            
+            // Should not throw exception and driver should be created
+            assertNotNull("Driver should be created even with default dimensions", driver);
+            
+            Dimension actualSize = driver.manage().window().getSize();
+            // Default size should be reasonable (not zero)
+            assertTrue("Default width should be greater than 0", actualSize.getWidth() > 0);
+            assertTrue("Default height should be greater than 0", actualSize.getHeight() > 0);
+            
+        } finally {
+            if (driver != null) {
+                driver.quit();
+            }
+        }
+    }
+    
+    @Test
+    public void testWindowSizeWithExtraChromeSwitches() throws IOException {
+        MediaPushPlugin plugin = new MediaPushPlugin();
+        int expectedWidth = 1280;
+        int expectedHeight = 720;
+        String streamId = "testExtraSwitches_" + System.currentTimeMillis();
+        
+        RemoteWebDriver driver = null;
+        try {
+            driver = plugin.createDriver(expectedWidth, expectedHeight, streamId,
+                Arrays.asList("--disable-gpu", "--disable-dev-shm-usage"));
+            
+            Dimension actualSize = driver.manage().window().getSize();
+            assertEquals("Window width should match even with extra switches", 
+                expectedWidth, actualSize.getWidth());
+            assertEquals("Window height should match even with extra switches", 
+                expectedHeight, actualSize.getHeight());
+            
+        } finally {
+            if (driver != null) {
+                driver.quit();
+            }
+        }
+    }
 	
 	@Test
 	public void testStartMediaPushWithEndpoint() throws IOException {

@@ -37,6 +37,7 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.openqa.selenium.By;
+import org.openqa.selenium.Dimension;
 import org.openqa.selenium.InvalidArgumentException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.TimeoutException;
@@ -551,8 +552,26 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 		logPrefs.enable(LogType.BROWSER, Level.ALL);
 
 		options.setCapability( "goog:loggingPrefs", logPrefs);
+		ChromeDriver chromeDriver = new ChromeDriver(options);
 
-		return new ChromeDriver(options);
+		if (height > 0 && width > 0) {
+				chromeDriver.manage().window().setSize(new Dimension(width, height));
+
+				try {
+					Map<String, Object> deviceMetrics = new java.util.HashMap<>();
+					deviceMetrics.put("width", width);
+					deviceMetrics.put("height", height);
+					deviceMetrics.put("deviceScaleFactor", 1);
+					deviceMetrics.put("mobile", false);
+
+					chromeDriver.executeCdpCommand("Emulation.setDeviceMetricsOverride", deviceMetrics);
+					logger.info("Set viewport size via CDP to {}x{} for streamId:{}", width, height, streamId);
+				} catch (Exception cdpException) {
+					logger.warn("CDP command failed, using Selenium API only: {}", cdpException.getMessage());
+				}
+		}
+
+		return chromeDriver;
 	}
 
 
