@@ -52,7 +52,7 @@ echo "Google Chrome installation is complete."
 # Release URL
 releaseUrl="https://repo1.maven.org/maven2/io/antmedia/plugin/media-push/maven-metadata.xml"
 # Snapshot URL
-snapshotUrl="https://oss.sonatype.org/service/local/repositories/snapshots/content/io/antmedia/plugin/media-push/maven-metadata.xml"
+snapshotUrl="https://central.sonatype.com/repository/maven-snapshots/io/antmedia/plugin/media-push/maven-metadata.xml"
 
 
 REDIRECT="releases"
