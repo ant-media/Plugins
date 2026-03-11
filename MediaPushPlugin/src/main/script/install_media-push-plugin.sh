@@ -51,8 +51,16 @@ echo "Google Chrome installation is complete."
 
 # Release URL
 releaseUrl="https://repo1.maven.org/maven2/io/antmedia/plugin/media-push/maven-metadata.xml"
-# Snapshot URL
-snapshotUrl="https://central.sonatype.com/repository/maven-snapshots/io/antmedia/plugin/media-push/maven-metadata.xml"
+# Snapshot metadata URL
+snapshotBaseUrl="https://central.sonatype.com/repository/maven-snapshots/io/antmedia/plugin/media-push"
+snapshotMetadataUrl="${snapshotBaseUrl}/maven-metadata.xml"
+
+extract_first_tag_value() {
+    local tag_name="$1"
+    local file_path="$2"
+
+    grep -o "<${tag_name}>[^<]*</${tag_name}>" "$file_path" | head -n 1 | sed "s#</\\?${tag_name}>##g"
+}
 
 
 REDIRECT="releases"
@@ -67,7 +75,7 @@ done
 
 if [ "$REDIRECT" = "snapshots" ]; then
     echo "Installing snapshot version..."
-    wget -O maven-metadata.xml $snapshotUrl
+    wget -O maven-metadata.xml "$snapshotMetadataUrl"
     if [ $? -ne 0 ]; then
       echo "There is a problem in getting the version of the media push plugin."
       exit $?
@@ -79,7 +87,7 @@ else
     # Check if wget failed (e.g., 404 error)
     if [ $? -ne 0 ]; then
         echo "Release URL failed (404). Trying the snapshot URL..."
-        wget -O maven-metadata.xml $snapshotUrl
+        wget -O maven-metadata.xml "$snapshotMetadataUrl"
         if [ $? -ne 0 ]; then
             echo "There is a problem in getting the version of the media push plugin."
             exit $?
@@ -89,13 +97,44 @@ else
 fi
 
 
-export LATEST_VERSION=$(grep -o '<version>[^<]*</version>' maven-metadata.xml | tail -n 1 | sed 's/<\/\?version>//g')
+if [ "$REDIRECT" = "snapshots" ]; then
+    LATEST_VERSION=$(extract_first_tag_value "latest" "maven-metadata.xml")
+    if [ -z "$LATEST_VERSION" ]; then
+        LATEST_VERSION=$(extract_first_tag_value "version" "maven-metadata.xml")
+    fi
+    LATEST_VERSION="${LATEST_VERSION%-SNAPSHOT}"
+else
+    LATEST_VERSION=$(extract_first_tag_value "release" "maven-metadata.xml")
+    if [ -z "$LATEST_VERSION" ]; then
+        LATEST_VERSION=$(grep -o '<version>[^<]*</version>' maven-metadata.xml | tail -n 1 | sed 's/<\/\?version>//g')
+    fi
+fi
+
+if [ -z "$LATEST_VERSION" ]; then
+    echo "Latest media push plugin version could not be determined."
+    exit 1
+fi
 
 #wget -O media-push.jar "https://repo1.maven.org/maven2/io/antmedia/plugin/media-push/${LATEST_VERSION}/media-push-${LATEST_VERSION}.jar"
 
 if [ "$REDIRECT" = "snapshots" ]; then
     echo "Downloading snapshot build..."
-    wget -O media-push.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=${REDIRECT}&g=io.antmedia.plugin&a=media-push&v=${LATEST_VERSION}&e=jar"
+    snapshotVersion="${LATEST_VERSION}-SNAPSHOT"
+    snapshotVersionMetadataUrl="${snapshotBaseUrl}/${snapshotVersion}/maven-metadata.xml"
+
+    wget -O snapshot-maven-metadata.xml "$snapshotVersionMetadataUrl"
+    if [ $? -ne 0 ]; then
+        echo "There is a problem in getting the snapshot artifact metadata of the media push plugin."
+        exit $?
+    fi
+
+    SNAPSHOT_VALUE=$(grep -o '<value>[^<]*</value>' snapshot-maven-metadata.xml | tail -n 1 | sed 's/<\/\?value>//g')
+    if [ -z "$SNAPSHOT_VALUE" ]; then
+        echo "Snapshot artifact version could not be determined."
+        exit 1
+    fi
+
+    wget -O media-push.jar "${snapshotBaseUrl}/${snapshotVersion}/media-push-${SNAPSHOT_VALUE}.jar"
 else
     echo "Downloading stable release..."
     wget -O media-push.jar "https://repo1.maven.org/maven2/io/antmedia/plugin/media-push/${LATEST_VERSION}/media-push-${LATEST_VERSION}.jar"
