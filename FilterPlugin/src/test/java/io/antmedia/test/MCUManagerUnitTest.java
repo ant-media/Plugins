@@ -95,7 +95,8 @@ public class MCUManagerUnitTest {
 		
 		Broadcast room = new Broadcast();
 		room.setStreamId(roomId);
-		room.setConferenceMode(WebSocketConstants.MCU);
+		
+		mcuManager.addCustomRoom(roomId, true, true);
 		
 		dataStore.save(room);
 		
@@ -137,13 +138,22 @@ public class MCUManagerUnitTest {
 		
 		Broadcast room = new Broadcast();
 		room.setStreamId(roomId);
-		room.setConferenceMode(WebSocketConstants.LEGACY);
-		room.setSubTrackStreamIds(Arrays.asList(streamId));
 		dataStore.save(room);
+		
+		//create a broadcast with streamId and maintrack roomId and save to the datastore
+		Broadcast broadcast2 = new Broadcast();
+		broadcast2.setStreamId(roomId);
+		broadcast2.setStatus(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING);
+		broadcast2.setUpdateTime(System.currentTimeMillis());
+		broadcast2.setMainTrackStreamId(roomId);
+		dataStore.save(broadcast2);
+		
+
+		mcuManager.addCustomRoom(roomId, true, true);
 		
 		mcuManager.setApplicationContext(null);
 		
-		mcuManager.addCustomRoom(roomId);
+		mcuManager.addCustomRoom(roomId, true, true);
 		
 		verify(filtersManager, timeout(MCUManager.CONFERENCE_INFO_POLL_PERIOD_MS*4000).times(1)).createFilter(any(), eq(app));
 

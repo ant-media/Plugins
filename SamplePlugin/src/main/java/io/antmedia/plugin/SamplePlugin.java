@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.app.SampleFrameListener;
 import io.antmedia.app.SamplePacketListener;
+import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.api.IFrameListener;
@@ -64,13 +65,13 @@ public class SamplePlugin implements ApplicationContextAware, IStreamListener{
 	}
 
 	@Override
-	public void streamStarted(String streamId) {
-		logger.info("*************** Stream Started: {} ***************", streamId);
+	public void streamStarted(Broadcast broadcast) {
+		logger.info("*************** Stream Started: {} ***************", broadcast.getStreamId());
 	}
 
 	@Override
-	public void streamFinished(String streamId) {
-		logger.info("*************** Stream Finished: {} ***************", streamId);
+	public void streamFinished(Broadcast broadcast) {
+		logger.info("*************** Stream Finished: {} ***************", broadcast.getStreamId());
 	}
 
 	@Override

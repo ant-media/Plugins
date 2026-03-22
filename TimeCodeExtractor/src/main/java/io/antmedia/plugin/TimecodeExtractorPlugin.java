@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.app.TimecodeExtractor;
+import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.IStreamListener;
 import io.vertx.core.Vertx;
@@ -52,8 +53,8 @@ public class TimecodeExtractorPlugin implements ApplicationContextAware, IStream
 	}
 
 	@Override
-	public void streamStarted(String streamId) {
-
+	public void streamStarted(Broadcast broadcast) {
+		String streamId = broadcast.getStreamId();
 		AntMediaApplicationAdapter app = getApplication();
 		TimecodeExtractor timeCodeExtractor = new TimecodeExtractor(streamId, getApplication());
 		boolean result = app.addPacketListener(streamId, timeCodeExtractor);
@@ -70,7 +71,8 @@ public class TimecodeExtractorPlugin implements ApplicationContextAware, IStream
 	}
 
 	@Override
-	public void streamFinished(String streamId) {
+	public void streamFinished(Broadcast broadcast) {
+		String streamId = broadcast.getStreamId();
 		TimecodeExtractor timecodeExtractor = timeCodeExtactorMap.remove(streamId);
 		if (timecodeExtractor != null) 
 		{

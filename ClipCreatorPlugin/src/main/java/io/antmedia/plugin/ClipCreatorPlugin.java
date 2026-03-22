@@ -621,17 +621,8 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		return createdMp4Count;
 	}
 
+	@Override
 	public void streamStarted(Broadcast broadcast) {
-
-	}
-
-	@Override
-	public void streamStarted(String streamId) {
-
-	}
-
-	@Override
-	public void streamFinished(String streamId) {
 
 	}
 
