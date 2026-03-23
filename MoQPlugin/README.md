@@ -39,6 +39,7 @@ Copy `src/dist/` to your AMS webapp directory (e.g. `webapps/LiveApp/moq/`) and 
 - **Embedded relay** — manage `moq-relay` process lifecycle from the plugin instead of requiring a separately running instance
 - **Publishing** — accept inbound MoQ streams and publish them into AMS as live streams
 - test self-contained ssl dose it work
+- Maybe move moq to https://localhost:4443/moq/appname? and in stream name just to be streamName/source or  streamName/resolution
 
 
 ## Notes

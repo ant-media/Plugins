@@ -15,19 +15,23 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 
+import io.antmedia.datastore.db.types.Broadcast;
+
 import javax.annotation.PreDestroy;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Component(value = "plugin.moq")
 public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     private static final Logger logger = LoggerFactory.getLogger(MoQPlugin.class);
     private static final long LOG_POLL_INTERVAL_MS = 2000;
-    public  static final int  EMBEDDED_RELAY_PORT = 4443;
+    public  static final int    EMBEDDED_RELAY_PORT = 4443;
+    public  static final String PUBLISH_TYPE_MOQ    = "MoQ";
 
     private static final Gson gson = new Gson();
 
@@ -37,6 +41,10 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     private AppSettings appSettings;
     private Vertx vertx;
     private final ConcurrentHashMap<String, Set<MoQMuxer>> muxersByStream = new ConcurrentHashMap<>();
+
+    // Ingest: external MoQ publishers → AMS
+    private MoQAnnouncePoller announcePoller;
+    private final ConcurrentMap<String, MoQStreamFetcher> activeIngests = new ConcurrentHashMap<>();
 
     @Override
     public void setApplicationContext(ApplicationContext ctx) throws BeansException {
@@ -55,7 +63,12 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         if (settings.isUseEmbeddedRelay()) {
             startRelay();
         } else {
-            logger.info("Not using enbeded relay.");
+            logger.info("Not using embedded relay.");
+        }
+
+        if (settings.isIngestEnabled()) {
+            announcePoller = new MoQAnnouncePoller(settings.getRelayUrl(), app.getScope().getName(), this);
+            announcePoller.start(vertx);
         }
 
         logger.info("MoQ plugin initialized for app: {}, relay: {}", app.getScope().getName(), settings.getRelayUrl());
@@ -119,7 +132,12 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     @PreDestroy
     public void destroy() {
-        // relay lifecycle is managed by the JVM shutdown hook in startRelay()
+        if (announcePoller != null) {
+            announcePoller.stop(vertx);
+        }
+        activeIngests.values().forEach(MoQStreamFetcher::stopStream);
+        activeIngests.clear();
+        // relay process lifecycle is managed by the JVM shutdown hook in startRelay()
     }
 
     /** Called on the Vert.x timer thread — non-blocking poll of moq-cli stderr for all active streams. */
@@ -129,6 +147,9 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         }
         muxersByStream.values().forEach(muxers ->
             muxers.forEach(muxer -> readAvailable(muxer.getCliErrorStream(), muxer.getOutputURL()))
+        );
+        activeIngests.forEach((streamId, handler) ->
+            readAvailable(handler.getLogStream(), "ingest/" + streamId)
         );
     }
 
@@ -174,7 +195,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         }
 
         muxersByStream.put(streamId, muxers);
-        logger.info("MoQ: {} quality timuxers.add(muxer);muxers.add(muxer);er(s) publishing for stream {}", muxers.size(), streamId);
+        logger.info("MoQ: {} quality muxer(s) publishing for stream {}", muxers.size(), streamId);
     }
 
     @Override
@@ -194,6 +215,64 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     @Override public void joinedTheRoom(String roomId, String streamId) {}
     @Override public void leftTheRoom(String roomId, String streamId) {}
+
+    // ── Ingest management (called by MoQAnnouncePoller) ───────────────────────
+
+    Set<String> getActiveIngestStreamIds() {
+        return activeIngests.keySet();
+    }
+
+    MoQStreamFetcher getIngestHandler(String streamId) {
+        return activeIngests.get(streamId);
+    }
+
+    void startIngest(String streamId) {
+        IAntMediaStreamHandler app = getApplication();
+
+        // StreamFetcher.WorkerThread requires a Broadcast record in the DB — create one if
+        // the stream was never registered manually. Type "liveStream" makes it appear in the
+        // management console alongside RTMP/WebRTC streams, not under stream sources.
+        if (app.getDataStore().get(streamId) == null) {
+            if (app.getAppSettings().isAcceptOnlyStreamsInDataStore()) {
+                logger.info("MoQ stream can not be ingested! Stream {} not defined, but only predifined streams are allowed", streamId);
+                return;    
+            }
+
+            Broadcast b = AntMediaApplicationAdapter.createZombiBroadcast(
+                    streamId, streamId,
+                    IAntMediaStreamHandler.BROADCAST_STATUS_CREATED,
+                    PUBLISH_TYPE_MOQ,
+                    "", "{}", "");
+            b.setType(AntMediaApplicationAdapter.LIVE_STREAM);
+            app.getDataStore().save(b);
+        }
+
+        MoQSettings settings = loadSettings();
+        MoQStreamFetcher fetcher;
+        try {
+            fetcher = new MoQStreamFetcher(
+                    streamId,
+                    app.getScope().getName(),
+                    settings.getRelayUrl(),
+                    app.getScope(),
+                    vertx);
+        } catch (RuntimeException e) {
+            logger.error("MoQ: cannot create stream fetcher for stream {}", streamId, e);
+            return;
+        }
+        fetcher.setStartStreamForce(true);
+        activeIngests.put(streamId, fetcher);
+        fetcher.startStream();
+    }
+
+    void stopIngest(String streamId) {
+        MoQStreamFetcher fetcher = activeIngests.remove(streamId);
+        if (fetcher != null) {
+            fetcher.stopStream();
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     private IAntMediaStreamHandler getApplication() {
         return (IAntMediaStreamHandler) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);

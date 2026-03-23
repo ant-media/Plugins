@@ -112,8 +112,9 @@ public class MoQMuxer extends Muxer {
 
     @Override
     public synchronized boolean prepareIO() {
-        options.put("movflags", "cmaf+separate_moof+delay_moov+skip_trailer+frag_every_frame");
+        options.put("movflags", "cmaf+separate_moof+delay_moov+skip_trailer");
         options.put("fflags", "+flush_packets");
+        options.put("frag_duration", "5000"); // write every 5ms (max 200 fps tehnically)
         running = true;
         startMoqCli();
         return super.prepareIO();
