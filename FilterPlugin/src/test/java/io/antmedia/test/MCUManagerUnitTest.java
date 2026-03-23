@@ -91,6 +91,7 @@ public class MCUManagerUnitTest {
 		DataStore dataStore = new InMemoryDataStore("test");
 		when(app.getDataStore()).thenReturn(dataStore );
 		doReturn(app).when(mcuManager).getApplication();
+		when(app.getVertx()).thenReturn(Vertx.vertx());
 
 		
 		Broadcast room = new Broadcast();
