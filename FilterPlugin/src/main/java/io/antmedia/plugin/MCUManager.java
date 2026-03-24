@@ -227,6 +227,6 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 
 	public void removeCustomRoom(String roomId) {
 		rooms.remove(roomId);	
-		filtersManager.delete(roomId, appAdaptor);
+		getFiltersManager().delete(roomId, appAdaptor);
 	}
 }

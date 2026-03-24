@@ -104,8 +104,39 @@ public class MCUManagerUnitTest {
 		mcuManager.updateRoomFilter(roomId);
 		
 		verify(filtersManager, times(1)).delete(roomId, app);
+		
+		mcuManager.removeCustomRoom(roomId);
 
 
+	}
+	
+	@Test
+	public void testDeleteCustomRoom() throws Exception {
+		String roomId = "room"+RandomUtils.nextInt();
+		MCUManager mcuManager = spy(new MCUManager());
+		FiltersManager filtersManager = spy(new FiltersManager());
+		
+		doReturn(filtersManager).when(mcuManager).getFiltersManager();
+		
+		AntMediaApplicationAdapter app = mock(AntMediaApplicationAdapter.class);
+		DataStore dataStore = new InMemoryDataStore("test");
+		when(app.getDataStore()).thenReturn(dataStore );
+		doReturn(app).when(mcuManager).getApplication();
+		when(app.getVertx()).thenReturn(Vertx.vertx());
+		
+		Broadcast room = new Broadcast();
+		room.setStreamId(roomId);
+		dataStore.save(room);
+		
+		mcuManager.addCustomRoom(roomId, true, true);
+		
+		mcuManager.customFilterAdded(roomId);
+		
+		mcuManager.updateRoomFilter(roomId);
+
+		//it should be deleted because there is no active subtrack
+		verify(filtersManager, times(1)).delete(roomId, app);
+		
 	}
 	
 	@Test
