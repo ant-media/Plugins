@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Detection Viewer</title>
+  <link rel="stylesheet" href="./viewer.css">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.14/dist/hls.min.js"></script>
+</head>
+<body>
+  <main class="container">
+    <h1>Source vs Processed Stream Viewer</h1>
+
+    <section class="controls">
+      <label>
+        Stream ID
+        <input id="streamIdInput" type="text" placeholder="streamId_xxx" />
+      </label>
+
+      <label>
+        Model
+        <select id="modelSelect">
+          <option value="face_detections">face_detections</option>
+          <option value="yolo_general_detections">yolo_general_detections</option>
+          <option value="pose_detections">pose_detections</option>
+        </select>
+      </label>
+
+      <label>
+        Window (seconds)
+        <input id="windowSecondsInput" type="number" min="5" value="30" />
+      </label>
+
+      <button id="loadBtn" type="button">Load</button>
+      <button id="refreshBtn" type="button">Refresh Detections</button>
+    </section>
+
+    <section class="videos">
+      <div class="video-card">
+        <h2>Source</h2>
+        <iframe id="sourceFrame" class="player-frame" title="Source Player"></iframe>
+      </div>
+      <div class="video-card">
+        <h2>Processed</h2>
+        <iframe id="processedFrame" class="player-frame" title="Processed Player"></iframe>
+      </div>
+    </section>
+
+    <section class="timeline-section">
+      <div class="timeline-header">
+        <h2>Detections Timeline</h2>
+        <div class="timeline-actions">
+          <button id="prevDetectionBtn" type="button">Previous</button>
+          <button id="nextDetectionBtn" type="button">Next</button>
+        </div>
+      </div>
+
+      <div id="timelineBar" class="timeline-bar" title="Click to jump"></div>
+
+      <div class="timeline-info">
+        <span id="detectionCounter">No detections</span>
+        <span id="statusText"></span>
+      </div>
+    </section>
+  </main>
+
+  <script src="./viewer.js"></script>
+</body>
+</html>
