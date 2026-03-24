@@ -1,7 +1,6 @@
 import subprocess
 import threading
 import os
-import time
 import cv2
 
 
@@ -29,13 +28,9 @@ class StreamFeeder:
 
         self._process = None
         self._lock = threading.Lock()
-        self._frame_lock = threading.Lock()
         self._restart_count = 0
         self._max_restarts = 3
         self._closed = False
-        self._writer_thread = None
-        self._latest_frame = None
-        self._last_frame = None
 
     def _start_process(self):
         gop_size = 25
@@ -75,11 +70,11 @@ class StreamFeeder:
             "-f",
             "hls",
             "-hls_time",
-            "1",
+            "2",
             "-hls_list_size",
-            "3",
+            "6",
             "-hls_flags",
-            "delete_segments+append_list+omit_endlist+independent_segments+split_by_time",
+            "delete_segments+append_list+omit_endlist",
             "-hls_segment_filename",
             self.segment_pattern,
             self.playlist_path,
@@ -111,66 +106,37 @@ class StreamFeeder:
             self._start_process()
         return True
 
-    def _start_writer_thread(self):
-        if self._writer_thread is None:
-            self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
-            self._writer_thread.start()
-
-    def _writer_loop(self):
-        frame_interval = 1.0 / self.fps if self.fps > 0 else 0.05
-        next_tick = time.time()
-        while True:
-            with self._lock:
-                if self._closed:
-                    break
-                running = self._ensure_running()
-
-            if running:
-                with self._frame_lock:
-                    if self._latest_frame is not None:
-                        self._last_frame = self._latest_frame
-                        self._latest_frame = None
-                    frame = self._last_frame
-                if frame is not None:
-                    try:
-                        self._process.stdin.write(frame.tobytes())
-                    except Exception:
-                        with self._lock:
-                            try:
-                                if self._process is not None:
-                                    self._process.kill()
-                            except Exception:
-                                pass
-                            self._process = None
-
-            next_tick += frame_interval
-            sleep_for = next_tick - time.time()
-            if sleep_for > 0:
-                time.sleep(sleep_for)
-            else:
-                next_tick = time.time()
-
     def write(self, frame):
         with self._lock:
-            if self._closed:
+            if not self._ensure_running():
                 return False
-            self._start_writer_thread()
-
-        if frame is None:
-            return False
-        frame_h, frame_w = frame.shape[:2]
-        if frame_w != self.width or frame_h != self.height:
-            frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
-        with self._frame_lock:
-            self._latest_frame = frame.copy()
-        return True
+            if frame is None:
+                return False
+            frame_h, frame_w = frame.shape[:2]
+            if frame_w != self.width or frame_h != self.height:
+                frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
+            try:
+                self._process.stdin.write(frame.tobytes())
+                return True
+            except Exception:
+                # Retry once after restart on broken pipe/process crash.
+                try:
+                    if self._process is not None:
+                        self._process.kill()
+                except Exception:
+                    pass
+                self._process = None
+                if not self._ensure_running():
+                    return False
+                try:
+                    self._process.stdin.write(frame.tobytes())
+                    return True
+                except Exception:
+                    return False
 
     def stop(self):
         with self._lock:
             self._closed = True
-        if self._writer_thread is not None:
-            self._writer_thread.join(timeout=3)
-        with self._lock:
             if self._process is not None:
                 try:
                     if self._process.stdin:

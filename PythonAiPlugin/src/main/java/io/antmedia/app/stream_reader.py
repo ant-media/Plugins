@@ -11,8 +11,7 @@ class _PluginWorker:
         self.plugin = plugin
         self.stream_id = stream_id
         self.feeder = feeder
-        # Keep queue tiny to prioritize latest frames and avoid buffering lag.
-        self._queue = queue.Queue(maxsize=2)
+        self._queue = queue.Queue(maxsize=15)
         self._running = False
         self._thread = None
 
@@ -42,12 +41,6 @@ class _PluginWorker:
                 frame, timestamp_ms = self._queue.get(timeout=0.5)
             except queue.Empty:
                 continue
-            # Drain extra queued frames and process only the freshest one.
-            try:
-                while True:
-                    frame, timestamp_ms = self._queue.get_nowait()
-            except queue.Empty:
-                pass
             try:
                 self.plugin.on_video_frame(
                     self.stream_id,

@@ -60,15 +60,7 @@ public class PythonPlugin implements ApplicationContextAware, IStreamListener {
       jepBridge = JepPythonBridge.getInstance();
     }
     if (!jepBridge.isInitialized()) {
-      String pluginPath = System.getProperty(PYTHON_PLUGIN_PATH_PROPERTY);
-      if (pluginPath == null || pluginPath.isBlank()) {
-        String amsDir = System.getenv("AMS_DIR");
-        if (amsDir != null && !amsDir.isBlank()) {
-          pluginPath = amsDir;
-        } else {
-          pluginPath = DEFAULT_PYTHON_PLUGIN_PATH;
-        }
-      }
+      String pluginPath = System.getProperty(PYTHON_PLUGIN_PATH_PROPERTY, DEFAULT_PYTHON_PLUGIN_PATH);
       logger.info("Initializing JEP Python bridge with plugin path: {}", pluginPath);
       jepBridge.init(pluginPath);
     }
