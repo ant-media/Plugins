@@ -71,7 +71,7 @@ public class FilterRestService {
 	    return new Result(getFiltersManager().delete(id, getAppAdaptor()));
 	}
 
-	@Operation(summary = "Creates MCU filter for non MCU room",
+	@Operation(summary = "Creates MCU for the roomo in the parameter",
 	           responses = {@ApiResponse(responseCode = "200", description = "MCU filter created for room")})
 	@POST
 	@Path("/room-mcu-filter/{roomId}")
