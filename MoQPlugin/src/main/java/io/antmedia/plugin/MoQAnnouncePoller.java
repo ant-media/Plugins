@@ -27,7 +27,7 @@ public class MoQAnnouncePoller {
 
     private static final Logger logger = LoggerFactory.getLogger(MoQAnnouncePoller.class);
 
-    private final String    announceUrl;
+    private final String announceUrl;
     private final MoQPlugin owner;
     private long timerId = -1;
 
@@ -65,8 +65,6 @@ public class MoQAnnouncePoller {
             timerId = -1;
         }
     }
-
-    // ── Core logic ────────────────────────────────────────────────────────────
 
     private void reconcile() {
         Set<String> announced = fetchAnnounced();

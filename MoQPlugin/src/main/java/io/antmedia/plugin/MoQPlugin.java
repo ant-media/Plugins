@@ -30,7 +30,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     private static final Logger logger = LoggerFactory.getLogger(MoQPlugin.class);
     private static final long LOG_POLL_INTERVAL_MS = 2000;
-    public  static final int    EMBEDDED_RELAY_PORT = 4443;
+    public  static final int EMBEDDED_RELAY_PORT = 4443;
     public  static final String PUBLISH_TYPE_MOQ    = "MoQ";
 
     private static final Gson gson = new Gson();
@@ -180,8 +180,16 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         String relayUrl = loadSettings().getRelayUrl();
         Set<MoQMuxer> muxers = ConcurrentHashMap.newKeySet();
 
+        // For direct-muxing (RTMP/SRT), height=0 means "match any resolution".
+        // For WebRTC (directMuxingSupported=false), the EncoderAdaptor fallback in addMuxer()
+        // must match the muxer to a forwarder/encoder by exact height=0 never matches,
+        // so the muxer gets no data. Use the actual source height in that case.
+        int sourceAddHeight = 0;
+        if (!muxAdaptor.directMuxingSupported() && muxAdaptor.getVideoCodecParameters() != null) {
+            sourceAddHeight = muxAdaptor.getVideoCodecParameters().height();
+        }
         MoQMuxer sourceMuxer = new MoQMuxer(vertx, streamId, 0, appName, relayUrl);
-        if (muxAdaptor.addMuxer(sourceMuxer, 0) && muxAdaptor.directMuxingSupported()){
+        if (muxAdaptor.addMuxer(sourceMuxer, sourceAddHeight)) {
             muxers.add(sourceMuxer);
         }
 
@@ -215,8 +223,6 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     @Override public void joinedTheRoom(String roomId, String streamId) {}
     @Override public void leftTheRoom(String roomId, String streamId) {}
-
-    // ── Ingest management (called by MoQAnnouncePoller) ───────────────────────
 
     Set<String> getActiveIngestStreamIds() {
         return activeIngests.keySet();
@@ -271,8 +277,6 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
             fetcher.stopStream();
         }
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
 
     private IAntMediaStreamHandler getApplication() {
         return (IAntMediaStreamHandler) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);

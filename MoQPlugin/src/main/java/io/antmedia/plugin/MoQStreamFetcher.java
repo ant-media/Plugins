@@ -43,7 +43,7 @@ import java.net.SocketTimeoutException;
 public class MoQStreamFetcher extends StreamFetcher {
 
     private static final Logger logger = LoggerFactory.getLogger(MoQStreamFetcher.class);
-    private static final int ACCEPT_TIMEOUT_MS = 10_000;
+    private static final int ACCEPT_TIMEOUT_MS = 10000;
 
     // ThreadLocal carries the ServerSocket through the super() call so we can
     // create it before super() (to get the port) while still calling super() first.
@@ -54,10 +54,8 @@ public class MoQStreamFetcher extends StreamFetcher {
     private final String relayUrl;
     private final ServerSocket serverSocket;
 
-    private volatile Process    moqProcess;
-    private volatile Socket     relaySocket;
-
-    // ── Construction ──────────────────────────────────────────────────────────
+    private volatile Process moqProcess;
+    private volatile Socket relaySocket;
 
     public MoQStreamFetcher(String streamId, String appName, String relayUrl, IScope scope, Vertx vertx) {
         super(allocateUrl(), streamId, AntMediaApplicationAdapter.LIVE_STREAM, scope, vertx, 0);
@@ -86,8 +84,6 @@ public class MoQStreamFetcher extends StreamFetcher {
         }
     }
 
-    // ── Extra API ─────────────────────────────────────────────────────────────
-
     /** True if the StreamFetcher WorkerThread is still alive. Used by the poller. */
     public boolean isAlive() {
         return getThread() != null && getThread().isAlive();
@@ -97,8 +93,6 @@ public class MoQStreamFetcher extends StreamFetcher {
     public InputStream getLogStream() {
         return moqProcess != null ? moqProcess.getErrorStream() : null;
     }
-
-    // ── StreamFetcher overrides ───────────────────────────────────────────────
 
     @Override
     public void startStream() {
@@ -136,8 +130,6 @@ public class MoQStreamFetcher extends StreamFetcher {
 
         super.stopStream();
     }
-
-    // ── Internal helpers ──────────────────────────────────────────────────────
 
     private void startRelayThread() {
         Thread relay = new Thread(() -> {
