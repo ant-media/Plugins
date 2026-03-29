@@ -12,6 +12,7 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.app.NativeInterface;
 import io.antmedia.app.PythonWrapFrameListener;
 import io.antmedia.app.PythonWrapPacketListener;
+import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.api.IFrameListener;
@@ -95,23 +96,23 @@ public class PythonPlugin extends NativeInterface implements ApplicationContextA
   }
 
   @Override
-  public void streamStarted(String streamId) {
+  public void streamStarted(Broadcast broadcast) {
     isPythonRunning();
 
-    int width = getMuxAdaptor(streamId).getVideoCodecParameters().width();
-    int height = getMuxAdaptor(streamId).getVideoCodecParameters().height();
+    int width = getMuxAdaptor(broadcast.getStreamId()).getVideoCodecParameters().width();
+    int height = getMuxAdaptor(broadcast.getStreamId()).getVideoCodecParameters().height();
 
     NativeInterface.PY_WRAPPER.INSTANCE.aquirejil();
-    NativeInterface.PY_WRAPPER.INSTANCE.streamStarted(streamId,width,height);
+    NativeInterface.PY_WRAPPER.INSTANCE.streamStarted(broadcast.getStreamId(), width, height);
     NativeInterface.PY_WRAPPER.INSTANCE.releasejil();
-    register(streamId);
+    register(broadcast.getStreamId());
   }
 
   @Override
-  public void streamFinished(String streamId) {
+  public void streamFinished(Broadcast broadcast) {
     isPythonRunning();
     NativeInterface.PY_WRAPPER.INSTANCE.aquirejil();
-    NativeInterface.PY_WRAPPER.INSTANCE.streamFinished(streamId);
+    NativeInterface.PY_WRAPPER.INSTANCE.streamFinished(broadcast.getStreamId());
     NativeInterface.PY_WRAPPER.INSTANCE.releasejil();
   }
 
