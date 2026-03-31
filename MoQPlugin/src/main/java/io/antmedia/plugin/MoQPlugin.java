@@ -169,7 +169,8 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     }
 
     @Override
-    public void streamStarted(String streamId) {
+    public void streamStarted(Broadcast broadcast) {
+        String streamId = broadcast.getStreamId();
         MuxAdaptor muxAdaptor = getMuxAdaptor(streamId);
         if (muxAdaptor == null) {
             logger.warn("MoQ: no MuxAdaptor for stream {}", streamId);
@@ -207,7 +208,8 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     }
 
     @Override
-    public void streamFinished(String streamId) {
+    public void streamFinished(Broadcast broadcast) {
+        String streamId = broadcast.getStreamId();
         MuxAdaptor muxAdaptor = getMuxAdaptor(streamId);
         Set<MoQMuxer> muxers = muxersByStream.remove(streamId);
         if (muxers == null) {
