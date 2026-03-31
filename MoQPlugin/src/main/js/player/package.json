@@ -1,0 +1,16 @@
+{
+  "name": "ams-moq-player",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "@moq/watch": "^0.2.3",
+    "@moq/publish": "^0.2.3"
+  }
+}
