@@ -146,3 +146,10 @@ jobs:
                 mvn deploy -DskipTests=false --quiet --settings ../mvn-settings.xml
                 cd ..
 
+        - name: Build and Test MoQ Plugin
+          run: |
+            cd MoQPlugin
+            mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent deploy org.jacoco:jacoco-maven-plugin:report sonar:sonar --settings ../mvn-settings.xml -Dgpg.skip=true -DskipTests=false --quiet
+            sudo cp target/MoQPlugin.jar /usr/local/antmedia/plugins
+            cd ..
+
