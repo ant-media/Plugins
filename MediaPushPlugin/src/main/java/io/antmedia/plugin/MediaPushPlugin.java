@@ -592,8 +592,9 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	@Override
 	@SuppressWarnings("java:S5738")
-	public void streamStarted(String streamId) 
+	public void streamStarted(Broadcast broadcast) 
 	{
+		String streamId = broadcast.getStreamId();
 		if (recordingMap.containsKey(streamId)) 
 		{
 			getApplication().getMuxAdaptor(streamId).startRecording(recordingMap.get(streamId), 0);
@@ -603,7 +604,8 @@ public class MediaPushPlugin implements ApplicationContextAware, IStreamListener
 
 	@Override
 	@SuppressWarnings("java:S5738")
-	public void streamFinished(String streamId) {
+	public void streamFinished(Broadcast broadcast) {
+		String streamId = broadcast.getStreamId();
 		WebDriver driver = drivers.remove(streamId);
 		recordingMap.remove(streamId);
 		if (driver != null) {
