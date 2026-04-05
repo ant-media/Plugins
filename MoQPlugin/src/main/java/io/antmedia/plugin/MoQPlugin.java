@@ -7,6 +7,7 @@ import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.muxer.MoQMuxer;
 import io.antmedia.plugin.api.IStreamListener;
+import org.red5.server.api.scope.IScope;
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -258,12 +259,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         MoQSettings settings = loadSettings();
         MoQStreamFetcher fetcher;
         try {
-            fetcher = new MoQStreamFetcher(
-                    streamId,
-                    app.getScope().getName(),
-                    settings.getRelayUrl(),
-                    app.getScope(),
-                    vertx);
+            fetcher = createFetcher(streamId, app.getScope().getName(), settings.getRelayUrl(), app.getScope());
         } catch (RuntimeException e) {
             logger.error("MoQ: cannot create stream fetcher for stream {}", streamId, e);
             return;
@@ -278,6 +274,10 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         if (fetcher != null) {
             fetcher.stopStream();
         }
+    }
+
+    protected MoQStreamFetcher createFetcher(String streamId, String appName, String relayUrl, IScope scope) {
+        return new MoQStreamFetcher(streamId, appName, relayUrl, scope, vertx);
     }
 
     private IAntMediaStreamHandler getApplication() {
