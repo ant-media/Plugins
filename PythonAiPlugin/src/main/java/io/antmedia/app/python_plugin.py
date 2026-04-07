@@ -1,3 +1,4 @@
+import json
 import os
 from stream_reader import StreamReader
 
@@ -55,3 +56,58 @@ def streamFinished(streamid):
             plugin.on_stream_finished(streamid)
         except Exception as e:
             print("Error in {}.on_stream_finished: {}".format(type(plugin).__name__, e))
+
+
+def set_monitor_callback(cb):
+    for p in registered_plugins:
+        fn = getattr(p, "set_monitor_callback", None)
+        if fn is not None:
+            fn(cb)
+            print("Monitor callback attached to {}".format(type(p).__name__))
+            return
+
+
+def set_vision_monitor_config(stream_id, prompts_json, threshold, interval_sec):
+    """prompts_json: JSON array of strings. Returns True if applied."""
+    for p in registered_plugins:
+        fn = getattr(p, "set_monitor_prompts", None)
+        if fn is not None:
+            return fn(stream_id, prompts_json, threshold, interval_sec)
+    return False
+
+
+def clear_vision_monitor(stream_id):
+    for p in registered_plugins:
+        fn = getattr(p, "clear_monitor_prompts", None)
+        if fn is not None:
+            fn(stream_id)
+            return True
+    return False
+
+
+def enqueue_ollama_vision_job(stream_id, mode, user_prompt):
+    """Enqueue a vision job for OllamaVisionQueuePlugin. Returns True if accepted."""
+    for plugin in registered_plugins:
+        enqueue = getattr(plugin, "enqueue_job", None)
+        if enqueue is None:
+            continue
+        try:
+            if enqueue(stream_id, mode, user_prompt or ""):
+                return True
+        except Exception as e:
+            print("Error in {}.enqueue_job: {}".format(type(plugin).__name__, e))
+    return False
+
+
+def get_latest_frame_b64(streamid):
+    for plugin in registered_plugins:
+        try:
+            getter = getattr(plugin, "get_latest_frame_b64", None)
+            if getter is None:
+                continue
+            frame_b64 = getter(streamid)
+            if frame_b64:
+                return frame_b64
+        except Exception as e:
+            print("Error in {}.get_latest_frame_b64: {}".format(type(plugin).__name__, e))
+    return None

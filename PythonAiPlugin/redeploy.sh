@@ -1,7 +1,7 @@
 #!/bin/sh
 sudo systemctl stop antmedia
 set -e
-AMS_DIR=/home/usama/tem/newant/antmedia/
+AMS_DIR=/usr/local/antmedia
 mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
 OUT=$?
 
@@ -18,6 +18,7 @@ cp ./target/lib/sqlite-jdbc-*.jar $AMS_DIR/lib/
 cp ./src/main/java/io/antmedia/app/*.py $AMS_DIR/
 mkdir -p "$AMS_DIR/webapps/LiveApp/viewer"
 cp ./web/viewer/* "$AMS_DIR/webapps/LiveApp/viewer/"
+cp ./web/samples/* $AMS_DIR/webapps/LiveApp/samples/
 
 
 

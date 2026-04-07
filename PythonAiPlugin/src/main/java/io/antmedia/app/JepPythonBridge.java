@@ -92,7 +92,11 @@ public class JepPythonBridge {
 					interpreter.exec("python_plugin.set_java_callback('yolo_general_detections', _yolo_general_cb)");
 					interpreter.set("_pose_cb", new ResultCallback("pose_detections"));
 					interpreter.exec("python_plugin.set_java_callback('pose_detections', _pose_cb)");
+					interpreter.set("_ollama_vision_q_cb", new OllamaVisionQueueResultCallback());
+					interpreter.exec("python_plugin.set_java_callback('ollama_vision_queue', _ollama_vision_q_cb)");
 					interpreter.exec("python_plugin.init_python_plugin_state()");
+					interpreter.set("_mon_cb", new ResultCallback("monitor_alerts"));
+					interpreter.exec("python_plugin.set_monitor_callback(_mon_cb)");
 
 					logger.info("JEP Python interpreter initialized with plugin path: {}", pythonPluginPath);
 				} catch (JepException e) {
@@ -132,6 +136,108 @@ public class JepPythonBridge {
 			}).get();
 		} catch (Exception e) {
 			logger.error("Error dispatching streamFinished for stream: {}", streamId, e);
+		}
+	}
+
+	/**
+	 * Enqueue a vision analysis job (OllamaVisionQueuePlugin). Modes: analyze_image,
+	 * describe_image, identify_objects, read_text, custom.
+	 */
+	public boolean setVisionMonitorConfig(String streamId, String promptsJson, double threshold, double intervalSec) {
+		if (!initialized) {
+			return false;
+		}
+		try {
+			Object result = pythonExecutor.submit(() -> {
+				try {
+					return interpreter.invoke(
+							"python_plugin.set_vision_monitor_config",
+							streamId,
+							promptsJson == null ? "[]" : promptsJson,
+							threshold,
+							intervalSec);
+				} catch (JepException e) {
+					logger.error("Error calling python set_vision_monitor_config for stream: {}", streamId, e);
+					return Boolean.FALSE;
+				}
+			}).get();
+			if (result instanceof Boolean) {
+				return (Boolean) result;
+			}
+			return Boolean.TRUE.equals(result);
+		} catch (Exception e) {
+			logger.error("Error dispatching setVisionMonitorConfig for stream: {}", streamId, e);
+			return false;
+		}
+	}
+
+	public boolean clearVisionMonitor(String streamId) {
+		if (!initialized) {
+			return false;
+		}
+		try {
+			Object result = pythonExecutor.submit(() -> {
+				try {
+					return interpreter.invoke("python_plugin.clear_vision_monitor", streamId);
+				} catch (JepException e) {
+					logger.error("Error calling python clear_vision_monitor for stream: {}", streamId, e);
+					return Boolean.FALSE;
+				}
+			}).get();
+			if (result instanceof Boolean) {
+				return (Boolean) result;
+			}
+			return Boolean.TRUE.equals(result);
+		} catch (Exception e) {
+			logger.error("Error dispatching clearVisionMonitor for stream: {}", streamId, e);
+			return false;
+		}
+	}
+
+	public boolean enqueueOllamaVisionJob(String streamId, String mode, String userPrompt) {
+		if (!initialized) {
+			return false;
+		}
+		try {
+			Object result = pythonExecutor.submit(() -> {
+				try {
+					return interpreter.invoke(
+							"python_plugin.enqueue_ollama_vision_job",
+							streamId,
+							mode == null ? "" : mode,
+							userPrompt == null ? "" : userPrompt);
+				} catch (JepException e) {
+					logger.error("Error calling python enqueue_ollama_vision_job for stream: {}", streamId, e);
+					return Boolean.FALSE;
+				}
+			}).get();
+			if (result instanceof Boolean) {
+				return (Boolean) result;
+			}
+			return Boolean.TRUE.equals(result);
+		} catch (Exception e) {
+			logger.error("Error dispatching enqueueOllamaVisionJob for stream: {}", streamId, e);
+			return false;
+		}
+	}
+
+	public String getLatestFrameBase64(String streamId) {
+		if (!initialized) {
+			return null;
+		}
+		try {
+			Object result = pythonExecutor.submit(() -> {
+				try {
+					return interpreter.invoke("python_plugin.get_latest_frame_b64", streamId);
+				} catch (JepException e) {
+					logger.error("Error calling python get_latest_frame_b64 for stream: {}", streamId, e);
+					return null;
+				}
+			}).get();
+			return result == null ? null : String.valueOf(result);
+		} catch (Exception e) {
+			logger.error("Error dispatching getLatestFrameBase64 for stream: {}", streamId, e);
+			return null;
 		}
 	}
 

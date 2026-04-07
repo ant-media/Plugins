@@ -115,4 +115,6 @@ class YoloPoseDetectionPlugin(PluginBase):
         }
 
         if self.java_callback is not None:
-            self.java_callback.onResult(stream_id, json.dumps(result_json))
+            self.java_callback.onResult(
+                stream_id, self.app_name_for(stream_id), json.dumps(result_json)
+            )

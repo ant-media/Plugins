@@ -9,9 +9,9 @@ import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.app.JepPythonBridge;
+import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
-import io.antmedia.plugin.api.IFrameListener;
 import io.antmedia.plugin.api.IStreamListener;
 import io.vertx.core.Vertx;
 
@@ -80,11 +80,23 @@ public class PythonPlugin implements ApplicationContextAware, IStreamListener {
   }
 
   @Override
-  public void streamStarted(String streamId) {
+  public void streamStarted(Broadcast broadcast) {
+    if (broadcast == null) {
+      return;
+    }
+    String streamId = broadcast.getStreamId();
+    if (streamId == null) {
+      return;
+    }
     initJep();
 
-    int width = getMuxAdaptor(streamId).getVideoCodecParameters().width();
-    int height = getMuxAdaptor(streamId).getVideoCodecParameters().height();
+    MuxAdaptor mux = getMuxAdaptor(streamId);
+    if (mux == null || mux.getVideoCodecParameters() == null) {
+      logger.warn("streamStarted: no mux or video params for {}", streamId);
+      return;
+    }
+    int width = mux.getVideoCodecParameters().width();
+    int height = mux.getVideoCodecParameters().height();
 
     String appName = applicationContext.getApplicationName().replace("/", "");
     String hlsUrl = "http://localhost:5080/" + appName + "/streams/" + streamId + ".m3u8";
@@ -94,7 +106,14 @@ public class PythonPlugin implements ApplicationContextAware, IStreamListener {
   }
 
   @Override
-  public void streamFinished(String streamId) {
+  public void streamFinished(Broadcast broadcast) {
+    if (broadcast == null) {
+      return;
+    }
+    String streamId = broadcast.getStreamId();
+    if (streamId == null) {
+      return;
+    }
     initJep();
     jepBridge.streamFinished(streamId);
   }

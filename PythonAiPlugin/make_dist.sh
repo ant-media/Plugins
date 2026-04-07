@@ -38,3 +38,6 @@ cp ./src/main/java/io/antmedia/app/*.xml "$DIST_DIR/python/" 2>/dev/null || true
 
 echo "Distribution created at: $DIST_DIR"
 ls -la "$DIST_DIR"
+
+cp ./install_dependencies.sh ./dist/
+cp ./install_python_plugin.sh ./dist/
