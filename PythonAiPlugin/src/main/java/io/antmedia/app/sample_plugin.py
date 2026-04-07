@@ -17,7 +17,7 @@ class FaceDetectionPlugin(PluginBase):
     def on_stream_finished(self, stream_id):
         print("SamplePlugin: stream {} finished".format(stream_id))
 
-    def on_video_frame(self, stream_id, frame, timestamp_ms, stream_feeder):
+    def on_video_frame(self, stream_id, app_name, frame, timestamp_ms, stream_feeder):
         gray_image = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
 
         faces, _, weights = self.face_classifier.detectMultiScale3(
@@ -53,4 +53,4 @@ class FaceDetectionPlugin(PluginBase):
         }
 
         if self.java_callback is not None:
-            self.java_callback.onResult(stream_id, json.dumps(result))
+            self.java_callback.onResult(app_name or "", stream_id, json.dumps(result))

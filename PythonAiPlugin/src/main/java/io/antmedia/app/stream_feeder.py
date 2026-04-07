@@ -8,6 +8,7 @@ class StreamFeeder:
     def __init__(
         self,
         input_stream_id,
+        appname,
         output_stream_id,
         width,
         height,
@@ -18,10 +19,11 @@ class StreamFeeder:
         self.output_stream_id = output_stream_id
         self.width = int(width)
         self.height = int(height)
+        self.appname = appname
         self.fps = float(fps) if fps and fps > 0 else 25.0
         if streams_dir is None:
             default_ams_dir = os.getenv("AMS_DIR", "/usr/local/antmedia/")
-            streams_dir = os.path.join(default_ams_dir, "webapps", "LiveApp", "streams")
+            streams_dir = os.path.join(default_ams_dir, "webapps", appname, "streams")
         self.streams_dir = streams_dir
         self.playlist_path = os.path.join(self.streams_dir, "{}.m3u8".format(self.output_stream_id))
         self.segment_pattern = os.path.join(self.streams_dir, "{}%09d.ts".format(self.output_stream_id))

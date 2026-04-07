@@ -16,8 +16,9 @@ public class ResultCallback {
 		this.db.ensureTable(tableName);
 	}
 
-	public void onResult(String streamId, String jsonData) {
-		logger.info("Python result [{}] for stream {}: {}", tableName, streamId, jsonData);
-		db.insertResult(tableName, streamId, jsonData);
+	public void onResult(String appName, String streamId, String jsonData) {
+		String app = appName != null ? appName : "";
+		logger.info("Python result [{}] app={} stream {}: {}", tableName, app, streamId, jsonData);
+		db.insertResult(tableName, app, streamId, jsonData);
 	}
 }

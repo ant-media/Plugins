@@ -77,7 +77,6 @@ The separate project [ollama-vision-mcp](https://github.com/xkiranj/ollama-visio
 - `OLLAMA_VISION_QUEUE_INTERVAL_SEC` — min seconds between **new JPEG encodes** (default `1`). While waiting, the plugin can still dequeue the next job using the **last cached** frame so backlog clears without waiting for another encode.
 - `OLLAMA_VISION_NUM_PREDICT` — max tokens for most modes (default `256`; was higher for slower runs).
 - `OLLAMA_VISION_NUM_PREDICT_READ_TEXT` — max tokens for `read_text` jobs (default `128`).
-- `OLLAMA_VISION_USE_PREV_FRAME` — set `0` to send **only the current frame** (no second image); faster, less context for motion.
 - `OLLAMA_VISION_QUEUE_MAX_SIDE` — default `512` (smaller = faster vision; raise to `768` if quality suffers).
 - `OLLAMA_VISION_QUEUE_JPEG_QUALITY` — default `80` for API calls.
 

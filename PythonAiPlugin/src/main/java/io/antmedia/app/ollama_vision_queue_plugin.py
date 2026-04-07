@@ -1,8 +1,8 @@
 """
 Queued vision jobs against local Ollama (same HTTP surface as ollama-vision-mcp-style tools).
 
-User prompts are enqueued per stream. On each video frame we keep the previous JPEG base64
-and the current one; when a job is processed we call Ollama /api/chat with one or two images.
+User prompts are enqueued per stream. Each job is processed with the current encoded JPEG only
+(one image per Ollama /api/chat call).
 
 Modes (aligned with ollama-vision-mcp tool names):
 - analyze_image: custom analysis (user_prompt should describe what to look for)
@@ -38,6 +38,7 @@ import cv2
 
 from frame_dump import dump_jpeg_b64_if_enabled, save_monitor_match_if_enabled
 from plugin_base import PluginBase
+from WebHookNotifier import notify_webhook_plugin_result_json
 
 
 def _env_float(name, default):
@@ -70,13 +71,13 @@ def _ollama_connection_error_message(base_url, exc):
         if ec in (errno.ECONNREFUSED, getattr(errno, "WSAECONNREFUSED", -1)):
             return (
                 "Connection refused to {} — nothing is listening there from this process. "
-            ).format(base_url, base_url)
+            ).format(base_url)
         if ec in (errno.ETIMEDOUT, errno.EHOSTUNREACH, errno.ENETUNREACH):
             return "Network error reaching {}: {} (errno {})".format(base_url, r, ec)
     return "Cannot reach Ollama at {}: {}".format(base_url, r)
 
 
-def _format_ollama_http_error(http_error, model_name):make sure you understand correctly that eyes are in fact close
+def _format_ollama_http_error(http_error, model_name):
     err_body = http_error.read().decode("utf-8", errors="replace")[:800]
     msg = "HTTP {}: {}".format(http_error.code, err_body)
     if http_error.code in (400, 404) and model_name and "not found" in err_body.lower():
@@ -118,20 +119,17 @@ class OllamaVisionQueuePlugin(PluginBase):
             "OLLAMA_VISION_DEFAULT_MODEL",
             os.environ.get("LOCAL_VLM_MODEL", "llava:13b"),
         )
-        # Smaller images → less vision compute and faster HTTP; tune up if you need detail.
         self.max_side = _env_int("OLLAMA_VISION_QUEUE_MAX_SIDE", 512)
         self.jpeg_quality = _env_int("OLLAMA_VISION_QUEUE_JPEG_QUALITY", 80)
         self.http_timeout_sec = _env_int("OLLAMA_VISION_TIMEOUT", 120)
         self.min_interval_sec = _env_float("OLLAMA_VISION_QUEUE_INTERVAL_SEC", 1.0)
         self.num_predict = _env_int("OLLAMA_VISION_NUM_PREDICT", 256)
         self.num_predict_read_text = _env_int("OLLAMA_VISION_NUM_PREDICT_READ_TEXT", 128)
-        self.use_prev_frame = _env_bool("OLLAMA_VISION_USE_PREV_FRAME", True)
         self._lock = threading.Lock()
         self._queues = {}
         self._inflight = set()
         self._completed = queue.Queue()
         self._work_queue = queue.Queue()
-        self.prev_b64_by_stream = {}
         self.latest_frame_b64_by_stream = {}
         self.last_run_ts = {}
         self.monitor_callback = None
@@ -193,18 +191,16 @@ class OllamaVisionQueuePlugin(PluginBase):
     def on_stream_started(self, stream_id, width, height):
         self.last_run_ts[stream_id] = 0.0
         self._last_monitor_ts[stream_id] = 0.0
-        self.prev_b64_by_stream.pop(stream_id, None)
         self.latest_frame_b64_by_stream.pop(stream_id, None)
         with self._lock:
             self._queues.pop(stream_id, None)
         print(
-            "OllamaVisionQueuePlugin: stream {} started {}x{} model={} max_side={} use_prev={}".format(
-                stream_id, width, height, self.model, self.max_side, self.use_prev_frame
+            "OllamaVisionQueuePlugin: stream {} started {}x{} model={} max_side={}".format(
+                stream_id, width, height, self.model, self.max_side
             )
         )
 
     def on_stream_finished(self, stream_id):
-        self.prev_b64_by_stream.pop(stream_id, None)
         self.latest_frame_b64_by_stream.pop(stream_id, None)
         self.last_run_ts.pop(stream_id, None)
         self._last_monitor_ts.pop(stream_id, None)
@@ -225,10 +221,10 @@ class OllamaVisionQueuePlugin(PluginBase):
                     return
                 (
                     stream_id,
+                    app_name,
                     prompts,
                     images,
                     timestamp_sec,
-                    had_prev,
                     threshold,
                 ) = item
                 if self.monitor_debug:
@@ -291,11 +287,11 @@ class OllamaVisionQueuePlugin(PluginBase):
 
                             self._emit_monitor(
                                 stream_id,
+                                app_name,
                                 prompt,
                                 conf,
                                 str(parsed.get("reason") or ""),
                                 timestamp_sec,
-                                had_prev,
                                 cur_b64,
                             )
                             with self._lock:
@@ -321,21 +317,34 @@ class OllamaVisionQueuePlugin(PluginBase):
                 if item is None:
                     return
                 (
+                    app_name,
                     stream_id,
                     job,
                     instruction,
                     images,
                     timestamp_sec,
-                    had_previous,
                 ) = item
                 t0 = time.time()
-                text, call_err = self._call_ollama(instruction, images, job)
-                latency_ms = int((time.time() - t0) * 1000)
-                with self._lock:
-                    self._inflight.discard(stream_id)
-                self._completed.put(
-                    (stream_id, job, text, call_err, had_previous, latency_ms, timestamp_sec)
-                )
+                text, call_err = None, None
+                try:
+                    text, call_err = self._call_ollama(instruction, images, job)
+                except Exception as e:
+                    text, call_err = None, str(e) or repr(e)
+                finally:
+                    latency_ms = int((time.time() - t0) * 1000)
+                    with self._lock:
+                        self._inflight.discard(stream_id)
+                    self._completed.put(
+                        (
+                            app_name,
+                            stream_id,
+                            job,
+                            text,
+                            call_err,
+                            latency_ms,
+                            timestamp_sec,
+                        )
+                    )
 
         t = threading.Thread(target=loop, daemon=True, name="ollama-vision-queue")
         t.start()
@@ -344,22 +353,22 @@ class OllamaVisionQueuePlugin(PluginBase):
         while True:
             try:
                 (
+                    app_name,
                     stream_id,
                     job,
                     text,
                     call_err,
-                    had_previous,
                     latency_ms,
                     timestamp_sec,
                 ) = self._completed.get_nowait()
             except queue.Empty:
                 break
             self._emit(
+                app_name,
                 stream_id,
                 job,
                 text,
                 call_err,
-                had_previous,
                 latency_ms,
                 timestamp_sec,
             )
@@ -407,11 +416,8 @@ class OllamaVisionQueuePlugin(PluginBase):
             return None
         return base64.b64encode(buf.tobytes()).decode("ascii")
 
-    def on_video_frame(self, stream_id, frame, timestamp_ms, stream_feeder):
+    def on_video_frame(self, stream_id, app_name, frame, timestamp_ms, stream_feeder):
         self._drain_completed()
-
-        if stream_feeder is not None:
-            stream_feeder.write(frame)
 
         now = time.time()
         do_encode = now - self.last_run_ts.get(stream_id, 0.0) >= self.min_interval_sec
@@ -428,13 +434,13 @@ class OllamaVisionQueuePlugin(PluginBase):
             if not b64:
                 return
 
-        prev_b64 = self.prev_b64_by_stream.get(stream_id)
-
-        self._maybe_schedule_monitor(stream_id, b64, prev_b64, timestamp_ms, now)
+        self._maybe_schedule_monitor(stream_id, app_name, b64, timestamp_ms, now)
 
         job = None
+        # Do not block queue jobs while monitor runs; monitor uses _monitor_inflight only.
+        # Blocking here caused REST-enqueued jobs to never run when monitor was active.
         with self._lock:
-            if stream_id in self._inflight or stream_id in self._monitor_inflight:
+            if stream_id in self._inflight:
                 job = None
             else:
                 q = self._queues.get(stream_id)
@@ -442,52 +448,42 @@ class OllamaVisionQueuePlugin(PluginBase):
                     job = q.popleft()
 
         if job is None:
-            if do_encode:
-                self.prev_b64_by_stream[stream_id] = b64
             return
 
-        has_prev = bool(prev_b64) and self.use_prev_frame
-        instruction, err = self._build_instruction(job, has_prev)
+        instruction, err = self._build_instruction(job)
         if err:
             self._emit(
+                app_name,
                 stream_id,
                 job,
                 None,
                 err,
-                has_prev,
                 0,
                 timestamp_ms / 1000.0,
             )
-            if do_encode:
-                self.prev_b64_by_stream[stream_id] = b64
             return
 
         images = [b64]
-        if prev_b64 and self.use_prev_frame:
-            dump_jpeg_b64_if_enabled(stream_id, "queue_prev", prev_b64)
-            images.append(prev_b64)
 
         with self._lock:
             self._inflight.add(stream_id)
         try:
             self._work_queue.put(
                 (
+                    app_name,
                     stream_id,
                     job,
                     instruction,
                     images,
                     timestamp_ms / 1000.0,
-                    has_prev,
                 )
             )
         except Exception:
             with self._lock:
                 self._inflight.discard(stream_id)
             raise
-        if do_encode:
-            self.prev_b64_by_stream[stream_id] = b64
 
-    def _maybe_schedule_monitor(self, stream_id, b64, prev_b64, timestamp_ms, now):
+    def _maybe_schedule_monitor(self, stream_id, app_name, b64, timestamp_ms, now):
         cfg = self._monitor_config.get(stream_id)
         prompts = self._monitor_prompts.get(stream_id) or []
         if not cfg or not prompts:
@@ -497,20 +493,17 @@ class OllamaVisionQueuePlugin(PluginBase):
         if now - self._last_monitor_ts.get(stream_id, 0.0) < cfg["interval_sec"]:
             return
         self._last_monitor_ts[stream_id] = now
-        has_prev = bool(prev_b64) and self.use_prev_frame
         images = [b64]
-        if prev_b64 and self.use_prev_frame:
-            images.append(prev_b64)
         with self._lock:
             self._monitor_inflight.add(stream_id)
         try:
             self._monitor_queue.put(
                 (
                     stream_id,
+                    app_name,
                     list(prompts),
                     images,
                     timestamp_ms / 1000.0,
-                    has_prev,
                     cfg["threshold"],
                 )
             )
@@ -519,7 +512,7 @@ class OllamaVisionQueuePlugin(PluginBase):
                 self._monitor_inflight.discard(stream_id)
             raise
 
-    def _build_instruction(self, job, has_previous):
+    def _build_instruction(self, job):
         mode = job["mode"]
         user = (job.get("prompt") or "").strip()
         if mode == "custom":
@@ -535,13 +528,7 @@ class OllamaVisionQueuePlugin(PluginBase):
             if user:
                 base += "\n\nAdditional instructions: " + user
 
-        if has_previous:
-            base += (
-                "\n\nImages order: (1) current video frame, (2) immediately previous frame. "
-                "Use both for motion or change if relevant."
-            )
-        else:
-            base += "\n\nOnly one image is provided (current frame)."
+        base += "\n\nOne image is provided (current video frame)."
         return base, None
 
     def _call_ollama(self, instruction, images_b64_list, job=None):
@@ -653,17 +640,18 @@ class OllamaVisionQueuePlugin(PluginBase):
     def _emit_monitor(
         self,
         stream_id,
+        app_name,
         prompt,
         confidence,
         reason,
         timestamp_sec,
-        had_previous,
         jpeg_b64_current=None,
     ):
         saved_path = save_monitor_match_if_enabled(
             stream_id, prompt, jpeg_b64_current
         )
         payload = {
+            "app_name": app_name or "",
             "stream_id": stream_id,
             "kind": "monitor_match",
             "prompt": prompt,
@@ -671,34 +659,35 @@ class OllamaVisionQueuePlugin(PluginBase):
             "confidence": confidence,
             "reason": reason,
             "timestamp_sec": round(timestamp_sec, 2),
-            "had_previous_frame": had_previous,
             "model": self.model,
         }
         if saved_path:
             payload["saved_image_path"] = saved_path
         if self.monitor_callback is not None:
             try:
-                self.monitor_callback.onResult(stream_id, json.dumps(payload))
+                self.monitor_callback.onResult(app_name or "", stream_id, json.dumps(payload))
             except Exception as e:
                 print("OllamaVisionQueuePlugin: monitor onResult error: {}".format(e))
 
+        notify_webhook_plugin_result_json(payload)
+
     def _emit(
         self,
+        app_name,
         stream_id,
         job,
         result_text,
         error_text,
-        had_previous,
         latency_ms,
         timestamp_sec,
     ):
         payload = {
+            "app_name": app_name or "",
             "stream_id": stream_id,
             "mode": job["mode"],
             "user_prompt": job.get("prompt") or "",
             "result": result_text,
             "error": error_text,
-            "had_previous_frame": had_previous,
             "enqueued_ms": job.get("enqueued_ms"),
             "timestamp_sec": round(timestamp_sec, 2),
             "model": self.model,
@@ -706,6 +695,7 @@ class OllamaVisionQueuePlugin(PluginBase):
         }
         if self.java_callback is not None:
             try:
-                self.java_callback.onResult(stream_id, json.dumps(payload))
+                self.java_callback.onResult(app_name or "", stream_id, json.dumps(payload))
             except Exception as e:
                 print("OllamaVisionQueuePlugin: onResult error: {}".format(e))
+        notify_webhook_plugin_result_json(payload)

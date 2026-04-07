@@ -7,11 +7,12 @@ from stream_feeder import StreamFeeder
 
 
 class _PluginWorker:
-    def __init__(self, plugin, stream_id, feeder):
+    def __init__(self, plugin, stream_id, app_name, feeder):
         self.plugin = plugin
         self.stream_id = stream_id
+        self.app_name = app_name or ""
         self.feeder = feeder
-        self._queue = queue.Queue(maxsize=15)
+        self._queue = queue.Queue(maxsize=60)
         self._running = False
         self._thread = None
 
@@ -44,6 +45,7 @@ class _PluginWorker:
             try:
                 self.plugin.on_video_frame(
                     self.stream_id,
+                    self.app_name,
                     frame,
                     timestamp_ms,
                     self.feeder,
@@ -58,10 +60,11 @@ class _PluginWorker:
 
 
 class StreamReader:
-    def __init__(self, stream_id, hls_url, plugins, width=None, height=None, streams_dir=None):
+    def __init__(self, stream_id, hls_url, app_name, plugins, width=None, height=None, streams_dir=None):
         self.stream_id = stream_id
         self.hls_url = hls_url
         self.plugins = plugins
+        self.app_name = app_name or ""
         self.width = width
         self.height = height
         default_ams_dir = os.getenv("AMS_DIR", "/usr/local/antmedia/")
@@ -140,15 +143,16 @@ class StreamReader:
                     for plugin in self.plugins:
                         output_stream_id = "{}_{}".format(self.stream_id, type(plugin).__name__)
                         feeder = StreamFeeder(
-                            input_stream_id=self.stream_id,
-                            output_stream_id=output_stream_id,
-                            width=frame_width,
-                            height=frame_height,
+                            self.stream_id,
+                            self.app_name,
+                            output_stream_id,
+                            frame_width,
+                            frame_height,
                             fps=fps,
                             streams_dir=self.streams_dir,
                         )
                         feeders[plugin] = feeder
-                        worker = _PluginWorker(plugin, self.stream_id, feeder)
+                        worker = _PluginWorker(plugin, self.stream_id, self.app_name, feeder)
                         worker.start()
                         workers[plugin] = worker
                 timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)

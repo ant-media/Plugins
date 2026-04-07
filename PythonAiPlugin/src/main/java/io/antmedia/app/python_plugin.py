@@ -37,6 +37,7 @@ def streamStarted(streamid, app_name, width, height, hls_url):
     reader = StreamReader(
         streamid,
         hls_url,
+        app_name,
         registered_plugins,
         width=width,
         height=height,

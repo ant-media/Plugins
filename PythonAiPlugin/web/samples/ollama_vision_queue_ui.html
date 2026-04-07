@@ -18,9 +18,104 @@
     .actions button { width: auto; flex: 1; min-width: 10rem; }
     .muted { color: #555; font-size: 0.85rem; margin-top: 0.35rem; }
     #out, #outMon { margin-top: 1rem; padding: 0.6rem; background: #f4f4f5; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; }
-    #results, #monitorResults { margin-top: 1rem; max-height: 18rem; overflow: auto; border: 1px solid #ddd; border-radius: 6px; padding: 0.5rem; font-size: 0.8rem; background: #fafafa; }
+    #monitorResults { margin-top: 1rem; max-height: 18rem; overflow: auto; border: 1px solid #ddd; border-radius: 6px; padding: 0.5rem; font-size: 0.8rem; background: #fafafa; }
     .r { border-bottom: 1px solid #e5e5e5; padding: 0.5rem 0; }
     .r:last-child { border-bottom: none; }
+
+    /* Vision chat (one-off) */
+    .chat-wrap {
+      margin-top: 0.75rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      max-height: min(70vh, 32rem);
+      min-height: 14rem;
+      overflow: hidden;
+    }
+    .chat-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+    .chat-scroll:empty::before {
+      content: "Ask about the live frame — messages appear here. Enable auto-poll above or use Sync from DB.";
+      color: #64748b;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      padding: 0.5rem;
+    }
+    .msg {
+      max-width: 90%;
+      padding: 0.55rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: #2563eb;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.user .msg-mode {
+      display: block;
+      font-size: 0.7rem;
+      opacity: 0.85;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-bottom: 0.25rem;
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: #fff;
+      color: #0f172a;
+      border: 1px solid #e2e8f0;
+      border-bottom-left-radius: 4px;
+      white-space: pre-wrap;
+    }
+    .msg.assistant.pending {
+      color: #64748b;
+      font-style: italic;
+    }
+    .msg.assistant .msg-meta {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-bottom: 0.35rem;
+    }
+    .msg.assistant.err {
+      border-color: #fecaca;
+      background: #fef2f2;
+    }
+    .chat-composer {
+      border-top: 1px solid #e2e8f0;
+      background: #fff;
+      padding: 0.65rem 0.75rem;
+    }
+    .chat-composer .composer-mode {
+      margin-bottom: 0.4rem;
+    }
+    .chat-composer select { margin-top: 0; }
+    .chat-composer textarea {
+      min-height: 2.75rem;
+      max-height: 8rem;
+      margin-top: 0.35rem;
+    }
+    .composer-actions {
+      margin-top: 0.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+    }
+    .composer-actions button { width: auto; flex: 0 1 auto; min-width: 0; padding: 0.45rem 0.75rem; }
+    .composer-actions .btn-primary { flex: 1; min-width: 8rem; }
+    #chatStatus { font-size: 0.8rem; margin-top: 0.35rem; }
     .yes { color: #0a7; font-weight: 600; }
     .poll-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-top: 0.75rem; }
     .poll-row label { display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0; font-weight: 500; }
@@ -31,9 +126,6 @@
 <body>
   <h1>Ollama vision queue</h1>
   <p class="muted">One-off jobs go to <code>ollama_vision_queue_results</code>. Continuous <strong>monitor</strong> stores <span class="yes">yes</span> matches in <code>monitor_alerts</code> (which prompt fired).</p>
-
-  <label for="restBase">Plugin REST base (empty = derive from <code>…/LiveApp/samples/</code>)</label>
-  <input type="text" id="restBase" placeholder="https://host:5080/LiveApp/rest/python-plugin">
 
   <label for="streamId">Stream ID</label>
   <input type="text" id="streamId" placeholder="publishing stream id">
@@ -47,26 +139,33 @@
     <span class="muted">seconds</span>
   </div>
 
-  <h2>One-off enqueue</h2>
-  <label for="mode">Mode</label>
-  <select id="mode">
-    <option value="analyze_image">analyze_image — custom question (prompt required)</option>
-    <option value="describe_image">describe_image — detailed description</option>
-    <option value="identify_objects">identify_objects — list objects</option>
-    <option value="read_text">read_text — OCR / visible text</option>
-    <option value="custom">custom — prompt is the full instruction</option>
-  </select>
+  <h2>Vision chat (one-off)</h2>
+  <p class="muted">Messages use the current video frame. Results are stored in <code>ollama_vision_queue_results</code>; turn on <strong>Auto-poll</strong> above or press <strong>Sync from DB</strong> after each question.</p>
 
-  <label for="prompt">Prompt (required for analyze_image and custom; optional for others)</label>
-  <textarea id="prompt" placeholder="e.g. Is there a visible firearm?"></textarea>
-
-  <div class="actions">
-    <button type="button" id="btnEnqueue">Enqueue job</button>
-    <button type="button" id="btnFetch">Fetch queue results (DB)</button>
+  <div class="chat-wrap">
+    <div id="chatScroll" class="chat-scroll" aria-live="polite"></div>
+    <div class="chat-composer">
+      <div class="composer-mode">
+        <label for="mode" style="margin-top:0;">Mode</label>
+        <select id="mode">
+          <option value="analyze_image">analyze_image — question (prompt required)</option>
+          <option value="describe_image">describe_image — detailed description</option>
+          <option value="identify_objects">identify_objects — list objects</option>
+          <option value="read_text">read_text — OCR / visible text</option>
+          <option value="custom">custom — full instruction</option>
+        </select>
+      </div>
+      <label for="prompt">Message</label>
+      <textarea id="prompt" placeholder="Ask about the current frame… (Enter to send, Shift+Enter for newline)"></textarea>
+      <div class="composer-actions">
+        <button type="button" class="btn-primary" id="btnEnqueue">Send</button>
+        <button type="button" id="btnFetch">Sync from DB</button>
+        <button type="button" id="btnClearChat">Clear chat</button>
+      </div>
+    </div>
   </div>
-  <div id="out"></div>
-  <h3 style="font-size:0.95rem;margin-top:0.75rem;">Queue results</h3>
-  <div id="results"></div>
+  <div id="chatStatus" class="muted"></div>
+  <div id="out" style="display:none;"></div>
 
   <h2>Continuous monitor (yes / no per prompt)</h2>
   <p class="muted">Enter <strong>one prompt per line</strong>. Each interval the model returns JSON <code>detected</code> + <code>confidence</code>; if both pass the threshold, a row is stored with the prompt that matched.</p>
@@ -92,13 +191,125 @@
   <div id="monitorResults"></div>
 
   <script>
-    function pluginRestBase() {
-      var manual = document.getElementById('restBase').value.trim();
-      if (manual) return manual.replace(/\/$/, '');
+    function appNameFromPage() {
       var p = window.location.pathname;
       var i = p.indexOf('/samples/');
-      if (i >= 0) return window.location.origin + p.slice(0, i) + '/rest/python-plugin';
-      return window.location.origin + '/LiveApp/rest/python-plugin';
+      if (i >= 0) {
+        var prefix = p.slice(0, i).replace(/^\/+|\/+$/g, '');
+        var first = prefix.split('/')[0];
+        return first || 'LiveApp';
+      }
+      var parts = p.split('/').filter(Boolean);
+      return parts[0] || 'LiveApp';
+    }
+
+    /** …/{appName}/rest/python-plugin — same host as this page */
+    function pluginRestBase() {
+      var p = window.location.pathname;
+      var i = p.indexOf('/samples/');
+      if (i >= 0) {
+        return window.location.origin + p.slice(0, i) + '/rest/python-plugin';
+      }
+      var app = appNameFromPage();
+      return window.location.origin + '/' + encodeURIComponent(app) + '/rest/python-plugin';
+    }
+
+    function detectionsQuerySuffix() {
+      var a = appNameFromPage();
+      return '?appName=' + encodeURIComponent(a);
+    }
+
+    var queueSeenKeys = {};
+    var pendingAssistantEls = [];
+    /** Only show / merge DB rows enqueued after this (avoids backfilling pending with old history). */
+    var chatSessionStartMs = Date.now();
+
+    function queueRowKey(o) {
+      var ms = o.enqueued_ms != null ? o.enqueued_ms : 0;
+      var body = String(o.result || o.error || '');
+      return ms + '|' + (o.mode || '') + '|' + body.slice(0, 120);
+    }
+
+    function appendUserBubble(mode, promptText) {
+      var wrap = document.getElementById('chatScroll');
+      var div = document.createElement('div');
+      div.className = 'msg user';
+      var modeLabel = document.createElement('span');
+      modeLabel.className = 'msg-mode';
+      modeLabel.textContent = mode;
+      div.appendChild(modeLabel);
+      var body = document.createElement('div');
+      body.textContent = promptText || '(no prompt)';
+      div.appendChild(body);
+      wrap.appendChild(div);
+      wrap.scrollTop = wrap.scrollHeight;
+    }
+
+    function appendAssistantPending() {
+      var wrap = document.getElementById('chatScroll');
+      var div = document.createElement('div');
+      div.className = 'msg assistant pending';
+      div.textContent = 'Thinking…';
+      wrap.appendChild(div);
+      wrap.scrollTop = wrap.scrollHeight;
+      pendingAssistantEls.push(div);
+      return div;
+    }
+
+    function fillOrAppendAssistant(o) {
+      var text = (o.error && String(o.error)) ? String(o.error) : String(o.result || '');
+      var meta = [];
+      if (o.mode) meta.push(o.mode);
+      if (o.latency_ms != null) meta.push(o.latency_ms + ' ms');
+      if (o.model) meta.push(o.model);
+      var metaLine = meta.join(' · ');
+      var html =
+        (metaLine ? '<div class="msg-meta">' + escapeHtml(metaLine) + '</div>' : '') +
+        escapeHtml(text);
+      var err = !!(o.error && String(o.error));
+      if (pendingAssistantEls.length) {
+        var el = pendingAssistantEls.shift();
+        el.className = 'msg assistant' + (err ? ' err' : '');
+        el.innerHTML = html;
+      } else {
+        var wrap = document.getElementById('chatScroll');
+        var div = document.createElement('div');
+        div.className = 'msg assistant' + (err ? ' err' : '');
+        div.innerHTML = html;
+        wrap.appendChild(div);
+      }
+      var wrap2 = document.getElementById('chatScroll');
+      wrap2.scrollTop = wrap2.scrollHeight;
+    }
+
+    function mergeQueueRowsIntoChat(arr) {
+      var skewMs = 120000;
+      var rows = arr.map(function (row) {
+        return typeof row === 'string' ? JSON.parse(row) : row;
+      });
+      rows = rows.filter(function (o) {
+        var ms = o.enqueued_ms;
+        if (ms == null) return true;
+        return ms >= chatSessionStartMs - skewMs;
+      });
+      rows.sort(function (a, b) {
+        return (a.enqueued_ms || 0) - (b.enqueued_ms || 0);
+      });
+      var streamId = document.getElementById('streamId').value.trim();
+      var seen = queueSeenKeys[streamId] || (queueSeenKeys[streamId] = {});
+      for (var i = 0; i < rows.length; i++) {
+        var o = rows[i];
+        var k = queueRowKey(o);
+        if (seen[k]) continue;
+        seen[k] = true;
+        fillOrAppendAssistant(o);
+      }
+    }
+
+    function setChatStatus(text, isErr) {
+      var el = document.getElementById('chatStatus');
+      el.textContent = text;
+      el.style.color = isErr ? '#b91c1c' : '';
     }
 
     document.getElementById('btnEnqueue').onclick = async function () {
@@ -107,10 +318,12 @@
       var mode = document.getElementById('mode').value;
       var prompt = document.getElementById('prompt').value.trim();
       if (!streamId) {
-        document.getElementById('out').textContent = 'streamId required.';
+        setChatStatus('Set Stream ID above first.', true);
         return;
       }
-      document.getElementById('out').textContent = 'Enqueueing…';
+      appendUserBubble(mode, prompt);
+      appendAssistantPending();
+      setChatStatus('Sending…');
       try {
         var r = await fetch(base + '/vision-queue/enqueue', {
           method: 'POST',
@@ -119,38 +332,70 @@
           credentials: 'include'
         });
         var j = await r.json();
-        document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+        if (j.accepted) {
+          setChatStatus('Queued — waiting for frame + model. Enable auto-poll or Sync from DB.');
+          document.getElementById('prompt').value = '';
+        } else {
+          if (pendingAssistantEls.length) {
+            var el = pendingAssistantEls.shift();
+            el.className = 'msg assistant err';
+            el.textContent = j.hint || JSON.stringify(j);
+          }
+          setChatStatus('Not accepted.', true);
+        }
       } catch (e) {
-        document.getElementById('out').textContent = 'Error: ' + e.message;
+        if (pendingAssistantEls.length) {
+          var el2 = pendingAssistantEls.shift();
+          el2.className = 'msg assistant err';
+          el2.textContent = 'Error: ' + e.message;
+        }
+        setChatStatus('Request failed.', true);
       }
     };
+
+    document.getElementById('prompt').addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' || ev.shiftKey) return;
+      ev.preventDefault();
+      document.getElementById('btnEnqueue').click();
+    });
+
+    document.getElementById('btnClearChat').onclick = function () {
+      var streamId = document.getElementById('streamId').value.trim();
+      chatSessionStartMs = Date.now();
+      if (streamId && queueSeenKeys[streamId]) delete queueSeenKeys[streamId];
+      pendingAssistantEls = [];
+      document.getElementById('chatScroll').innerHTML = '';
+      setChatStatus('Chat cleared. Only new vision replies will appear below.');
+    };
+
+    document.getElementById('streamId').addEventListener('change', function () {
+      chatSessionStartMs = Date.now();
+      var sid = document.getElementById('streamId').value.trim();
+      pendingAssistantEls = [];
+      document.getElementById('chatScroll').innerHTML = '';
+      if (sid) queueSeenKeys[sid] = {};
+      setChatStatus('Stream changed — chat reset for this session.');
+    });
 
     async function fetchQueueResultsFromDb(silent) {
       var base = pluginRestBase();
       var streamId = document.getElementById('streamId').value.trim();
       if (!streamId) {
-        if (!silent) document.getElementById('out').textContent = 'streamId required.';
+        if (!silent) setChatStatus('streamId required.', true);
         return;
       }
       try {
-        var r = await fetch(base + '/detections/ollama_vision_queue_results/' + encodeURIComponent(streamId) + '/seconds/86400', { credentials: 'include' });
+        var r = await fetch(base + '/detections/ollama_vision_queue_results/' + encodeURIComponent(streamId) + '/seconds/86400' + detectionsQuerySuffix(), { credentials: 'include' });
         var arr = JSON.parse(await r.text());
-        var el = document.getElementById('results');
         if (!arr.length) {
-          el.innerHTML = '<div class="muted">No rows yet.</div>';
-          document.getElementById('out').textContent = silent ? '' : 'No rows.';
+          if (!silent) setChatStatus('No rows in DB yet for this stream.');
           return;
         }
-        el.innerHTML = arr.slice(-25).reverse().map(function (row) {
-          var o = typeof row === 'string' ? JSON.parse(row) : row;
-          var res = (o.result || o.error || '').toString().slice(0, 400);
-          return '<div class="r"><strong>' + (o.mode || '') + '</strong> · ' + (o.latency_ms != null ? o.latency_ms + 'ms' : '') +
-            '<br>' + escapeHtml(res) + '</div>';
-        }).join('');
-        var msg = 'Loaded ' + arr.length + ' row(s).' + (silent ? ' · ' + new Date().toLocaleTimeString() : '');
-        document.getElementById('out').textContent = msg;
+        mergeQueueRowsIntoChat(arr);
+        var msg = 'Synced ' + arr.length + ' row(s) from DB' + (silent ? ' · ' + new Date().toLocaleTimeString() : '');
+        setChatStatus(msg);
       } catch (e) {
-        document.getElementById('out').textContent = 'Fetch error: ' + e.message;
+        setChatStatus('Fetch error: ' + e.message, true);
       }
     }
 
@@ -208,7 +453,7 @@
         return;
       }
       try {
-        var r = await fetch(base + '/detections/monitor_alerts/' + encodeURIComponent(streamId) + '/seconds/86400', { credentials: 'include' });
+        var r = await fetch(base + '/detections/monitor_alerts/' + encodeURIComponent(streamId) + '/seconds/86400' + detectionsQuerySuffix(), { credentials: 'include' });
         var arr = JSON.parse(await r.text());
         var el = document.getElementById('monitorResults');
         if (!arr.length) {
@@ -254,7 +499,7 @@
     });
 
     function escapeHtml(s) {
-      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
   </script>
 </body>

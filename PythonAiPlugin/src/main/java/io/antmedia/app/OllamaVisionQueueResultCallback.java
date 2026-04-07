@@ -14,17 +14,16 @@ public class OllamaVisionQueueResultCallback extends ResultCallback {
 	}
 
 	@Override
-	public void onResult(String streamId, String jsonData) {
-		super.onResult(streamId, jsonData);
+	public void onResult(String appName, String streamId, String jsonData) {
+		super.onResult(appName, streamId, jsonData);
 		try {
-			onOllamaVisionQueueResult(streamId, jsonData);
-
+			onOllamaVisionQueueResult(appName, streamId, jsonData);
 		} catch (Exception e) {
-			logger.error("onOllamaVisionQueueResult failed for stream {}", streamId, e);
+			logger.error("onOllamaVisionQueueResult failed for app {} stream {}", appName, streamId, e);
 		}
 	}
 
-	protected void onOllamaVisionQueueResult(String streamId, String jsonData) {
+	protected void onOllamaVisionQueueResult(String appName,String streamId, String jsonData) {
 		
 	}
 }

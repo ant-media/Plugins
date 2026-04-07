@@ -9,6 +9,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -184,8 +185,9 @@ public class PythonPluginRestService {
   public Response getDetectionsByLastSeconds(
       @PathParam("model") String model,
       @PathParam("streamId") String streamId,
-      @PathParam("seconds") int seconds) {
-    return getDetectionsBySeconds(model, streamId, seconds);
+      @PathParam("seconds") int seconds,
+      @QueryParam("appName") String appName) {
+    return getDetectionsBySeconds(model, streamId, seconds, appName);
   }
 
   @GET
@@ -194,7 +196,8 @@ public class PythonPluginRestService {
   public Response getDetectionsBySeconds(
       @PathParam("model") String model,
       @PathParam("streamId") String streamId,
-      @PathParam("seconds") int seconds) {
+      @PathParam("seconds") int seconds,
+      @QueryParam("appName") String appName) {
     if (seconds <= 0) {
       return Response.status(Status.BAD_REQUEST)
           .entity("{\"error\": \"seconds must be a positive number\"}")
@@ -207,8 +210,9 @@ public class PythonPluginRestService {
           .build();
     }
 
+    String app = appName == null || appName.isBlank() ? getAppNameFromContext() : appName.trim();
     PluginResultDatabase db = PluginResultDatabase.getInstance();
-    List<String> results = db.getResultsByStreamIdAndRecentSeconds(model, streamId, seconds);
+    List<String> results = db.getResultsByStreamIdAndRecentSeconds(model, app, streamId, seconds);
     String json = "[" + String.join(",", results) + "]";
     return Response.ok(json).build();
   }
@@ -219,7 +223,8 @@ public class PythonPluginRestService {
   public Response getDetectionsByCount(
       @PathParam("model") String model,
       @PathParam("streamId") String streamId,
-      @PathParam("lastn") int lastn) {
+      @PathParam("lastn") int lastn,
+      @QueryParam("appName") String appName) {
     if (lastn <= 0) {
       return Response.status(Status.BAD_REQUEST)
           .entity("{\"error\": \"lastn must be a positive number\"}")
@@ -232,10 +237,22 @@ public class PythonPluginRestService {
           .build();
     }
 
+    String app = appName == null || appName.isBlank() ? getAppNameFromContext() : appName.trim();
     PluginResultDatabase db = PluginResultDatabase.getInstance();
-    List<String> results = db.getResultsByStreamId(model, streamId, lastn);
+    List<String> results = db.getResultsByStreamId(model, app, streamId, lastn);
     String json = "[" + String.join(",", results) + "]";
     return Response.ok(json).build();
+  }
+
+  private String getAppNameFromContext() {
+    if (servletContext == null) {
+      return "";
+    }
+    String cp = servletContext.getContextPath();
+    if (cp == null || cp.isEmpty() || "/".equals(cp)) {
+      return "";
+    }
+    return cp.startsWith("/") ? cp.substring(1) : cp;
   }
 
   private boolean isValidModelName(String model) {

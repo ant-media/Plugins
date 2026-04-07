@@ -56,8 +56,37 @@ public class PluginResultDatabase {
 		}
 	}
 
+	private boolean columnExists(String tableName, String columnName) {
+		try (Statement stmt = connection.createStatement();
+				ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + tableName + ")")) {
+			while (rs.next()) {
+				if (columnName.equalsIgnoreCase(rs.getString("name"))) {
+					return true;
+				}
+			}
+		} catch (SQLException e) {
+			logger.error("PRAGMA table_info failed for {}", tableName, e);
+		}
+		return false;
+	}
+
+	private void ensureAppNameColumn(String tableName) {
+		validateTableName(tableName);
+		if (columnExists(tableName, "app_name")) {
+			return;
+		}
+		String sql = "ALTER TABLE " + tableName + " ADD COLUMN app_name TEXT NOT NULL DEFAULT ''";
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute(sql);
+			logger.info("Added app_name column to table '{}'", tableName);
+		} catch (SQLException e) {
+			logger.error("Failed to add app_name column to '{}'", tableName, e);
+		}
+	}
+
 	public synchronized void ensureTable(String tableName) {
 		if (createdTables.contains(tableName)) {
+			ensureAppNameColumn(tableName);
 			return;
 		}
 		validateTableName(tableName);
@@ -65,6 +94,7 @@ public class PluginResultDatabase {
 				+ "id INTEGER PRIMARY KEY AUTOINCREMENT, "
 				+ "stream_id TEXT NOT NULL, "
 				+ "json_data TEXT NOT NULL, "
+				+ "app_name TEXT NOT NULL DEFAULT '', "
 				+ "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
 				+ ")";
 		try (Statement stmt = connection.createStatement()) {
@@ -75,34 +105,40 @@ public class PluginResultDatabase {
 			logger.error("Failed to create table '{}'", tableName, e);
 			throw new RuntimeException("Failed to create table: " + tableName, e);
 		}
+		ensureAppNameColumn(tableName);
 	}
 
-	public void insertResult(String tableName, String streamId, String jsonData) {
+	public void insertResult(String tableName, String appName, String streamId, String jsonData) {
 		ensureTable(tableName);
-		String sql = "INSERT INTO " + tableName + " (stream_id, json_data) VALUES (?, ?)";
+		String app = appName != null ? appName : "";
+		String sql = "INSERT INTO " + tableName + " (stream_id, json_data, app_name) VALUES (?, ?, ?)";
 		try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
 			pstmt.setString(1, streamId);
 			pstmt.setString(2, jsonData);
+			pstmt.setString(3, app);
 			pstmt.executeUpdate();
 		} catch (SQLException e) {
-			logger.error("Failed to insert result into '{}' for stream {}", tableName, streamId, e);
+			logger.error("Failed to insert result into '{}' app {} stream {}", tableName, app, streamId, e);
 		}
 	}
 
-	public List<String> getResultsByStreamId(String tableName, String streamId, int limit) {
+	public List<String> getResultsByStreamId(String tableName, String appName, String streamId, int limit) {
 		ensureTable(tableName);
-		String sql = "SELECT json_data FROM " + tableName + " WHERE stream_id = ? ORDER BY id DESC LIMIT ?";
+		String app = appName != null ? appName : "";
+		String sql = "SELECT json_data FROM " + tableName
+				+ " WHERE stream_id = ? AND app_name = ? ORDER BY id DESC LIMIT ?";
 		List<String> results = new ArrayList<>();
 		try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
 			pstmt.setString(1, streamId);
-			pstmt.setInt(2, limit);
+			pstmt.setString(2, app);
+			pstmt.setInt(3, limit);
 			try (ResultSet rs = pstmt.executeQuery()) {
 				while (rs.next()) {
 					results.add(rs.getString("json_data"));
 				}
 			}
 		} catch (SQLException e) {
-			logger.error("Failed to query results from '{}' for stream {}", tableName, streamId, e);
+			logger.error("Failed to query results from '{}' app {} stream {}", tableName, app, streamId, e);
 		}
 		return results;
 	}
@@ -124,15 +160,18 @@ public class PluginResultDatabase {
 		return results;
 	}
 
-	public List<String> getResultsByStreamIdAndRecentSeconds(String tableName, String streamId, int seconds) {
+	public List<String> getResultsByStreamIdAndRecentSeconds(String tableName, String appName, String streamId,
+			int seconds) {
 		ensureTable(tableName);
+		String app = appName != null ? appName : "";
 		String sql = "SELECT json_data FROM " + tableName
-				+ " WHERE stream_id = ? AND datetime(created_at) >= datetime('now', ?)"
+				+ " WHERE stream_id = ? AND app_name = ? AND datetime(created_at) >= datetime('now', ?)"
 				+ " ORDER BY id ASC";
 		List<String> results = new ArrayList<>();
 		try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
 			pstmt.setString(1, streamId);
-			pstmt.setString(2, "-" + seconds + " seconds");
+			pstmt.setString(2, app);
+			pstmt.setString(3, "-" + seconds + " seconds");
 			try (ResultSet rs = pstmt.executeQuery()) {
 				while (rs.next()) {
 					results.add(rs.getString("json_data"));
@@ -140,8 +179,9 @@ public class PluginResultDatabase {
 			}
 		} catch (SQLException e) {
 			logger.error(
-					"Failed to query recent-seconds results from '{}' for stream {} and seconds {}",
+					"Failed to query recent-seconds results from '{}' app {} stream {} seconds {}",
 					tableName,
+					app,
 					streamId,
 					seconds,
 					e);
@@ -149,15 +189,17 @@ public class PluginResultDatabase {
 		return results;
 	}
 
-	public void deleteByStreamId(String tableName, String streamId) {
+	public void deleteByStreamId(String tableName, String appName, String streamId) {
 		ensureTable(tableName);
-		String sql = "DELETE FROM " + tableName + " WHERE stream_id = ?";
+		String app = appName != null ? appName : "";
+		String sql = "DELETE FROM " + tableName + " WHERE stream_id = ? AND app_name = ?";
 		try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
 			pstmt.setString(1, streamId);
+			pstmt.setString(2, app);
 			int deleted = pstmt.executeUpdate();
-			logger.info("Deleted {} results from '{}' for stream {}", deleted, tableName, streamId);
+			logger.info("Deleted {} results from '{}' app {} stream {}", deleted, tableName, app, streamId);
 		} catch (SQLException e) {
-			logger.error("Failed to delete results from '{}' for stream {}", tableName, streamId, e);
+			logger.error("Failed to delete results from '{}' app {} stream {}", tableName, app, streamId, e);
 		}
 	}
 

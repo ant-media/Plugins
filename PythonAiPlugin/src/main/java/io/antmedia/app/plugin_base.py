@@ -17,5 +17,5 @@ class PluginBase(ABC):
         pass
 
     @abstractmethod
-    def on_video_frame(self, stream_id, frame, timestamp_ms, stream_feeder):
+    def on_video_frame(self, stream_id, app_name, frame, timestamp_ms, stream_feeder):
         pass

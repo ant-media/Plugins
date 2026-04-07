@@ -43,7 +43,7 @@ class _BaseYoloDetectionPlugin(PluginBase):
         self.last_objects_by_stream.pop(stream_id, None)
         print("{}: stream {} finished".format(type(self).__name__, stream_id))
 
-    def on_video_frame(self, stream_id, frame, timestamp_ms, stream_feeder):
+    def on_video_frame(self, stream_id, app_name, frame, timestamp_ms, stream_feeder):
         frame_count = self.frame_counter.get(stream_id, 0) + 1
         self.frame_counter[stream_id] = frame_count
 
@@ -120,7 +120,7 @@ class _BaseYoloDetectionPlugin(PluginBase):
         }
 
         if self.java_callback is not None:
-            self.java_callback.onResult(stream_id, json.dumps(result_json))
+            self.java_callback.onResult(app_name or "", stream_id, json.dumps(result_json))
 
 
 class YoloGeneralDetectionPlugin(_BaseYoloDetectionPlugin):
