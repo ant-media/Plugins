@@ -1,12 +1,15 @@
-AMS_DIR=/home/usama/tem/newant/antmedia/
+AMS_DIR=/usr/local/antmedia
 sudo ./install_dependencies.sh
-sudo ./copy_python_files.sh
-cp ./lib/sqlite-jdbc-*.jar  $AMS_DIR/lib/
-cp ./jep-*.jar $AMS_DIR/lib/
+
+cp ./lib/*  $AMS_DIR/lib/
+cp ./PythonAIPlugin.jar  $AMS_DIR/plugins 
+
 cp ./*.xml $AMS_DIR
+
 cd $AMS_DIR
 python3 -m venv pythonAIPlugin
-activate ./pythonAIPlugin/Scripts/activate
+source ./pythonAIPlugin/bin/activate
 cd -
-pip install requirement.txt
-export PYTHONPATH=/home/usama/learn/AntMedia/HalkEkmekPlugin/ekmplug/lib/python3.14/site-packages/
+pip install -r requirements.txt
+cp ./python/* $AMS_DIR
+export PYTHONPATH=$AMS_DIR/pythonAIPlugin/lib/python3.*/site-packages/

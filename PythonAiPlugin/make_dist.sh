@@ -41,3 +41,5 @@ ls -la "$DIST_DIR"
 
 cp ./install_dependencies.sh ./dist/
 cp ./install_python_plugin.sh ./dist/
+cp ./copy_python_files.sh ./dist/
+cp ./requirements.txt ./dist/

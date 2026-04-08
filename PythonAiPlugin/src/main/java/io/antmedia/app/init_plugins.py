@@ -15,10 +15,10 @@ def init_plugins(register_plugin, callbacks):
     yolo_general_plugin.set_java_callback(yolo_general_callback)
     register_plugin(yolo_general_plugin)
 
-    # yolo_pose_plugin = YoloPoseDetectionPlugin()
-    # yolo_pose_callback = callbacks.get("pose_detections") or callbacks.get("default")
-    # yolo_pose_plugin.set_java_callback(yolo_pose_callback)
-    # register_plugin(yolo_pose_plugin)
+    yolo_pose_plugin = YoloPoseDetectionPlugin()
+    yolo_pose_callback = callbacks.get("pose_detections") or callbacks.get("default")
+    yolo_pose_plugin.set_java_callback(yolo_pose_callback)
+    register_plugin(yolo_pose_plugin)
 
     ollama_queue_plugin = OllamaVisionQueuePlugin()
     oq_callback = callbacks.get("ollama_vision_queue") or callbacks.get("default")

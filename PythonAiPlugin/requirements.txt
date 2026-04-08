@@ -1,5 +1,4 @@
 jep
-cython
 numpy
 opencv-python
 ultralytics
