@@ -4,7 +4,7 @@ sudo apt update
 
 echo "Installing system packages..."
 sudo apt install -y \
-  python3-venv
+  python3-venv \
   openjdk-17-jdk-headless \
   maven \
   python3-pip \
