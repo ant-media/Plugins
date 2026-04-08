@@ -12,4 +12,12 @@ source ./pythonAIPlugin/bin/activate
 cd -
 pip install -r requirements.txt
 cp ./python/* $AMS_DIR
-export PYTHONPATH=$AMS_DIR/pythonAIPlugin/lib/python3.*/site-packages/
+
+SITE_PACKAGES="$("$AMS_DIR/pythonAIPlugin/bin/python3" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+export PYTHONPATH="$SITE_PACKAGES"
+
+START_SH="$AMS_DIR/start.sh"
+if [ -f "$START_SH" ]; then
+  sed -i '\|export PYTHONPATH=.*pythonAIPlugin|d' "$START_SH"
+  sed -i "1a export PYTHONPATH=\"$SITE_PACKAGES\"" "$START_SH"
+fi
