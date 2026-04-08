@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.app.SEItoID3Converter;
+import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.api.IFrameListener;
@@ -71,7 +72,8 @@ public class ID3Converter implements ApplicationContextAware, IStreamListener{
 	
 
 	@Override
-	public void streamStarted(String streamId) {
+	public void streamStarted(Broadcast broadcast) {
+		String streamId = broadcast.getStreamId();
 		IAntMediaStreamHandler app = getApplication();
 		SEItoID3Converter seiToID3Converter = new SEItoID3Converter(streamId, getApplication());
 		boolean result = app.addPacketListener(streamId, seiToID3Converter);
@@ -87,7 +89,9 @@ public class ID3Converter implements ApplicationContextAware, IStreamListener{
 	}
 
 	@Override
-	public void streamFinished(String streamId) {
+	public void streamFinished(Broadcast broadcast) {
+		String streamId = broadcast.getStreamId();
+
 		SEItoID3Converter timecodeExtractor = sei2ID3ConverterMap.remove(streamId);
 		if (timecodeExtractor != null) 
 		{
