@@ -15,36 +15,18 @@ With this plugin you can find:
 - Clone the repository and go the Sample Plugin Directory
   ```sh
   git clone https://github.com/ant-media/Plugins.git
-  cd Plugins/PythonPlugin/
+  cd Plugins/pythonAIPlugin/
   ```
 - Build the Sample Plugin
   ```sh
   sudo ./redeploy.sh
   ```
 - Publish/unPublish a Live Stream to Ant Media Server with WebRTC/RTMP/RTSP
-- Check the logs on the server side 
-  ```
-  tail -f /usr/local/antmedia/log/ant-media-server.log
-  ```
-  You would see the following logs
-  ```
-  ...
-  ...
-  ...
-  io.antmedia.plugin.PythonPlugin - *************** Stream Started: streamIdXXXXX ***************
-  ...
-  ...
-  ...
-  io.antmedia.plugin.PythonPlugin - *************** Stream Finished: streamIdXXXXX ***************
-  ...
-  ...
-  ...
-  ```
 
 For more information about the plugins, [visit this post](https://antmedia.io/plugins-will-make-ant-media-server-more-powerful/)
 
 ## Ollama (Docker)
-
+optionally if you want to try out the olama vision model you can install olama with docker 
 Run Ollama for the vision queue / monitor (see `docker-compose.yml` in this folder), or:
 
 ```sh
