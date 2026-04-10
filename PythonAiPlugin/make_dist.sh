@@ -33,14 +33,17 @@ else
 fi
 
 echo "Copying Python files..."
-cp ./src/main/java/io/antmedia/app/*.py "$DIST_DIR/python/"
-cp ./src/main/java/io/antmedia/app/*.xml "$DIST_DIR/python/"
-cp ./web/ ./dist/
+
+mkdir ./dist/PythonPluginFiles
+cp -r ./src/main/java/io/antmedia/samples  "dist/PythonPluginFiles"
+cp -r ./src/main/java/io/antmedia/samples/init_plugins.py  "dist/PythonPluginFiles"
+cp ./src/main/java/io/antmedia/app/*.py   "dist/PythonPluginFiles"
+
+cp -r ./web/ ./dist/
 
 echo "Distribution created at: $DIST_DIR"
 ls -la "$DIST_DIR"
 
 cp ./install_dependencies.sh ./dist/
 cp ./install_python_plugin.sh ./dist/
-cp ./copy_python_files.sh ./dist/
 cp ./requirements.txt ./dist/

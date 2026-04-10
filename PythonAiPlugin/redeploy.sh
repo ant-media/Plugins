@@ -15,10 +15,7 @@ cp ./target/PythonAIPlugin.jar $AMS_DIR/plugins/
 [ -f $AMS_DIR/lib/jna-*.jar ] || cp ./target/lib/jna-*.jar $AMS_DIR/lib
 cp ./target/lib/sqlite-jdbc-*.jar $AMS_DIR/lib/
 
-cp ./src/main/java/io/antmedia/app/*.py $AMS_DIR/
-cp ./web/samples/* "$AMS_DIR/webapps/LiveApp/samples/"
-
-
+./copy_files.sh
 
 OUT=$?
 

@@ -21,7 +21,7 @@ def register_plugin(plugin):
 
 
 def init_python_plugin_state():
-    from init_plugins import init_plugins
+    from samples.init_plugins import init_plugins
     init_plugins(register_plugin, java_callbacks)
     print("Python plugin initialized with {} plugin(s)".format(len(registered_plugins)))
 

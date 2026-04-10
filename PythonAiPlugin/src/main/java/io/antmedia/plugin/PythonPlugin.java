@@ -19,7 +19,7 @@ import io.vertx.core.Vertx;
 public class PythonPlugin implements ApplicationContextAware, IStreamListener {
 
   private static final String PYTHON_PLUGIN_PATH_PROPERTY = "python.plugin.path";
-  private static final String DEFAULT_PYTHON_PLUGIN_PATH = "/usr/local/antmedia";
+  private static final String DEFAULT_PYTHON_PLUGIN_PATH = "/usr/local/antmedia/PythonPluginFiles";
 
   public static final String BEAN_NAME = "web.handler";
   protected static Logger logger = LoggerFactory.getLogger(PythonPlugin.class);
