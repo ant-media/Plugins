@@ -16,9 +16,7 @@ cp ./target/PythonAIPlugin.jar $AMS_DIR/plugins/
 cp ./target/lib/sqlite-jdbc-*.jar $AMS_DIR/lib/
 
 cp ./src/main/java/io/antmedia/app/*.py $AMS_DIR/
-mkdir -p "$AMS_DIR/webapps/LiveApp/viewer"
-cp ./web/viewer/* "$AMS_DIR/webapps/LiveApp/viewer/"
-cp ./web/samples/* $AMS_DIR/webapps/LiveApp/samples/
+cp ./web/samples/* "$AMS_DIR/webapps/LiveApp/samples/"
 
 
 

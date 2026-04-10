@@ -34,7 +34,8 @@ fi
 
 echo "Copying Python files..."
 cp ./src/main/java/io/antmedia/app/*.py "$DIST_DIR/python/"
-cp ./src/main/java/io/antmedia/app/*.xml "$DIST_DIR/python/" 2>/dev/null || true
+cp ./src/main/java/io/antmedia/app/*.xml "$DIST_DIR/python/"
+cp ./web/ ./dist/
 
 echo "Distribution created at: $DIST_DIR"
 ls -la "$DIST_DIR"
