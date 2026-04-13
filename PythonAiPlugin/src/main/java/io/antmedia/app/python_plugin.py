@@ -26,7 +26,7 @@ def init_python_plugin_state():
     print("Python plugin initialized with {} plugin(s)".format(len(registered_plugins)))
 
 
-def streamStarted(streamid, app_name, width, height, hls_url):
+def streamStarted(streamid, app_name, width, height):
     for plugin in registered_plugins:
         try:
             plugin.on_stream_started(streamid, width, height)
@@ -35,10 +35,9 @@ def streamStarted(streamid, app_name, width, height, hls_url):
 
     streams_dir = os.path.join(ANTMEDIA_WEBAPPS_DIR, app_name, "streams")
     reader = StreamReader(
-        streamid,
-        hls_url,
-        app_name,
-        registered_plugins,
+        stream_id=streamid,
+        app_name=app_name,
+        plugins=registered_plugins,
         width=width,
         height=height,
         streams_dir=streams_dir,

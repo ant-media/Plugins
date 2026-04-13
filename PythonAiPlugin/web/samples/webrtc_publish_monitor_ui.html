@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Publish &amp; Ollama monitor — Ant Media</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #eef1f8;
+      --bg-card: #ffffff;
+      --bg-elevated: #f1f5f9;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --text: #0f172a;
+      --muted: #475569;
+      --accent: #4f46e5;
+      --accent-dim: rgba(79, 70, 229, .14);
+      --success: #059669;
+      --success-muted: rgba(16, 185, 129, .14);
+      --warn: #d97706;
+      --danger: #dc2626;
+      --radius: 16px;
+      --radius-sm: 12px;
+      --shadow: 0 4px 24px rgba(15, 23, 42, .08), 0 12px 40px rgba(15, 23, 42, .06);
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --fs-base: 1.0625rem;
+      --fs-sm: 0.9375rem;
+      --fs-xs: 0.8125rem;
+      --fs-label: 0.9375rem;
+      --fs-section: 0.8125rem;
+      --fs-title: clamp(1.5rem, 3vw, 2rem);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; color-scheme: light; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .btn, .video-wrap, .alert-item { transition: none !important; }
+    }
+    body {
+      margin: 0;
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-size: var(--fs-base);
+      background:
+        radial-gradient(ellipse 1000px 560px at 8% -12%, rgba(99, 102, 241, .09) 0%, transparent 55%),
+        radial-gradient(ellipse 800px 480px at 96% 0%, rgba(14, 165, 233, .06) 0%, transparent 48%),
+        linear-gradient(180deg, #f8fafc 0%, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::selection {
+      background: #c7d2fe;
+      color: var(--text);
+    }
+    .shell { max-width: 1120px; margin: 0 auto; padding: 2rem 1.35rem 3.5rem; }
+    header {
+      margin-bottom: 2.25rem;
+      padding-bottom: 1.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .eyebrow {
+      display: inline-block;
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 0.55rem;
+    }
+    header h1 {
+      font-size: var(--fs-title);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin: 0;
+      color: var(--text);
+    }
+
+    .grid {
+      display: grid;
+      gap: 1.35rem;
+    }
+    @media (min-width: 880px) {
+      .grid-2 { grid-template-columns: 1.08fr .92fr; align-items: start; }
+    }
+
+    .card {
+      position: relative;
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem 1.45rem;
+      box-shadow: var(--shadow);
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(145deg, rgba(255,255,255,.95), rgba(241,245,249,.5) 40%, transparent);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .card h2 {
+      font-size: var(--fs-section);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: var(--muted);
+      margin: 0 0 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .card h2::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--border-strong), transparent);
+      min-width: 2rem;
+    }
+
+    .field-block { margin-top: 1.15rem; }
+    .field-block:first-of-type { margin-top: 0; }
+
+    label {
+      display: block;
+      font-size: var(--fs-label);
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: .5rem;
+    }
+    input[type="text"],
+    input[type="number"],
+    input[type="url"],
+    textarea {
+      width: 100%;
+      padding: .7rem .9rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text);
+      font-size: 1.0625rem;
+      font-family: inherit;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    input[type="text"]#streamId {
+      font-family: var(--font-mono);
+      font-size: 1.0625rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+    textarea { min-height: 8rem; resize: vertical; line-height: 1.55; }
+    input:focus-visible, textarea:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    .video-wrap {
+      position: relative;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+      aspect-ratio: 16/10;
+      border: 1px solid var(--border);
+      transition: box-shadow .35s ease, border-color .35s ease;
+    }
+    .video-wrap::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .08);
+      border-radius: inherit;
+    }
+    .video-wrap.video-live {
+      border-color: rgba(52, 211, 153, .45);
+      box-shadow: 0 0 0 1px rgba(52, 211, 153, .2), 0 12px 40px rgba(52, 211, 153, .08);
+    }
+    .video-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .video-badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      padding: .4rem .75rem;
+      border-radius: 999px;
+      font-size: var(--fs-xs);
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.15);
+      color: #f8fafc;
+    }
+    .video-badge.is-live {
+      background: rgba(16, 185, 129, .85);
+      border-color: rgba(5, 150, 105, .9);
+      color: #ffffff;
+    }
+
+    .stream-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      align-items: stretch;
+    }
+    .stream-row input { flex: 1; min-width: 12rem; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .4rem;
+      padding: .68rem 1.15rem;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-family: inherit;
+      font-size: 1.0625rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .14s ease, box-shadow .14s ease, filter .14s ease, background .14s ease;
+    }
+    .btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn-primary {
+      background: linear-gradient(145deg, #6366f1 0%, #4f46e5 55%, #4338ca 100%);
+      color: #fff;
+      box-shadow: 0 10px 28px rgba(79, 70, 229, .38);
+    }
+    .btn-primary:hover { filter: brightness(1.05); box-shadow: 0 12px 32px rgba(79, 70, 229, .42); }
+    .btn-ghost {
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: #e2e8f0; border-color: var(--border-strong); }
+    .btn-danger {
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    .btn-danger:hover { background: #fee2e2; border-color: #f87171; color: #991b1b; }
+    .btn-sm { padding: .45rem .75rem; font-size: .82rem; }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .65rem;
+      margin-top: .85rem;
+    }
+    .btn-row .btn { flex: 1 1 auto; min-width: 7.5rem; }
+
+    .publish-actions .btn {
+      transition: opacity .18s ease, filter .18s ease, box-shadow .18s ease, transform .14s ease;
+    }
+    .publish-actions .btn:disabled {
+      opacity: .48;
+      cursor: not-allowed;
+      filter: grayscale(0.12);
+      box-shadow: none !important;
+    }
+    .publish-actions .btn:disabled:hover {
+      filter: grayscale(0.12);
+    }
+    .publish-actions.broadcast-offline .btn-primary:not(:disabled) {
+      box-shadow: 0 10px 28px rgba(79, 70, 229, .38);
+    }
+    .publish-actions.broadcast-live .btn-danger:not(:disabled) {
+      background: linear-gradient(145deg, #ef4444 0%, #dc2626 55%, #b91c1c 100%);
+      color: #fff;
+      border-color: rgba(220, 38, 38, .5);
+      box-shadow: 0 10px 28px rgba(220, 38, 38, .32);
+    }
+    .publish-actions.broadcast-live .btn-danger:not(:disabled):hover {
+      filter: brightness(1.05);
+      box-shadow: 0 12px 32px rgba(220, 38, 38, .38);
+    }
+
+    .muted { color: var(--muted); font-size: var(--fs-sm); margin-top: 0; line-height: 1.5; }
+
+    .section-hint { margin: 0 0 1.1rem; max-width: 42ch; font-size: var(--fs-sm); }
+
+    .alerts-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: .75rem;
+      margin: 1.15rem 0 .6rem;
+    }
+    .alerts-head h3 {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: .4rem .65rem;
+      font-size: var(--fs-section);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      margin: 0;
+    }
+    .alerts-count {
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--text);
+      opacity: 0.9;
+    }
+    .poll-hint {
+      font-size: var(--fs-xs);
+      color: var(--muted);
+      opacity: .9;
+    }
+
+    .monitor-alerts {
+      max-height: min(320px, 42vh);
+      overflow-y: auto;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 transparent;
+    }
+    .monitor-alerts::-webkit-scrollbar { width: 6px; }
+    .monitor-alerts::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+    .monitor-empty {
+      padding: 1.5rem 1.25rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: var(--fs-sm);
+      line-height: 1.55;
+    }
+
+    .alert-item {
+      padding: .95rem 1.1rem;
+      border-bottom: 1px solid var(--border);
+      font-size: var(--fs-sm);
+      transition: background .12s ease;
+    }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-item:hover { background: rgba(15, 23, 42, .035); }
+    .alert-item--new {
+      animation: alert-item-enter 0.6s ease-out forwards;
+    }
+    @keyframes alert-item-enter {
+      0% {
+        opacity: 0;
+        transform: translateY(-10px);
+        background-color: rgba(99, 102, 241, .16);
+        box-shadow: inset 3px 0 0 0 rgba(79, 70, 229, 0.7);
+      }
+      45% {
+        background-color: rgba(99, 102, 241, .07);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+        background-color: transparent;
+        box-shadow: inset 3px 0 0 0 transparent;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .alert-item--new { animation: none; }
+    }
+    .alert-item-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin-bottom: .45rem;
+    }
+    .alert-item .tag {
+      display: inline-block;
+      font-size: var(--fs-xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--success);
+    }
+    .conf-pill {
+      font-family: var(--font-mono);
+      font-size: var(--fs-xs);
+      font-weight: 500;
+      padding: .25rem .5rem;
+      border-radius: 6px;
+      background: #eef2ff;
+      color: #4338ca;
+      border: 1px solid #c7d2fe;
+    }
+    .alert-prompt {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 1.0625rem;
+      margin-bottom: .35rem;
+      line-height: 1.4;
+    }
+    .alert-reason {
+      font-size: var(--fs-sm);
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .toast-host {
+      position: fixed;
+      right: 1.15rem;
+      bottom: 1.15rem;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: .5rem;
+      pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      padding: .65rem 1rem;
+      border-radius: var(--radius-sm);
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      line-height: 1.35;
+      max-width: min(18rem, calc(100vw - 2.5rem));
+      box-shadow: 0 12px 32px rgba(15, 23, 42, .12), 0 2px 8px rgba(15, 23, 42, .06);
+      animation: toast-in 0.28s ease-out;
+    }
+    @keyframes toast-in {
+      from {
+        opacity: 0;
+        transform: translateX(0.65rem);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .toast { animation: none; }
+    }
+    .toast--success {
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+    .toast--error {
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+
+    code { font-size: 0.95em; font-family: var(--font-mono); background: var(--bg-elevated); padding: .12rem .38rem; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <p class="eyebrow">Ant Media sample</p>
+      <h1>WebRTC publish &amp; vision monitor</h1>
+    </header>
+
+    <div class="grid grid-2">
+      <div class="grid">
+        <div class="card">
+          <h2>Camera &amp; publish</h2>
+          <div class="field-block">
+            <div class="video-wrap" id="videoWrap">
+              <video id="localVideo" autoplay muted playsinline></video>
+              <span class="video-badge" id="videoBadge">Preview</span>
+            </div>
+          </div>
+          <div class="field-block">
+            <label for="streamId">Stream ID</label>
+            <div class="stream-row">
+              <input type="text" id="streamId" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+          <div class="btn-row publish-actions broadcast-offline" id="publishActions" role="group" aria-label="Broadcast controls">
+            <button type="button" class="btn btn-primary" id="publish_start">Start broadcast</button>
+            <button type="button" class="btn btn-danger" id="publish_stop" disabled>Stop</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Continuous monitor (yes / no)</h2>
+        <p class="muted section-hint">To change prompts, update the text and click <strong>Apply monitor</strong>.</p>
+        <label for="monitorPrompts">Monitor prompts</label>
+        <textarea id="monitorPrompts" placeholder="Is there a person without helmet?&#10;Is there a person without jacket?&#10;Is there a person with helmet?"></textarea>
+        <div class="field-block">
+          <div class="btn-row monitor-apply-row">
+            <button type="button" class="btn btn-primary" id="btnApplyMonitor">Apply monitor</button>
+          </div>
+        </div>
+        <div class="alerts-head">
+          <h3>
+            Alerts
+            <span id="alertsTotalCount" class="alerts-count" aria-live="polite">Total: 0</span>
+          </h3>
+          <span class="poll-hint" title="Refresh interval">Updates every 1s</span>
+        </div>
+        <div id="monitorResults" class="monitor-alerts">
+          <div class="monitor-empty">No alerts loaded yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastHost" class="toast-host" aria-live="polite"></div>
+
+  <script type="module">
+    import { WebRTCAdaptor } from "https://esm.sh/@antmedia/webrtc_adaptor";
+
+    function appNameFromPage() {
+      const p = window.location.pathname;
+      const i = p.indexOf("/samples/");
+      if (i >= 0) {
+        const prefix = p.slice(0, i).replace(/^\/+|\/+$/g, "");
+        const first = prefix.split("/")[0];
+        return first || "LiveApp";
+      }
+      const parts = p.split("/").filter(Boolean);
+      return parts[0] || "LiveApp";
+    }
+
+    /** App name from path (e.g. /LiveApp/samples/... → LiveApp). WS = same host + /{app}/websocket */
+    function websocketUrlFromPage() {
+      const app = appNameFromPage();
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      return proto + "//" + window.location.host + "/" + encodeURIComponent(app) + "/websocket";
+    }
+
+    function pluginRestBase() {
+      const p = window.location.pathname;
+      const i = p.indexOf("/samples/");
+      if (i >= 0) {
+        return window.location.origin + p.slice(0, i) + "/rest/python-plugin";
+      }
+      const app = appNameFromPage();
+      return window.location.origin + "/" + encodeURIComponent(app) + "/rest/python-plugin";
+    }
+
+    function detectionsQuerySuffix() {
+      return "?appName=" + encodeURIComponent(appNameFromPage());
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    const WS_URL = websocketUrlFromPage();
+
+    const streamIdInput = document.getElementById("streamId");
+    /** Exactly 10 chars [a-z0-9] for stream id. */
+    function randomStreamId() {
+      var chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+      var out = "";
+      var i;
+      try {
+        if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+          var buf = new Uint8Array(10);
+          crypto.getRandomValues(buf);
+          for (i = 0; i < 10; i++) {
+            out += chars.charAt(buf[i] % chars.length);
+          }
+          return out;
+        }
+      } catch (e) {
+        /* fall through */
+      }
+      for (i = 0; i < 10; i++) {
+        out += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return out;
+    }
+    (function initStreamIdFromQuery() {
+      const q = new URLSearchParams(window.location.search);
+      const fromQuery = (q.get("id") || q.get("streamId") || "").trim();
+      streamIdInput.value = fromQuery || randomStreamId();
+    })();
+
+    const publishActionsEl = document.getElementById("publishActions");
+    const publishStartBtn = document.getElementById("publish_start");
+    const publishStopBtn = document.getElementById("publish_stop");
+    const videoWrap = document.getElementById("videoWrap");
+    const videoBadge = document.getElementById("videoBadge");
+
+    function setBroadcastUiState(live) {
+      if (live) {
+        publishActionsEl.classList.remove("broadcast-offline");
+        publishActionsEl.classList.add("broadcast-live");
+        publishStartBtn.disabled = true;
+        publishStopBtn.disabled = false;
+      } else {
+        publishActionsEl.classList.add("broadcast-offline");
+        publishActionsEl.classList.remove("broadcast-live");
+        publishStartBtn.disabled = false;
+        publishStopBtn.disabled = true;
+      }
+    }
+
+    const webRTCAdaptor = new WebRTCAdaptor({
+      websocket_url: WS_URL,
+      localVideoElement: document.getElementById("localVideo"),
+      callback: (info, obj) => {
+        console.log("WebRTC callback:", info, obj);
+        if (info === "publish_started") {
+          setBroadcastUiState(true);
+          videoWrap.classList.add("video-live");
+          videoBadge.textContent = "Live";
+          videoBadge.classList.add("is-live");
+          /* Apply after server-side streamStarted + frames; avoids monitor never scheduling. */
+          setTimeout(function () {
+            applyMonitorConfig({ suppressSuccessToast: true });
+          }, 800);
+        } else if (info === "publish_finished") {
+          setBroadcastUiState(false);
+          videoWrap.classList.remove("video-live");
+          videoBadge.textContent = "Preview";
+          videoBadge.classList.remove("is-live");
+        } else if (info === "initialized") {
+          /* no-op */
+        }
+      },
+    });
+
+    document.getElementById("publish_start").addEventListener("click", () => {
+      webRTCAdaptor.websocket_url = WS_URL;
+      const sid = streamIdInput.value.trim();
+      if (!sid) {
+        showToast("Set a stream ID.", "error");
+        return;
+      }
+      webRTCAdaptor.publish(sid);
+    });
+
+    document.getElementById("publish_stop").addEventListener("click", () => {
+      const sid = streamIdInput.value.trim();
+      if (sid) {
+        webRTCAdaptor.stop(sid);
+      }
+    });
+
+    /* —— Monitor (REST): fixed threshold + interval; apply on publish_started —— */
+    const MON_THRESHOLD = 0.6;
+    const MON_INTERVAL_SEC = 2;
+    const POLL_MS = 1000;
+
+    let toastTimer = null;
+    function showToast(message, variant) {
+      const host = document.getElementById("toastHost");
+      host.textContent = "";
+      const el = document.createElement("div");
+      el.className = "toast toast--" + (variant === "success" ? "success" : "error");
+      el.setAttribute("role", "status");
+      el.textContent = message;
+      host.appendChild(el);
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        el.remove();
+      }, 3800);
+    }
+
+    async function applyMonitorConfig(options) {
+      options = options || {};
+      const suppressSuccessToast = !!options.suppressSuccessToast;
+      const base = pluginRestBase();
+      const streamId = streamIdInput.value.trim();
+      const raw = document.getElementById("monitorPrompts").value.split("\n");
+      const prompts = raw.map((s) => s.trim()).filter(Boolean);
+      if (!streamId || !prompts.length) {
+        showToast("Add a stream ID and at least one prompt line.", "error");
+        return;
+      }
+      try {
+        const r = await fetch(base + "/vision-monitor/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            streamId,
+            prompts,
+            threshold: MON_THRESHOLD,
+            intervalSec: MON_INTERVAL_SEC,
+          }),
+          credentials: "include",
+        });
+        const text = await r.text();
+        let j = {};
+        try {
+          j = text ? JSON.parse(text) : {};
+        } catch (_) {
+          j = {};
+        }
+        if (!r.ok) {
+          showToast(String(j.error || j.message || "Request failed (" + r.status + ")"), "error");
+          return;
+        }
+        if (j.ok === false) {
+          showToast(String(j.error || j.message || "Monitor request failed."), "error");
+          return;
+        }
+        if (!suppressSuccessToast) {
+          showToast("Monitor applied", "success");
+        }
+      } catch (e) {
+        showToast(String(e.message || e), "error");
+      }
+    }
+
+    document.getElementById("btnApplyMonitor").addEventListener("click", () => {
+      applyMonitorConfig();
+    });
+
+    const alertsTotalEl = document.getElementById("alertsTotalCount");
+
+    function setAlertsTotal(n) {
+      if (!alertsTotalEl) return;
+      var t = typeof n === "number" && !isNaN(n) ? n : 0;
+      alertsTotalEl.textContent = "Total: " + t;
+    }
+
+    var alertRowKeysSeen = new Set();
+    var lastAlertsPollStreamId = "";
+
+    function alertRowKey(o) {
+      return [
+        o.timestamp_sec != null ? String(o.timestamp_sec) : "",
+        String(o.prompt || ""),
+        String(o.confidence != null ? o.confidence : ""),
+        String((o.reason || "").slice(0, 96)),
+      ].join("\x1f");
+    }
+
+    async function fetchMonitorAlertsFromDb() {
+      const base = pluginRestBase();
+      const streamId = streamIdInput.value.trim();
+      const el = document.getElementById("monitorResults");
+      if (!streamId) {
+        setAlertsTotal(0);
+        alertRowKeysSeen = new Set();
+        lastAlertsPollStreamId = "";
+        return;
+      }
+      if (streamId !== lastAlertsPollStreamId) {
+        lastAlertsPollStreamId = streamId;
+        alertRowKeysSeen = new Set();
+      }
+      try {
+        const path =
+          "/detections/monitor_alerts/" + encodeURIComponent(streamId) + "/seconds/86400";
+        let r = await fetch(base + path + detectionsQuerySuffix(), { credentials: "include" });
+        let arr = JSON.parse(await r.text());
+        if (!Array.isArray(arr)) {
+          arr = [];
+        }
+        /* Fallback if DB rows used servlet app context but ?appName= did not match. */
+        if (arr.length === 0) {
+          r = await fetch(base + path, { credentials: "include" });
+          const arr2 = JSON.parse(await r.text());
+          if (Array.isArray(arr2) && arr2.length) {
+            arr = arr2;
+          }
+        }
+        const total = arr.length;
+        setAlertsTotal(total);
+        if (!arr.length) {
+          el.innerHTML =
+            '<div class="monitor-empty">No monitor alerts yet. Ensure Ollama is running, prompts match the scene, and confidence exceeds the threshold.</div>';
+          alertRowKeysSeen = new Set();
+          return;
+        }
+
+        var newKeySet = new Set();
+        if (alertRowKeysSeen.size > 0) {
+          for (var i = 0; i < arr.length; i++) {
+            var raw = arr[i];
+            var obj = typeof raw === "string" ? JSON.parse(raw) : raw;
+            var key = alertRowKey(obj);
+            if (!alertRowKeysSeen.has(key)) {
+              newKeySet.add(key);
+            }
+          }
+        }
+        var keysThisPoll = arr.map(function (row) {
+          var o = typeof row === "string" ? JSON.parse(row) : row;
+          return alertRowKey(o);
+        });
+        alertRowKeysSeen = new Set(keysThisPoll);
+
+        el.innerHTML = arr
+          .slice(-40)
+          .reverse()
+          .map((row) => {
+            const o = typeof row === "string" ? JSON.parse(row) : row;
+            const k = alertRowKey(o);
+            const isNew = newKeySet.has(k);
+            const reason = String(o.reason || "").slice(0, 280);
+            const confPill = (function (c) {
+              if (c == null || c === "") return "—";
+              const n = Number(c);
+              return Number.isFinite(n) ? n.toFixed(2) : String(c);
+            })(o.confidence);
+            return (
+              '<div class="alert-item' +
+              (isNew ? " alert-item--new" : "") +
+              '">' +
+              '<div class="alert-item-head">' +
+              '<span class="tag">Match</span>' +
+              '<span class="conf-pill">' +
+              escapeHtml(confPill) +
+              "</span></div>" +
+              '<div class="alert-prompt">' +
+              escapeHtml(String(o.prompt || "")) +
+              "</div>" +
+              (reason
+                ? '<div class="alert-reason">' + escapeHtml(reason) + "</div>"
+                : "") +
+              "</div>"
+            );
+          })
+          .join("");
+      } catch (e) {
+        console.warn("monitor alerts poll:", e);
+      }
+    }
+
+    fetchMonitorAlertsFromDb();
+    setInterval(fetchMonitorAlertsFromDb, POLL_MS);
+  </script>
+</body>
+</html>

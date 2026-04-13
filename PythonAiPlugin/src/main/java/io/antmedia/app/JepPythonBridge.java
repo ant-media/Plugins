@@ -111,11 +111,11 @@ public class JepPythonBridge {
 		}
 	}
 
-	public void streamStarted(String streamId, String appName, int width, int height, String hlsUrl) {
+	public void streamStarted(String streamId, String appName, int width, int height) {
 		try {
 			pythonExecutor.submit(() -> {
 				try {
-					interpreter.invoke("python_plugin.streamStarted", streamId, appName, width, height, hlsUrl);
+					interpreter.invoke("python_plugin.streamStarted", streamId, appName, width, height);
 				} catch (JepException e) {
 					logger.error("Error calling python streamStarted for stream: {}", streamId, e);
 				}

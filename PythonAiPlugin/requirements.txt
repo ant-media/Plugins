@@ -1,4 +1,5 @@
 jep
 numpy
 opencv-python
-ultralytics
+aiortc
+websocket-client

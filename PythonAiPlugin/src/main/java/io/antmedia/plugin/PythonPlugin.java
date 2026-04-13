@@ -99,9 +99,8 @@ public class PythonPlugin implements ApplicationContextAware, IStreamListener {
     int height = mux.getVideoCodecParameters().height();
 
     String appName = applicationContext.getApplicationName().replace("/", "");
-    String hlsUrl = "http://localhost:5080/" + appName + "/streams/" + streamId + ".m3u8";
 
-    jepBridge.streamStarted(streamId , appName, width, height, hlsUrl);
+    jepBridge.streamStarted(streamId , appName, width, height);
     register(streamId);
   }
 

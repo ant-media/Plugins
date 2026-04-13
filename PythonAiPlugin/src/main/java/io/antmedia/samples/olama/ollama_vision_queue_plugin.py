@@ -488,7 +488,8 @@ class OllamaVisionQueuePlugin(PluginBase):
         prompts = self._monitor_prompts.get(stream_id) or []
         if not cfg or not prompts:
             return
-        if stream_id in self._inflight or stream_id in self._monitor_inflight:
+        # Monitor must not block on vision-queue _inflight; that set only guards REST/API jobs.
+        if stream_id in self._monitor_inflight:
             return
         if now - self._last_monitor_ts.get(stream_id, 0.0) < cfg["interval_sec"]:
             return
