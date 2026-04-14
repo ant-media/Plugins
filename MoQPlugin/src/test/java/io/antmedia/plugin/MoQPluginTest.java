@@ -193,9 +193,6 @@ public class MoQPluginTest {
         Broadcast broadcast = mock(Broadcast.class);
         when(dataStore.get(streamId)).thenReturn(broadcast);
 
-        MoQStreamFetcher mockFetcher = mock(MoQStreamFetcher.class);
-        doReturn(mockFetcher).when(plugin).createFetcher(eq(streamId), any(), any(), any());
-
         plugin.startIngest(streamId);
 
         ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
