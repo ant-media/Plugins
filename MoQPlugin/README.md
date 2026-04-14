@@ -16,20 +16,38 @@ This produces `target/MoQPlugin-<version>-release.zip`. Extract it on the server
 sudo ./install-moq-plugin.sh
 ```
 
-The script installs `moq-cli` and `moq-relay` binaries to `/usr/local/antmedia/plugins/`.
+The script:
+- Installs `moq-cli` and `moq-relay` binaries to `/usr/local/bin`
+- Copies `MoQPlugin.jar` to `/usr/local/antmedia/plugins/`
+
+Restart AMS after installation:
+
+```bash
+sudo systemctl restart antmedia
+```
 
 ---
 
-## Demo Web Player
+## Demo Web Pages
 
-Build the static player from the [moq](https://github.com/kixelated/moq-rs) JS demo:
+Temporary dev pages for testing — not intended for production. Includes a WebCodecs player (`index.html`), an MSE fallback player (`mse.html`, works without HTTPS), and a publisher page (`publish.html`). Built from the JS demo in the `moq/` repo.
 
 ```bash
+# Build (run from moq/ repo root — bun workspace)
+cd /path/to/moq
+bun install
 cd js/demo
-VITE_RELAY_URL="https://your-server:4443/anon" bun run build -- --base=./
+VITE_RELAY_URL="https://your-server:4443/moq" bun run build -- --base=./
 ```
 
-Copy `src/dist/` to your AMS webapp directory (e.g. `webapps/LiveApp/moq/`) and open `index.html`.
+Copy `js/demo/src/dist/` into your AMS webapp directory and open the pages from there:
+
+```bash
+# Example: deploy to the 'live' app
+sudo cp -r js/demo/src/dist/. /usr/local/antmedia/webapps/live/moq/
+# Access at: http://<server>:5080/live/moq/index.html?name=live/<streamId>/source
+#            http://<server>:5080/live/moq/mse.html?name=live/<streamId>/source
+```
 
 ---
 

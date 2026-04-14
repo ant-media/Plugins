@@ -81,6 +81,20 @@ verify_binaries() {
     done
 }
 
+# ─── Deploy plugin JAR to AMS plugins dir ─────────────────────────────────────
+deploy_plugin_jar() {
+    local jar="$1"
+    local dest="$PLUGINS_DIR/$PLUGIN_JAR"
+    sudo mkdir -p "$PLUGINS_DIR"
+    sudo install -m 644 "$jar" "$dest"
+    if id antmedia &>/dev/null; then
+        sudo chown antmedia:antmedia "$dest"
+        info "Plugin JAR installed: $dest (owner: antmedia:antmedia)"
+    else
+        info "Plugin JAR installed: $dest"
+    fi
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 main() {
     [[ "$EUID" -ne 0 ]] && [[ -z "$(command -v sudo)" ]] && error "sudo is required"
@@ -103,8 +117,9 @@ main() {
     install_os_deps "$os"
     extract_binaries "$jar" "$arch"
     verify_binaries
+    deploy_plugin_jar "$jar"
 
-    info "Done. moq-cli and moq-relay installed to $INSTALL_DIR."
+    info "Done. moq-cli and moq-relay installed to $INSTALL_DIR, MoQPlugin.jar deployed to $PLUGINS_DIR."
 }
 
 main "$@"
