@@ -16,21 +16,15 @@ This produces `target/MoQPlugin-<version>-release.zip`. Extract it on the server
 sudo ./install-moq-plugin.sh
 ```
 
-The script:
-- Installs `moq-cli` and `moq-relay` binaries to `/usr/local/bin`
-- Copies `MoQPlugin.jar` to `/usr/local/antmedia/plugins/`
-
-Restart AMS after installation:
-
-```bash
-sudo systemctl restart antmedia
-```
+The script installs `moq-cli` and `moq-relay` binaries to `/usr/local/antmedia/plugins/`.
 
 ---
 
-## Demo Web Pages
+## MoQ Web Player
 
-Temporary dev pages for testing — not intended for production. Includes a WebCodecs player (`index.html`), an MSE fallback player (`mse.html`, works without HTTPS), and a publisher page (`publish.html`). Built from the JS demo in the `moq/` repo.
+Player pages. Includes a WebCodecs player (`index.html`), an MSE fallback player (`mse.html`, works without HTTPS), and a publisher page (`publish.html`). Built from the JS demo in the moq.dev repo.
+
+This will be integrated into main ant-media player in the future.
 
 ```bash
 # Build (run from moq/ repo root — bun workspace)
@@ -54,9 +48,6 @@ sudo cp -r js/demo/src/dist/. /usr/local/antmedia/webapps/live/moq/
 ## TODO
 
 - **Security / Access control** — webhook-based auth in `moq-relay` calling AMS REST token validation (see `moq/rs/moq-relay/src/auth.rs`)
-- **Embedded relay** — manage `moq-relay` process lifecycle from the plugin instead of requiring a separately running instance
-- **Publishing** — accept inbound MoQ streams and publish them into AMS as live streams
-- test self-contained ssl dose it work
 - Maybe move moq to https://localhost:4443/moq/appname? and in stream name just to be streamName/source or  streamName/resolution
 
 
@@ -80,11 +71,6 @@ A fallback player using MSE (Media Source Extensions) is available at `/mse.html
 - Question? When accessing with http we should add port :4443/moq at the end of link....
 -           When accessing with https, we should just add /moq at the end of link, right? TEST: If no nginx proxy is is in use, how dose this work with local ant-media-server? Need likely to deploy to amazon to test this....
 
-
-
-
-
---- Figure out publishing?
 
 
 
