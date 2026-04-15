@@ -48,8 +48,12 @@ public class MutedPacketReceiver extends Muxer {
 
 	@Override
 	public synchronized void writePacket(AVPacket pkt, AVStream stream) {
+		if (stream.codecpar().codec_type() != AVMEDIA_TYPE_VIDEO) {
+			return;
+		}
+		boolean isKey = (pkt.flags() & AV_PKT_FLAG_KEY) != 0;
 		if (!firstKeyframeSeen) {
-			if (stream.codecpar().codec_type() == AVMEDIA_TYPE_VIDEO && (pkt.flags() & AV_PKT_FLAG_KEY) != 0) {
+			if (isKey) {
 				firstKeyframeSeen = true;
 			} else {
 				return;
@@ -62,18 +66,32 @@ public class MutedPacketReceiver extends Muxer {
 
 	@Override
 	public synchronized void writePacket(AVPacket pkt, AVCodecContext codecContext) {
+		if (codecContext.codec_type() != AVMEDIA_TYPE_VIDEO) {
+			return;
+		}
+		boolean isKey = (pkt.flags() & AV_PKT_FLAG_KEY) != 0;
 		if (!firstKeyframeSeen) {
-			if (codecContext.codec_type() == AVMEDIA_TYPE_VIDEO && (pkt.flags() & AV_PKT_FLAG_KEY) != 0) {
+			if (isKey) {
 				firstKeyframeSeen = true;
+				// On first keyframe, codecContext is fully initialized. Update each target
+				// muxer's inputTimeBaseMap (for correct timestamp rescaling) and videoExtradata
+				// (for correct SPS/PPS prepending) to match the source encoder.
+				for (Muxer muxer : getTargetMuxerSnapshot()) {
+					muxer.contextChanged(codecContext, 0);
+				}
 			} else {
 				return;
 			}
 		}
+		// Force video stream index to 0. Muxers sometime register video at index 0, audio at 1.
+		// Source encoder (esp. WebRTC) may produce video packets with streamIdx=1, which would
+		// be treated as audio by downstream muxers, causing errors.
+		pkt.stream_index(0);
 		for (Muxer muxer : getTargetMuxerSnapshot()) {
 			muxer.writePacket(pkt, codecContext);
 		}
 	}
-	
+
 	@Override
 	public synchronized void writeAudioBuffer(ByteBuffer audioFrame, int streamIndex, long timestamp) {
 	}
@@ -83,7 +101,7 @@ public class MutedPacketReceiver extends Muxer {
 			int streamIndex, boolean isKeyFrame, long firstFrameTimeStamp, long pts) {
 		for (Muxer muxer : getTargetMuxerSnapshot()) {
 			muxer.writeVideoBuffer(encodedVideoFrame, dts, frameRotation, streamIndex, isKeyFrame, firstFrameTimeStamp, pts);
-		}		
+		}
 	}
 
 	@Override

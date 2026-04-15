@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.datastore.db.types.Broadcast;
+import io.antmedia.datastore.db.types.Endpoint;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.plugin.api.IStreamListener;
@@ -72,6 +73,10 @@ public class MutedStreamReplicatorPlugin implements ApplicationContextAware, ISt
 	}
 
 	private void handleMutedReplicaStarted(String mutedReplicaStreamId) {
+		if (stripAbrSuffix(mutedReplicaStreamId) != null) {
+			return;
+		}
+
 		logger.info("Muted replica stream started: {}", mutedReplicaStreamId);
 
 		String sourceStreamId = getSourceStreamId(mutedReplicaStreamId);
@@ -139,6 +144,9 @@ public class MutedStreamReplicatorPlugin implements ApplicationContextAware, ISt
 
 		if (result != null && result.isSuccess()) {
 			logger.info("Started muted replica stream: {}", mutedReplicaStreamId);
+			Endpoint replicaEndpoint = new Endpoint();
+			replicaEndpoint.setEndpointUrl(replicaEndpointUrl);
+			app.getDataStore().addEndpoint(sourceStreamId, replicaEndpoint);
 		}
 		else {
 			String reason = result != null ? result.getMessage() : "No result returned from startEndpointStreaming";
@@ -155,9 +163,27 @@ public class MutedStreamReplicatorPlugin implements ApplicationContextAware, ISt
 		MutedStreamReplicatorSettings settings = loadSettings();
 		String prefix = settings.getMutedStreamPrefix();
 		String suffix = settings.getMutedStreamSuffix();
+		if (matchesMutedPattern(streamId, prefix, suffix)) {
+			return true;
+		}
+
+		// Also catch ABR renditions of a muted stream (EX: "streamId-muted_480p1000kbps")
+		String base = stripAbrSuffix(streamId);
+		return base != null && matchesMutedPattern(base, prefix, suffix);
+	}
+
+	private static boolean matchesMutedPattern(String streamId, String prefix, String suffix) {
 		boolean matchesPrefix = StringUtils.isBlank(prefix) || streamId.startsWith(prefix);
 		boolean matchesSuffix = StringUtils.isBlank(suffix) || streamId.endsWith(suffix);
 		return matchesPrefix && matchesSuffix && streamId.length() > prefix.length() + suffix.length();
+	}
+
+	/** Returns the stream ID without an ABR rendition suffix like "_480p1000kbps", or null if none. */
+	private static String stripAbrSuffix(String streamId) {
+		int idx = streamId.lastIndexOf('_');
+		if (idx < 0) return null;
+		String tail = streamId.substring(idx + 1);
+		return tail.matches("\\d+p\\d+kbps") ? streamId.substring(0, idx) : null;
 	}
 
 	private String getSourceStreamId(String mutedReplicaStreamId) {
@@ -198,13 +224,16 @@ public class MutedStreamReplicatorPlugin implements ApplicationContextAware, ISt
 			mutedStreamManager.stop();
 		}
 
-		if (!isMutedReplicaStream(streamId) && !loadSettings().isKeepMutedStreamsAfterEnd()) {
+		if (!isMutedReplicaStream(streamId)) {
 			String mutedStreamId = getMutedStreamId(streamId);
 			IAntMediaStreamHandler app = getApplication();
-			if (app.getDataStore().get(mutedStreamId) != null) {
+			if (!loadSettings().isKeepMutedStreamsAfterEnd() && app.getDataStore().get(mutedStreamId) != null) {
 				app.getDataStore().delete(mutedStreamId);
 				logger.info("Deleted muted replica broadcast {} after source stream {} ended", mutedStreamId, streamId);
 			}
+			Endpoint replicaEndpoint = new Endpoint();
+			replicaEndpoint.setEndpointUrl(getReplicaRtmpUrl(mutedStreamId));
+			app.getDataStore().removeEndpoint(streamId, replicaEndpoint, true);
 		}
 	}
 

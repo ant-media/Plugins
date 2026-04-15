@@ -15,7 +15,7 @@ import io.antmedia.muxer.Muxer;
 import io.vertx.core.Vertx;
 
 public class MutedStreamManager {
-	private static final long TARGET_BUFFER_CLEAR_PERIOD_MS = 500;
+	private static final long TARGET_BUFFER_CLEAR_PERIOD_MS = 50;
 	private static final Logger logger = LoggerFactory.getLogger(MutedStreamManager.class);
 
 	private final EncoderAdaptor sourceAdaptor;
@@ -34,6 +34,8 @@ public class MutedStreamManager {
 			logger.warn("Cannot start muted stream manager because source or target adaptor is null");
 			return false;
 		}
+
+		targetAdaptor.setEnableAudio(false);
 
 		startTargetBufferCleaner();
 
@@ -91,17 +93,22 @@ public class MutedStreamManager {
 						continue;
 					}
 
-					// Remove preview muxer for muted streams, since it cause some weird log spam.
-					targetMuxers = targetMuxers.stream()
+					// Remove preview muxer for muted streams, since it causes some weird log spam.
+					List<Muxer> filteredMuxers = targetMuxers.stream()
 							.filter(m -> !(m instanceof io.antmedia.enterprise.preview.PreviewMuxer))
 							.collect(java.util.stream.Collectors.toList());
-					if (targetMuxers.isEmpty()) {
+					if (filteredMuxers.isEmpty()) {
 						continue;
 					}
 
-					logger.info("Attaching muted rendition receiver for source stream {} at {}p",
-							sourceAdaptor.getStreamId(), sourceVideoEncoder.getResolutionHeight());
-					MutedPacketReceiver receiver = new MutedPacketReceiver(targetMuxers);
+					logger.info("Attaching muted rendition receiver for source stream {} at {}p to {} target muxers: {}",
+							sourceAdaptor.getStreamId(), sourceVideoEncoder.getResolutionHeight(),
+							filteredMuxers.size(),
+							filteredMuxers.stream().map(m -> m.getClass().getSimpleName()
+									+ "[idx=" + m.getRegisteredStreamIndexList() + "]")
+									.collect(java.util.stream.Collectors.joining(", ")));
+
+					MutedPacketReceiver receiver = new MutedPacketReceiver(filteredMuxers);
 					sourceVideoEncoder.addMuxer(receiver);
 					attachedReceivers.add(AttachedReceiver.forVideoEncoder(sourceVideoEncoder, receiver));
 					attachedCount++;
@@ -131,7 +138,7 @@ public class MutedStreamManager {
 		attachedReceivers.clear();
 	}
 
-	//this is a trick to prevent feeding the encoder adaptor with packets 
+	//this is a trick to prevent feeding the encoder adaptor with packets
 	private void startTargetBufferCleaner() {
 		stopTargetBufferCleaner();
 
