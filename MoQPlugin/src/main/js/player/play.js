@@ -2,8 +2,10 @@ import "@moq/watch/element";
 import "@moq/watch/support/element";
 
 // ─── Elements ────────────────────────────────────────────────────────────────
-const player       = document.getElementById("player");
-const errors       = document.getElementById("errors");
+const player         = document.getElementById("player");
+const errors         = document.getElementById("errors");
+const qualityPanel   = document.getElementById("quality-panel");
+const qualityButtons = document.getElementById("quality-buttons");
 const urlRows      = document.getElementById("url-rows");
 const infoName     = document.getElementById("info-name");
 const infoUrl      = document.getElementById("info-url");
@@ -326,12 +328,98 @@ async function findWorkingUrl() {
   return null;
 }
 
+// ─── Quality discovery ────────────────────────────────────────────────────────
+// The npm @moq/lite@0.1.5 does not have connection.announced as a Signal.
+// Instead we use Established.announced() — an async iterator that emits
+// { path, active } entries as the relay announces/unannounces tracks.
+
+let currentStreamId = broadcastName ?? "";
+let currentBroadcasts = new Set();
+let currentSelected = "";
+
+function renderQualities() {
+  qualityButtons.innerHTML = "";
+
+  if (!currentStreamId) {
+    qualityPanel.style.display = "none";
+    return;
+  }
+
+  // AMS names broadcasts like: live/streamId/source, live/streamId/240p, etc.
+  // Match any broadcast that has the stream ID as a path segment.
+  const relevant = [...currentBroadcasts].filter((name) =>
+    name.split("/").includes(currentStreamId),
+  );
+
+  if (relevant.length === 0) {
+    qualityPanel.style.display = "none";
+    return;
+  }
+
+  qualityPanel.style.display = "flex";
+
+  for (const name of relevant) {
+    const isSelected = name === currentSelected;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = name.split("/").pop() ?? name;
+    btn.title = name;
+    btn.className = "quality-btn" + (isSelected ? " active" : "");
+    btn.addEventListener("click", () => {
+      player.name = name;
+    });
+    qualityButtons.appendChild(btn);
+  }
+}
+
+// Track the active connection so we can detect stale loops on reconnect.
+let activeConn = null;
+
+player.connection.established.subscribe(async (conn) => {
+  // Clear stale broadcasts whenever the connection changes.
+  currentBroadcasts = new Set();
+  renderQualities();
+
+  if (!conn) return;
+  activeConn = conn;
+
+  const announced = conn.announced();
+
+  try {
+    for (;;) {
+      const entry = await announced.next();
+      if (!entry) break; // connection closed
+
+      // Ignore updates from a stale connection (reconnect happened).
+      if (activeConn !== conn) break;
+
+      const name = entry.path.toString();
+      if (entry.active) {
+        currentBroadcasts = new Set([...currentBroadcasts, name]);
+      } else {
+        currentBroadcasts = new Set([...currentBroadcasts].filter((p) => p !== name));
+      }
+      renderQualities();
+    }
+  } catch {
+    // Connection dropped — next established event will restart discovery.
+  }
+});
+
+// Keep active quality button highlighted when player.broadcast.name changes.
+player.broadcast.name.subscribe((name) => {
+  currentSelected = name.toString();
+  renderQualities();
+});
+
 // ─── Stream ID form ───────────────────────────────────────────────────────────
 // Apply a new stream ID to the player (works before and after relay is connected).
 function applyStreamId(id) {
   if (!id) return;
+  currentStreamId = id;
   player.setAttribute("name", id);
   infoName.textContent = id;
+  renderQualities();
   // Reflect the change in the URL bar without reloading the page.
   const url = new URL(window.location);
   url.searchParams.set("name", id);

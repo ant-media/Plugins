@@ -12,8 +12,9 @@ const streamInput  = document.getElementById("stream-input");
 const sourceRadios = document.querySelectorAll("input[name=source]");
 const mutedCheck   = document.getElementById("chk-muted");
 const invisCheck   = document.getElementById("chk-invisible");
-const btnPublish   = document.getElementById("btn-publish");
-const btnStop      = document.getElementById("btn-stop");
+const btnPublish        = document.getElementById("btn-publish");
+const btnStop           = document.getElementById("btn-stop");
+const broadcastPreview  = document.getElementById("broadcast-preview");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function badge(text, color) {
@@ -30,18 +31,33 @@ function showError(msg) {
 // ─── Query params ─────────────────────────────────────────────────────────────
 const params = new URLSearchParams(window.location.search);
 
-// Broadcast name: ?name= or ?broadcast= or ?id=, default "live"
-const broadcastName =
+// App name comes from the URL path: /live/moq/publish.html → "live"
+const appName = window.location.pathname.split("/").filter(Boolean)[0] ?? "live";
+
+// Stream ID: ?name= or ?broadcast= or ?id=, otherwise generate a random one.
+function randomStreamId() {
+  return Math.random().toString(36).slice(2, 9);
+}
+
+const initialStreamId =
   params.get("name") ??
   params.get("broadcast") ??
   params.get("id") ??
-  "live";
+  randomStreamId();
 
 // Source host: ?url= (full URL or just hostname[:port]), or ?host=, or page hostname
 const rawUrl = params.get("url") ?? params.get("host") ?? null;
 
-streamInput.value = broadcastName;
-infoName.textContent = broadcastName;
+streamInput.value = initialStreamId;
+infoName.textContent = `${appName}/${initialStreamId}/publish`;
+
+// Live-update the broadcast path preview as user types.
+function updateBroadcastPreview() {
+  const id = streamInput.value.trim();
+  broadcastPreview.textContent = id ? `→ ${appName}/${id}/publish` : "";
+}
+streamInput.addEventListener("input", updateBroadcastPreview);
+updateBroadcastPreview();
 
 // ─── WebCodecs check (required for encoding) ──────────────────────────────────
 const hasWebCodecs = typeof VideoEncoder !== "undefined";
@@ -185,11 +201,15 @@ btnPublish.addEventListener("click", async () => {
     return;
   }
 
+  // AMS expects: {appName}/{streamId}/publish
+  // MoQAnnouncePoller polls /announced/moq/{appName} and detects paths ending in /publish.
+  const broadcastName = `${appName}/${streamId}/publish`;
+
   infoUrl.textContent = workingUrl;
-  infoName.textContent = streamId;
+  infoName.textContent = broadcastName;
 
   publisher.setAttribute("url", workingUrl);
-  publisher.setAttribute("name", streamId);
+  publisher.setAttribute("name", broadcastName);
 
   infoStatus.innerHTML = badge("publishing", "green");
   btnPublish.style.display = "none";

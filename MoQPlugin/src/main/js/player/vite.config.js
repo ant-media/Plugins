@@ -3,6 +3,7 @@ export default {
   build: {
     rollupOptions: {
       input: {
+        index: "index.html",
         play: "play.html",
         publish: "publish.html",
       },
