@@ -6,7 +6,8 @@
     <formats>
         <format>zip</format>
     </formats>
-    <includeBaseDirectory>false</includeBaseDirectory>
+    <includeBaseDirectory>true</includeBaseDirectory>
+    <baseDirectory>MoQ-Plugin</baseDirectory>
 
     <files>
         <file>
