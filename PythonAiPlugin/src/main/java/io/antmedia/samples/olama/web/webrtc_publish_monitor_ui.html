@@ -168,6 +168,29 @@
       box-shadow: 0 0 0 3px var(--accent-dim);
     }
 
+    select.stream-mode-select {
+      width: 100%;
+      padding: .7rem .9rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text);
+      font-size: 1.0625rem;
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    select.stream-mode-select:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    select.stream-mode-select:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
     .video-wrap {
       position: relative;
       border-radius: var(--radius-sm);
@@ -193,6 +216,18 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      display: block;
+    }
+    .video-wrap.mode-publish .video-play {
+      display: none !important;
+    }
+    .video-wrap.mode-publish .video-pub {
+      display: block;
+    }
+    .video-wrap.mode-play .video-pub {
+      display: none !important;
+    }
+    .video-wrap.mode-play .video-play {
       display: block;
     }
     .video-badge {
@@ -484,10 +519,18 @@
     <div class="grid grid-2">
       <div class="grid">
         <div class="card">
-          <h2>Camera &amp; publish</h2>
+          <h2>WebRTC stream</h2>
           <div class="field-block">
-            <div class="video-wrap" id="videoWrap">
-              <video id="localVideo" autoplay muted playsinline></video>
+            <label for="streamModeSelect">Mode</label>
+            <select id="streamModeSelect" class="stream-mode-select" aria-label="Publish or play">
+              <option value="play" selected>Play (watch stream)</option>
+              <option value="publish">Publish (camera)</option>
+            </select>
+          </div>
+          <div class="field-block">
+            <div class="video-wrap mode-play" id="videoWrap">
+              <video id="localVideo" class="video-pub" autoplay muted playsinline></video>
+              <video id="remoteVideo" class="video-play" autoplay playsinline muted controls></video>
               <span class="video-badge" id="videoBadge">Preview</span>
             </div>
           </div>
@@ -497,7 +540,7 @@
               <input type="text" id="streamId" autocomplete="off" spellcheck="false">
             </div>
           </div>
-          <div class="btn-row publish-actions broadcast-offline" id="publishActions" role="group" aria-label="Broadcast controls">
+          <div class="btn-row publish-actions broadcast-offline" id="publishActions" role="group" aria-label="Stream controls">
             <button type="button" class="btn btn-primary" id="publish_start">Start broadcast</button>
             <button type="button" class="btn btn-danger" id="publish_stop" disabled>Stop</button>
           </div>
@@ -602,6 +645,10 @@
       const q = new URLSearchParams(window.location.search);
       const fromQuery = (q.get("id") || q.get("streamId") || "").trim();
       streamIdInput.value = fromQuery || randomStreamId();
+      const modeQ = (q.get("mode") || "").trim().toLowerCase();
+      if (modeQ === "play" || modeQ === "publish") {
+        document.getElementById("streamModeSelect").value = modeQ;
+      }
     })();
 
     const publishActionsEl = document.getElementById("publishActions");
@@ -609,6 +656,32 @@
     const publishStopBtn = document.getElementById("publish_stop");
     const videoWrap = document.getElementById("videoWrap");
     const videoBadge = document.getElementById("videoBadge");
+    const streamModeSelect = document.getElementById("streamModeSelect");
+
+    function isPublishMode() {
+      return streamModeSelect.value === "publish";
+    }
+
+    let streamSessionActive = false;
+
+    function updateModeChrome() {
+      const play = !isPublishMode();
+      videoWrap.classList.toggle("mode-play", play);
+      videoWrap.classList.toggle("mode-publish", !play);
+      if (streamSessionActive) {
+        return;
+      }
+      publishStartBtn.textContent = play ? "Start play" : "Start broadcast";
+      videoBadge.textContent = play ? "No stream" : "Preview";
+      videoBadge.classList.remove("is-live");
+    }
+
+    streamModeSelect.addEventListener("change", function () {
+      if (streamSessionActive) {
+        return;
+      }
+      updateModeChrome();
+    });
 
     function setBroadcastUiState(live) {
       if (live) {
@@ -616,38 +689,56 @@
         publishActionsEl.classList.add("broadcast-live");
         publishStartBtn.disabled = true;
         publishStopBtn.disabled = false;
+        streamModeSelect.disabled = true;
       } else {
         publishActionsEl.classList.add("broadcast-offline");
         publishActionsEl.classList.remove("broadcast-live");
         publishStartBtn.disabled = false;
         publishStopBtn.disabled = true;
+        streamModeSelect.disabled = false;
       }
     }
 
     const webRTCAdaptor = new WebRTCAdaptor({
       websocket_url: WS_URL,
       localVideoElement: document.getElementById("localVideo"),
+      remoteVideoElement: document.getElementById("remoteVideo"),
       callback: (info, obj) => {
         console.log("WebRTC callback:", info, obj);
         if (info === "publish_started") {
+          streamSessionActive = true;
           setBroadcastUiState(true);
           videoWrap.classList.add("video-live");
           videoBadge.textContent = "Live";
           videoBadge.classList.add("is-live");
-          /* Apply after server-side streamStarted + frames; avoids monitor never scheduling. */
           setTimeout(function () {
             applyMonitorConfig({ suppressSuccessToast: true });
           }, 800);
         } else if (info === "publish_finished") {
+          streamSessionActive = false;
           setBroadcastUiState(false);
           videoWrap.classList.remove("video-live");
-          videoBadge.textContent = "Preview";
           videoBadge.classList.remove("is-live");
+          updateModeChrome();
+        } else if (info === "play_started") {
+          streamSessionActive = true;
+          setBroadcastUiState(true);
+          videoWrap.classList.add("video-live");
+          videoBadge.textContent = "Playing";
+          videoBadge.classList.add("is-live");
+        } else if (info === "play_finished") {
+          streamSessionActive = false;
+          setBroadcastUiState(false);
+          videoWrap.classList.remove("video-live");
+          videoBadge.classList.remove("is-live");
+          updateModeChrome();
         } else if (info === "initialized") {
           /* no-op */
         }
       },
     });
+
+    updateModeChrome();
 
     document.getElementById("publish_start").addEventListener("click", () => {
       webRTCAdaptor.websocket_url = WS_URL;
@@ -656,7 +747,11 @@
         showToast("Set a stream ID.", "error");
         return;
       }
-      webRTCAdaptor.publish(sid);
+      if (isPublishMode()) {
+        webRTCAdaptor.publish(sid);
+      } else {
+        webRTCAdaptor.play(sid);
+      }
     });
 
     document.getElementById("publish_stop").addEventListener("click", () => {
@@ -790,7 +885,7 @@
         setAlertsTotal(total);
         if (!arr.length) {
           el.innerHTML =
-            '<div class="monitor-empty">No monitor alerts yet. Ensure Ollama is running, prompts match the scene, and confidence exceeds the threshold.</div>';
+            '<div class="monitor-empty">No alerts Available </div>';
           alertRowKeysSeen = new Set();
           return;
         }

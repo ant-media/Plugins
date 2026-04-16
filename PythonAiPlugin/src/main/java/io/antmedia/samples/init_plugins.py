@@ -1,48 +1,64 @@
+import importlib.util
 import os
 import sys
 
 # Layout on server (see copy_files.sh):
 #   PythonPluginFiles/python_plugin.py, plugin_base.py, ...  (from app/*.py)
 #   PythonPluginFiles/samples/init_plugins.py  (this file)
-#   PythonPluginFiles/samples/yolo/yolo_detection_plugin.py, yolo_pose_plugin.py
-#   PythonPluginFiles/samples/face/sample_plugin.py
-#   PythonPluginFiles/samples/olama/ollama_vision_queue_plugin.py
+#   Each subfolder may contain init.py with init_plugin(register_plugin, callbacks).
 
 _here = os.path.dirname(os.path.abspath(__file__))
 _parent = os.path.dirname(_here)
-for _p in (
-    _parent,
-    os.path.join(_here, "yolo"),
-    os.path.join(_here, "face"),
-    os.path.join(_here, "olama"),
-    _here,
-):
+
+
+def _iter_sample_dir_names():
+    """Yield names of each immediate child directory of samples/ (sorted)."""
+    try:
+        for name in sorted(os.listdir(_here)):
+            if name.startswith(("_", ".")) or name == "__pycache__":
+                continue
+            if os.path.isdir(os.path.join(_here, name)):
+                yield name
+    except OSError as e:
+        print("init_plugins: cannot list %s: %s" % (_here, e))
+
+
+# Same insert order as before: parent, each sample subdir (sorted), then samples root.
+for _p in (_parent,) + tuple(os.path.join(_here, n) for n in _iter_sample_dir_names()) + (_here,):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from sample_plugin import FaceDetectionPlugin
-from yolo.yolo_detection_plugin import YoloGeneralDetectionPlugin
-from yolo_pose_plugin import YoloPoseDetectionPlugin
-from ollama_vision_queue_plugin import OllamaVisionQueuePlugin
+
+def _load_sample_init(sample_dir_name):
+    init_path = os.path.join(_here, sample_dir_name, "init.py")
+    if not os.path.isfile(init_path):
+        return None
+    module_name = "samples_%s_init" % sample_dir_name.replace(".", "_")
+    spec = importlib.util.spec_from_file_location(module_name, init_path)
+    if spec is None or spec.loader is None:
+        print("init_plugins: cannot load spec for %s" % init_path)
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    fn = getattr(mod, "init_plugin", None)
+    if fn is None:
+        print("init_plugins: %s must define init_plugin(register_plugin, callbacks)" % init_path)
+        return None
+    return fn
 
 
 def init_plugins(register_plugin, callbacks):
-    face_plugin = FaceDetectionPlugin()
-    face_callback = callbacks.get("face_detections") or callbacks.get("default")
-    face_plugin.set_java_callback(face_callback)
-    register_plugin(face_plugin)
-
-    yolo_general_plugin = YoloGeneralDetectionPlugin()
-    yolo_general_callback = callbacks.get("yolo_general_detections") or callbacks.get("default")
-    yolo_general_plugin.set_java_callback(yolo_general_callback)
-    register_plugin(yolo_general_plugin)
-
-    yolo_pose_plugin = YoloPoseDetectionPlugin()
-    yolo_pose_callback = callbacks.get("pose_detections") or callbacks.get("default")
-    yolo_pose_plugin.set_java_callback(yolo_pose_callback)
-    register_plugin(yolo_pose_plugin)
-
-    ollama_queue_plugin = OllamaVisionQueuePlugin()
-    oq_callback = callbacks.get("ollama_vision_queue") or callbacks.get("default")
-    ollama_queue_plugin.set_java_callback(oq_callback)
-    register_plugin(ollama_queue_plugin)
+    """Discover each immediate subfolder of samples/ that contains init.py and call init_plugin()."""
+    for name in _iter_sample_dir_names():
+        sub = os.path.join(_here, name)
+        init_py = os.path.join(sub, "init.py")
+        if not os.path.isfile(init_py):
+            continue
+        init_fn = _load_sample_init(name)
+        if init_fn is None:
+            continue
+        try:
+            init_fn(register_plugin, callbacks)
+            print("Python sample loaded: %s" % name)
+        except Exception as e:
+            print("Error in %s init_plugin: %s" % (name, e))

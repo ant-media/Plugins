@@ -39,7 +39,6 @@ cp -r ./src/main/java/io/antmedia/samples  "dist/PythonPluginFiles"
 cp -r ./src/main/java/io/antmedia/samples/init_plugins.py  "dist/PythonPluginFiles"
 cp ./src/main/java/io/antmedia/app/*.py   "dist/PythonPluginFiles"
 
-cp -r ./web/ ./dist/
 
 echo "Distribution created at: $DIST_DIR"
 ls -la "$DIST_DIR"

@@ -2,6 +2,10 @@
 sudo systemctl stop antmedia
 set -e
 AMS_DIR=/usr/local/antmedia
+
+SITE_PACKAGES="$("$AMS_DIR/pythonAIPlugin/bin/python3" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+export PYTHONPATH="$SITE_PACKAGES"
+
 mvn clean install -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
 OUT=$?
 

@@ -13,11 +13,8 @@ source ./pythonAIPlugin/bin/activate
 cd -
 pip install -r requirements.txt
 cp -r ./PythonPluginFiles "$AMS_DIR"
-
-cp ./web/samples/* "$AMS_DIR/webapps/LiveApp/samples"
-cp ./web/samples/* "$AMS_DIR/webapps/WebRTCAppEE/samples"
-cp ./web/samples/* "$AMS_DIR/webapps/live/samples"
-
+rm -rf $AMS_DIR/PythonPluginFiles/samples/*/
+ 
 SITE_PACKAGES="$("$AMS_DIR/pythonAIPlugin/bin/python3" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
 export PYTHONPATH="$SITE_PACKAGES"
 
