@@ -1,0 +1,5 @@
+jep
+numpy
+opencv-python
+aiortc
+websocket-client
