@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import io.antmedia.enterprise.adaptive.EncoderAdaptor;
 import io.antmedia.enterprise.adaptive.StreamAdaptor;
 import io.antmedia.enterprise.adaptive.base.VideoEncoder;
+import io.antmedia.enterprise.preview.PreviewEncoder;
 import io.antmedia.muxer.Muxer;
 import io.vertx.core.Vertx;
 
@@ -82,6 +83,11 @@ public class MutedStreamManager {
 		int attachedCount = 0;
 		for (StreamAdaptor sourceStreamAdaptor : sourceAdaptor.getStreamAdaptorList()) {
 			for (VideoEncoder sourceVideoEncoder : sourceStreamAdaptor.getVideoEncoderList()) {
+				// PreviewEncoder causes problems, skipped.
+				if (sourceVideoEncoder instanceof PreviewEncoder) {
+					continue;
+				}
+
 				List<VideoEncoder> matchingTargetEncoders = targetEncodersByHeight.get(sourceVideoEncoder.getResolutionHeight());
 				if (matchingTargetEncoders == null || matchingTargetEncoders.isEmpty()) {
 					continue;
@@ -122,6 +128,9 @@ public class MutedStreamManager {
 		Map<Integer, List<VideoEncoder>> targetEncodersByHeight = new LinkedHashMap<>();
 		for (StreamAdaptor targetStreamAdaptor : targetAdaptor.getStreamAdaptorList()) {
 			for (VideoEncoder targetVideoEncoder : targetStreamAdaptor.getVideoEncoderList()) {
+				if (targetVideoEncoder instanceof PreviewEncoder) {
+					continue;
+				}
 				targetEncodersByHeight
 						.computeIfAbsent(targetVideoEncoder.getResolutionHeight(), ignored -> new ArrayList<>())
 						.add(targetVideoEncoder);
