@@ -323,6 +323,51 @@ public class ClipCreatorPluginTest {
 	}
 
 	@Test
+	public void testConvertHlsToMp4Range() throws Exception {
+		String streamId = "testStream";
+		ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
+		DataStore dataStore = new InMemoryDataStore("db");
+		plugin.setDataStore(dataStore);
+
+		AntMediaApplicationAdapter mockApplication = mock(AntMediaApplicationAdapter.class);
+		doReturn(mockApplication).when(plugin).getApplication();
+		doNothing().when(mockApplication).muxingFinished(any(), any(), any(), anyLong(), anyLong(), anyInt(), anyString(), anyString());
+
+		Broadcast broadcast = new Broadcast();
+		broadcast.setStreamId(streamId);
+		plugin.setStreamsFolder("target/resources_tmp_range");
+
+		File streamFolder = new File(plugin.getStreamsFolder());
+		streamFolder.mkdirs();
+
+		File file = new File("src/test/resources");
+		File[] files = file.listFiles();
+		for (File tmpFile : files) {
+			Files.copy(tmpFile, new File(streamFolder, tmpFile.getName()));
+		}
+
+		plugin.setClipCreatorSettings(new ClipCreatorSettings());
+
+		// PDTs in the test fixture playlist (see testGetSegmentFilesWithinTimeRange) span ~1727644047000.
+		// Pick a range that covers them so segments are found and an MP4 is produced.
+		long startMs = 1727644047000L;
+		long endMs = 1727644051862L;
+
+		Mp4CreationResponse response = plugin.convertHlsToMp4Range(broadcast, startMs, endMs);
+
+		assertTrue(response.isSuccess());
+		assertNotNull(response.getFile());
+		assertTrue(response.getFile().exists());
+		assertTrue(response.getFile().getTotalSpace() > 0);
+
+		// Critical behavioral guarantee: range clipping must NOT update the periodic recorder's bookkeeping
+		assertFalse(plugin.getLastMp4CreateTimeForStream().containsKey(streamId));
+
+		assertTrue(response.getFile().delete());
+		delete(streamFolder);
+	}
+
+	@Test
 	public void testGetSegmentFilesWithinTimeRange() throws IOException {
 		ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
 		MediaPlaylistParser parser = new MediaPlaylistParser();

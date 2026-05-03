@@ -44,8 +44,13 @@ To enable the Clip Creator Plugin to function correctly, follow these configurat
 - Enable HLS Streaming:
 Go to your app settings and ensure HLS streaming is enabled. The plugin uses HLS segments to create MP4 clips.
 
-- Set Playlist Type to `Event`:
-In advanced settings, set `hlsPlayListType` to `event` to specify the type of HLS playlist.
+- Choose your HLS playlist mode based on stream lifetime:
+
+  **For short streams** (minutes to a few hours), `hlsPlayListType=event` works fine — ffmpeg keeps every segment, so any past moment is clip-able.
+
+  **For long-running streams** (hours to days, or 24/7) leave `hlsPlayListType` empty (live mode) and set `hlsListSize` to the retention window you want, in segments. With `hlsTime=2`, `hlsListSize=43200` retains 24 h of clip-able history. ffmpeg's `delete_segments` flag (in the AMS default `hlsflags`) automatically deletes old `.ts` files and prunes the m3u8 — no manual cleanup needed.
+
+  Avoid `event` mode for 24/7 streams: it disables `delete_segments`, so both the m3u8 and `.ts` files grow without bound.
 
 - Adjust Clip Interval:
 In advanced app settings, configure the custom settings:
@@ -57,6 +62,19 @@ In advanced app settings, configure the custom settings:
 }
 ```
 Replace 1800 with your preferred interval in seconds (default is 600 seconds or 10 minutes).
+
+- Plugin settings reference:
+```
+"customSettings": {
+    "plugin.clip-creator": {
+        "enabled": true,
+        "mp4CreationIntervalSeconds": 600,
+        "deleteHLSFilesAfterCreatedMp4": false,
+        "maxClipDurationSeconds": 21600
+    }
+}
+```
+`maxClipDurationSeconds` (default 21600 / 6 h) is the hard upper bound on the clip range accepted by the timestamp-range endpoint described below.
 
 
 ## How to Use the Clip Creator Plugin
@@ -108,7 +126,36 @@ For example if last MP4 is generated at 14:00 and method is called at 14:05, dur
 
 If there is no MP4 created so far by the plugin, maximum duration of created clip by this endpoint will be around `mp4CreationIntervalSeconds`
 
-### 3. Stop Periodic Clip Creation
+### 3. Create MP4 Clip for a UTC Timestamp Range
+Create an MP4 from HLS segments between two UTC timestamps. Useful when an external system orchestrates *when* clips are taken (e.g. "give me the slice from 14:00:00 to 14:45:00 UTC for stream X").
+
+POST Request:
+```
+https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/mp4/{STREAM_ID}/range?startTimestamp={ms}&endTimestamp={ms}&returnFile={bool}
+```
+
+Example CURL Command:
+```
+curl -X POST "https://{YOUR_SERVER}:{PORT}/{APP}/rest/clip-creator/mp4/{STREAM_ID}/range?startTimestamp=1727644047000&endTimestamp=1727644107000&returnFile=false" -H "Content-Type: application/json"
+```
+
+Parameters:
+  - `startTimestamp` (required): inclusive UTC milliseconds since epoch.
+  - `endTimestamp` (required): inclusive UTC milliseconds since epoch. Must be `>` `startTimestamp` and not in the future.
+  - `returnFile`: same contract as `/mp4/{STREAM_ID}` — `false` returns JSON with the new vodId, `true` returns the MP4 file content.
+
+Validation responses:
+  - `400` if `endTimestamp <= startTimestamp`.
+  - `400` if `endTimestamp` is in the future.
+  - `400` if the requested duration exceeds `maxClipDurationSeconds` (default 21600).
+  - `417` if no broadcast exists for the stream id.
+  - `417` if no segments are found in the range — typically because the requested range falls outside the HLS retention window (`hlsListSize × hlsTime`) or the stream had no data then.
+
+Notes:
+  - Range clips do NOT affect the periodic recorder's bookkeeping; `lastMp4CreateTime` is left untouched, so the next periodic interval still slices from where it would have.
+  - Concurrent range requests serialize webapp-wide (single mutex shared with the periodic recorder). If high-throughput concurrent clipping is needed, file an issue.
+
+### 4. Stop Periodic Clip Creation
 Pause the periodic MP4 creation:
 
 DELETE Request:

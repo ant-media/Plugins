@@ -102,6 +102,106 @@ public class RestServiceTest {
     }
 
     @Test
+    public void testCreateMp4Range_BadOrder() {
+        when(clipCreatorSettings.getMaxClipDurationSeconds()).thenReturn(21600);
+        long now = System.currentTimeMillis();
+        Response response = restService.createMp4Range("s", now - 1000, now - 5000, false);
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+        assertTrue(((Result) response.getEntity()).getMessage().contains("greater than startTimestamp"));
+    }
+
+    @Test
+    public void testCreateMp4Range_FutureEnd() {
+        when(clipCreatorSettings.getMaxClipDurationSeconds()).thenReturn(21600);
+        long now = System.currentTimeMillis();
+        Response response = restService.createMp4Range("s", now - 1000, now + 60_000, false);
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+        assertTrue(((Result) response.getEntity()).getMessage().contains("future"));
+    }
+
+    @Test
+    public void testCreateMp4Range_OverCap() {
+        when(clipCreatorSettings.getMaxClipDurationSeconds()).thenReturn(60);
+        long now = System.currentTimeMillis();
+        Response response = restService.createMp4Range("s", now - 120_000, now - 1000, false);
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+        assertTrue(((Result) response.getEntity()).getMessage().contains("maxClipDurationSeconds"));
+    }
+
+    @Test
+    public void testCreateMp4Range_NoBroadcast() {
+        when(clipCreatorSettings.getMaxClipDurationSeconds()).thenReturn(21600);
+        long now = System.currentTimeMillis();
+        Response response = restService.createMp4Range("missing", now - 60_000, now - 1000, false);
+        assertEquals(Response.Status.EXPECTATION_FAILED.getStatusCode(), response.getStatus());
+        assertEquals("No broadcast exists for stream missing", ((Result) response.getEntity()).getMessage());
+    }
+
+    @Test
+    public void testCreateMp4Range_ConversionFails() throws Exception {
+        String streamId = "rangeStream";
+        when(clipCreatorSettings.getMaxClipDurationSeconds()).thenReturn(21600);
+
+        Broadcast broadcast = new Broadcast();
+        broadcast.setStreamId(streamId);
+        clipCreatorPlugin.getDataStore().save(broadcast);
+
+        Mp4CreationResponse failed = mock(Mp4CreationResponse.class);
+        when(failed.isSuccess()).thenReturn(false);
+        when(failed.getMessage()).thenReturn("No segment file found for stream " + streamId);
+        when(clipCreatorPlugin.convertHlsToMp4Range(any(), anyLong(), anyLong())).thenReturn(failed);
+
+        long now = System.currentTimeMillis();
+        Response response = restService.createMp4Range(streamId, now - 60_000, now - 1000, false);
+        assertEquals(Response.Status.EXPECTATION_FAILED.getStatusCode(), response.getStatus());
+        String msg = ((Result) response.getEntity()).getMessage();
+        assertTrue(msg.contains("No segment file"));
+        assertTrue(msg.contains("retention window"));
+    }
+
+    @Test
+    public void testCreateMp4Range_SuccessJson() throws Exception {
+        String streamId = "rangeStream";
+        when(clipCreatorSettings.getMaxClipDurationSeconds()).thenReturn(21600);
+
+        Broadcast broadcast = new Broadcast();
+        broadcast.setStreamId(streamId);
+        clipCreatorPlugin.getDataStore().save(broadcast);
+
+        Mp4CreationResponse ok = new Mp4CreationResponse(new File("range.mp4"), "vodRangeId");
+        ok.setSuccess(true);
+        when(clipCreatorPlugin.convertHlsToMp4Range(any(), anyLong(), anyLong())).thenReturn(ok);
+
+        long now = System.currentTimeMillis();
+        Response response = restService.createMp4Range(streamId, now - 60_000, now - 1000, false);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        Result result = (Result) response.getEntity();
+        assertTrue(result.isSuccess());
+        assertEquals("vodRangeId", result.getDataId());
+    }
+
+    @Test
+    public void testCreateMp4Range_SuccessFile() throws Exception {
+        String streamId = "rangeStream";
+        when(clipCreatorSettings.getMaxClipDurationSeconds()).thenReturn(21600);
+
+        Broadcast broadcast = new Broadcast();
+        broadcast.setStreamId(streamId);
+        clipCreatorPlugin.getDataStore().save(broadcast);
+
+        File mp4 = new File("range.mp4");
+        Mp4CreationResponse ok = new Mp4CreationResponse(mp4, "vodRangeId");
+        ok.setSuccess(true);
+        when(clipCreatorPlugin.convertHlsToMp4Range(any(), anyLong(), anyLong())).thenReturn(ok);
+
+        long now = System.currentTimeMillis();
+        Response response = restService.createMp4Range(streamId, now - 60_000, now - 1000, true);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals("attachment; filename=\"" + mp4.getName() + "\"", response.getHeaderString("Content-Disposition"));
+        assertEquals("vodRangeId", response.getHeaderString("X-vodId"));
+    }
+
+    @Test
     public void testCreateMp4_Success() throws Exception {
         String streamId = "testStream";
         File m3u8File = new File("test.m3u8");
