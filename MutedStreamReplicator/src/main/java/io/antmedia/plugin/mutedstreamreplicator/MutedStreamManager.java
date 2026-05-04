@@ -16,7 +16,7 @@ import io.antmedia.muxer.Muxer;
 import io.vertx.core.Vertx;
 
 public class MutedStreamManager {
-	private static final long TARGET_BUFFER_CLEAR_PERIOD_MS = 50;
+	private static final long TARGET_BUFFER_CLEAR_PERIOD_MS = 30;
 	private static final Logger logger = LoggerFactory.getLogger(MutedStreamManager.class);
 
 	private final EncoderAdaptor sourceAdaptor;

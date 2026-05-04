@@ -1,5 +1,7 @@
 package io.antmedia.plugin;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -39,6 +41,20 @@ public class MutedStreamReplicatorPlugin implements ApplicationContextAware, ISt
 	public void setApplicationContext(ApplicationContext applicationContext) {
 		this.applicationContext = applicationContext;
 		this.appAdapter = (AntMediaApplicationAdapter) applicationContext.getBean(AntMediaApplicationAdapter.BEAN_NAME);
+
+		// Run cleanup before adding the listener.
+		// There might be hanging endpoints left behind in case of crash
+		if (loadSettings().isCleanupOrphanedReplicasOnStartup()) {
+			try {
+				int removed = cleanupOrphanedReplicaEndpoints();
+				if (removed > 0) {
+					logger.info("Removed {} orphan replica endpoint(s) on startup", removed);
+				}
+			} catch (Exception e) {
+				logger.error("Orphan replica endpoint cleanup failed: {}", e.getMessage(), e);
+			}
+		}
+
 		this.appAdapter.addStreamListener(this);
 	}
 
@@ -202,13 +218,60 @@ public class MutedStreamReplicatorPlugin implements ApplicationContextAware, ISt
 		return muxAdaptor != null ? muxAdaptor.getClass().getSimpleName() : "null";
 	}
 
-	/**
-	 * The muted replica is published back to the same application over the local RTMP listener.
-	 */
 	private String getReplicaRtmpUrl(String streamId) {
+		return getLocalReplicaUrlPrefix() + streamId;
+	}
+
+	private String getLocalReplicaUrlPrefix() {
 		AntMediaApplicationAdapter application = (AntMediaApplicationAdapter) getApplication();
 		return "rtmp://127.0.0.1:" + application.getServerSettings().getRtmpPort() + "/"
-				+ application.getScope().getName() + "/" + streamId;
+				+ application.getScope().getName() + "/";
+	}
+
+	// Drops replica endpoints left behind by a previous crash that skipped streamFinished.
+	private int cleanupOrphanedReplicaEndpoints() {
+		IAntMediaStreamHandler app = getApplication();
+		if (app == null || app.getDataStore() == null) {
+			return 0;
+		}
+		String prefix = getLocalReplicaUrlPrefix();
+
+		int removed = 0;
+		final int pageSize = 100;
+		int offset = 0;
+		List<Broadcast> page;
+		do {
+			page = app.getDataStore().getBroadcastList(offset, pageSize, null, null, null, null);
+			if (page == null) {
+				break;
+			}
+			for (Broadcast broadcast : page) {
+				if (broadcast == null || broadcast.getStreamId() == null) {
+					continue;
+				}
+				List<Endpoint> endpoints = broadcast.getEndPointList();
+				if (endpoints == null || endpoints.isEmpty()) {
+					continue;
+				}
+				// Snapshot the list — removeEndpoint mutates it.
+				for (Endpoint endpoint : new ArrayList<>(endpoints)) {
+					String url = endpoint != null ? endpoint.getEndpointUrl() : null;
+					if (url == null || !url.startsWith(prefix)) {
+						continue;
+					}
+					if (!isMutedReplicaStream(url.substring(prefix.length()))) {
+						continue;
+					}
+					if (app.getDataStore().removeEndpoint(broadcast.getStreamId(), endpoint, true)) {
+						removed++;
+						logger.info("Cleanup removed orphan replica endpoint {} from broadcast {}", url, broadcast.getStreamId());
+					}
+				}
+			}
+			offset += pageSize;
+		} while (page.size() == pageSize);
+
+		return removed;
 	}
 
 	@Override

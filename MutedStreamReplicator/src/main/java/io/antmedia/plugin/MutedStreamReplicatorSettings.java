@@ -14,6 +14,9 @@ public class MutedStreamReplicatorSettings {
      */
     private boolean keepMutedStreamsAfterEnd = false;
 
+    /** If true, removes replica endpoints left in the datastore by a previous crash on startup. */
+    private boolean cleanupOrphanedReplicasOnStartup = true;
+
     public String getMutedStreamSuffix() { return mutedStreamSuffix; }
     public void setMutedStreamSuffix(String v) { this.mutedStreamSuffix = v; }
 
@@ -22,4 +25,7 @@ public class MutedStreamReplicatorSettings {
 
     public boolean isKeepMutedStreamsAfterEnd() { return keepMutedStreamsAfterEnd; }
     public void setKeepMutedStreamsAfterEnd(boolean v) { this.keepMutedStreamsAfterEnd = v; }
+
+    public boolean isCleanupOrphanedReplicasOnStartup() { return cleanupOrphanedReplicasOnStartup; }
+    public void setCleanupOrphanedReplicasOnStartup(boolean v) { this.cleanupOrphanedReplicasOnStartup = v; }
 }
