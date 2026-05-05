@@ -80,43 +80,43 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
             // already running — only one relay per JVM
             return;
         }
-
         try {
-            String amsRoot = System.getProperty("red5.root");
-            File certFile = new File(amsRoot, "conf/fullchain.pem");
-            File keyFile  = new File(amsRoot, "conf/privkey.pem");
-            boolean hasCert = certFile.exists() && keyFile.exists();
-
-            ProcessBuilder pb;
-            if (hasCert) {
-                logger.info("MoQ: found TLS certificate at {}, starting relay with HTTPS/WSS", certFile.getAbsolutePath());
-                pb = new ProcessBuilder(
-                        "moq-relay",
-                        "--server-bind",      "[::]:" + EMBEDDED_RELAY_PORT,
-                        "--tls-cert",         certFile.getAbsolutePath(),
-                        "--tls-key",          keyFile.getAbsolutePath(),
-                        "--web-https-listen", "[::]:" + EMBEDDED_RELAY_PORT,
-                        "--web-https-cert",   certFile.getAbsolutePath(),
-                        "--web-https-key",    keyFile.getAbsolutePath(),
-                        "--web-ws",
-                        "--auth-public", "/");
-            } else {
-                logger.info("MoQ: no TLS certificate found, starting relay with HTTP/WS (localhost only)");
-                pb = new ProcessBuilder(
-                        "moq-relay",
-                        "--server-bind",     "[::]:" + EMBEDDED_RELAY_PORT,
-                        "--tls-generate",    "localhost",
-                        "--web-http-listen", "[::]:" + EMBEDDED_RELAY_PORT,
-                        "--web-ws",
-                        "--auth-public", "/");
-            }
-
-            relayProcess = pb.redirectErrorStream(true).start();
+            relayProcess = buildRelayProcessBuilder().redirectErrorStream(true).start();
             Runtime.getRuntime().addShutdownHook(new Thread(() -> relayProcess.destroy()));
             logger.info("MoQ: embedded relay started on port {}", EMBEDDED_RELAY_PORT);
         } catch (IOException e) {
             logger.error("MoQ: failed to start embedded relay", e);
         }
+    }
+
+    /** Picks the moq-relay command line: with TLS cert files if both exist, otherwise self-signed for localhost. */
+    static ProcessBuilder buildRelayProcessBuilder() {
+        String amsRoot = System.getProperty("red5.root");
+        File certFile = new File(amsRoot != null ? amsRoot : ".", "conf/fullchain.pem");
+        File keyFile  = new File(amsRoot != null ? amsRoot : ".", "conf/privkey.pem");
+
+        if (certFile.exists() && keyFile.exists()) {
+            logger.info("MoQ: found TLS certificate at {}, starting relay with HTTPS/WSS", certFile.getAbsolutePath());
+            return new ProcessBuilder(
+                    "moq-relay",
+                    "--server-bind",      "[::]:" + EMBEDDED_RELAY_PORT,
+                    "--tls-cert",         certFile.getAbsolutePath(),
+                    "--tls-key",          keyFile.getAbsolutePath(),
+                    "--web-https-listen", "[::]:" + EMBEDDED_RELAY_PORT,
+                    "--web-https-cert",   certFile.getAbsolutePath(),
+                    "--web-https-key",    keyFile.getAbsolutePath(),
+                    "--web-ws",
+                    "--auth-public", "/");
+        }
+
+        logger.info("MoQ: no TLS certificate found, starting relay with HTTP/WS (localhost only)");
+        return new ProcessBuilder(
+                "moq-relay",
+                "--server-bind",     "[::]:" + EMBEDDED_RELAY_PORT,
+                "--tls-generate",    "localhost",
+                "--web-http-listen", "[::]:" + EMBEDDED_RELAY_PORT,
+                "--web-ws",
+                "--auth-public", "/");
     }
 
     public MoQSettings loadSettings() {

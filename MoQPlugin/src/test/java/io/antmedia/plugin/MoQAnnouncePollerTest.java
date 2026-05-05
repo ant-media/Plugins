@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.*;
 import io.vertx.core.Vertx;
 import org.junit.Test;
 
+import java.io.BufferedReader;
+import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.Set;
@@ -27,6 +29,10 @@ public class MoQAnnouncePollerTest {
         // External relay over https collapses to http, port preserved
         MoQAnnouncePoller p2 = newPoller("https://relay.example.com:9000/moq", "myapp", owner);
         assertEquals("http://relay.example.com:9000/announced/moq/myapp", getField(p2, "announceUrl"));
+
+        // No port specified -> URL has no :port suffix
+        MoQAnnouncePoller p3 = newPoller("http://example.com/moq", "live", owner);
+        assertEquals("http://example.com/announced/moq/live", getField(p3, "announceUrl"));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -69,43 +75,53 @@ public class MoQAnnouncePollerTest {
         MoQStreamFetcher live = mock(MoQStreamFetcher.class);
         when(live.isAlive()).thenReturn(true);
         when(owner.getIngestHandler("alive")).thenReturn(live);
-
-        Set<String> announced = new HashSet<>();
-        announced.add("alive");
-        doReturn(announced).when(poller).fetchAnnounced();
-
-        Set<String> active = new HashSet<>();
-        active.add("alive");
-        when(owner.getActiveIngestStreamIds()).thenReturn(active);
+        doReturn(setOf("alive")).when(poller).fetchAnnounced();
+        when(owner.getActiveIngestStreamIds()).thenReturn(setOf("alive"));
 
         poller.reconcile();
         verify(owner, never()).startIngest(any());
         verify(owner, never()).stopIngest(any());
         verify(live, never()).stopStream();
 
-        // Now: announce a new stream, kill the previously-alive handler, drop "alive" from announces,
-        // and add a third stream "old" that is active but no longer announced.
+        // Now: announce a new stream, kill the previously-alive handler (still announced -> restart),
+        // and add "old" that is active but no longer announced (-> stop)
         MoQStreamFetcher dead = mock(MoQStreamFetcher.class);
         when(dead.isAlive()).thenReturn(false);
         when(owner.getIngestHandler("alive")).thenReturn(dead);
         when(owner.getIngestHandler("new")).thenReturn(null);
-
-        Set<String> announced2 = new HashSet<>();
-        announced2.add("new");
-        announced2.add("alive"); // still announced, but its handler died -> restart
-        doReturn(announced2).when(poller).fetchAnnounced();
-
-        Set<String> active2 = new HashSet<>();
-        active2.add("alive");
-        active2.add("old");
-        when(owner.getActiveIngestStreamIds()).thenReturn(active2);
+        doReturn(setOf("new", "alive")).when(poller).fetchAnnounced();
+        when(owner.getActiveIngestStreamIds()).thenReturn(setOf("alive", "old"));
 
         poller.reconcile();
         verify(owner).startIngest("new");
         verify(dead).stopStream();
-        verify(owner).startIngest("alive"); // restarted after dead handler killed
+        verify(owner).startIngest("alive");
         verify(owner).stopIngest("old");
         verify(owner, never()).stopIngest("new");
+    }
+
+    @Test
+    public void testParseAnnouncements() {
+        String body = "stream1/publish\n"
+                + "stream2/publish\n"
+                + "  stream3/publish  \n"   // trimmed
+                + "noSuffix\n"
+                + "\n"
+                + "other/something\n"
+                + "stream1/publish\n";       // duplicate -> Set dedupes
+
+        Set<String> result = MoQAnnouncePoller.parseAnnouncements(new BufferedReader(new StringReader(body)));
+
+        assertEquals(setOf("stream1", "stream2", "stream3"), result);
+
+        Set<String> empty = MoQAnnouncePoller.parseAnnouncements(new BufferedReader(new StringReader("")));
+        assertTrue(empty.isEmpty());
+    }
+
+    private static Set<String> setOf(String... items) {
+        Set<String> s = new HashSet<>();
+        for (String i : items) s.add(i);
+        return s;
     }
 
     @SuppressWarnings("unchecked")

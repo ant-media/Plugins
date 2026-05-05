@@ -43,7 +43,7 @@ import java.net.SocketTimeoutException;
 public class MoQStreamFetcher extends StreamFetcher {
 
     private static final Logger logger = LoggerFactory.getLogger(MoQStreamFetcher.class);
-    private static final int ACCEPT_TIMEOUT_MS = 10000;
+    static int acceptTimeoutMs = 10000;
 
     // ThreadLocal carries the ServerSocket through the super() call so we can
     // create it before super() (to get the port) while still calling super() first.
@@ -96,15 +96,8 @@ public class MoQStreamFetcher extends StreamFetcher {
 
     @Override
     public void startStream() {
-        String broadcastName = appName + "/" + streamId + "/publish";
         try {
-            // stdout → Java pipe (relay thread reads it); stderr → Java pipe (log polling)
-            moqProcess = new ProcessBuilder("moq-cli", "subscribe",
-                    "--url",  relayUrl,
-                    "--name", broadcastName,
-                    "fmp4")
-                .start();
-            logger.info("MoQ: moq-cli subscribe started for {}", broadcastName);
+            moqProcess = spawnMoqCli();
         } catch (IOException e) {
             logger.error("MoQ: failed to spawn moq-cli for stream {}", streamId, e);
             return;
@@ -114,6 +107,22 @@ public class MoQStreamFetcher extends StreamFetcher {
 
         // WorkerThread spawned here → calls avformat_open_input("tcp://localhost:PORT").
         // serverSocket is already listening, so the connection completes immediately.
+        callSuperStartStream();
+    }
+
+    protected Process spawnMoqCli() throws IOException {
+        String broadcastName = appName + "/" + streamId + "/publish";
+        // stdout → Java pipe (relay thread reads it); stderr → Java pipe (log polling)
+        Process p = new ProcessBuilder("moq-cli", "subscribe",
+                "--url",  relayUrl,
+                "--name", broadcastName,
+                "fmp4")
+            .start();
+        logger.info("MoQ: moq-cli subscribe started for {}", broadcastName);
+        return p;
+    }
+
+    protected void callSuperStartStream() {
         super.startStream();
     }
 
@@ -131,32 +140,35 @@ public class MoQStreamFetcher extends StreamFetcher {
         super.stopStream();
     }
 
-    private void startRelayThread() {
-        Thread relay = new Thread(() -> {
-            try {
-                serverSocket.setSoTimeout(ACCEPT_TIMEOUT_MS);
-                relaySocket = serverSocket.accept();
-                relaySocket.setTcpNoDelay(true);
-                logger.info("MoQ: relay connected for stream {}", streamId);
-
-                // Pump moq-cli stdout → FFmpeg. Blocks until moq-cli exits or socket closes.
-                moqProcess.getInputStream().transferTo(relaySocket.getOutputStream());
-
-                logger.info("MoQ: relay ended for stream {}", streamId);
-                // Close socket so FFmpeg receives clean EOF rather than hanging.
-                closeQuietly(relaySocket);
-
-            } catch (SocketTimeoutException e) {
-                logger.error("MoQ: FFmpeg did not connect within {}ms for stream {}, stopping",
-                        ACCEPT_TIMEOUT_MS, streamId);
-                stopStream();
-            } catch (IOException e) {
-                // Normal on shutdown: moqProcess destroyed or socket closed by stopStream().
-                logger.debug("MoQ: relay IO ended for stream {}: {}", streamId, e.getMessage());
-            }
-        }, "moq-relay-" + streamId);
+    protected void startRelayThread() {
+        Thread relay = new Thread(this::runRelay, "moq-relay-" + streamId);
         relay.setDaemon(true);
         relay.start();
+    }
+
+    /** Body of the relay thread, factored out so it can be invoked synchronously in tests. */
+    void runRelay() {
+        try {
+            serverSocket.setSoTimeout(acceptTimeoutMs);
+            relaySocket = serverSocket.accept();
+            relaySocket.setTcpNoDelay(true);
+            logger.info("MoQ: relay connected for stream {}", streamId);
+
+            // Pump moq-cli stdout → FFmpeg. Blocks until moq-cli exits or socket closes.
+            moqProcess.getInputStream().transferTo(relaySocket.getOutputStream());
+
+            logger.info("MoQ: relay ended for stream {}", streamId);
+            // Close socket so FFmpeg receives clean EOF rather than hanging.
+            closeQuietly(relaySocket);
+
+        } catch (SocketTimeoutException e) {
+            logger.error("MoQ: FFmpeg did not connect within {}ms for stream {}, stopping",
+                    acceptTimeoutMs, streamId);
+            stopStream();
+        } catch (IOException e) {
+            // Normal on shutdown: moqProcess destroyed or socket closed by stopStream().
+            logger.debug("MoQ: relay IO ended for stream {}: {}", streamId, e.getMessage());
+        }
     }
 
     private static void closeQuietly(AutoCloseable c) {

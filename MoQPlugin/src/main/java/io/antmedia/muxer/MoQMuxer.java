@@ -12,6 +12,7 @@ import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.javacpp.BytePointer;
 import org.bytedeco.javacpp.Pointer;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
@@ -71,10 +72,7 @@ public class MoQMuxer extends Muxer {
     @Override
     public synchronized boolean addVideoStream(int width, int height, AVRational timebase, int codecId,
             int streamIndex, boolean isAVC, AVCodecParameters codecpar) {
-        int extradataSize = codecpar != null ? codecpar.extradata_size() : -1;
-        byte firstBytes = (codecpar != null && extradataSize > 0) ? codecpar.extradata().get(0) : 0;
-
-        boolean result = super.addVideoStream(width, height, timebase, codecId, streamIndex, isAVC, codecpar);
+        boolean result = callSuperAddVideoStream(width, height, timebase, codecId, streamIndex, isAVC, codecpar);
         if (result) {
             videoOutStreamIdx = inputOutputStreamIndexMap.get(streamIndex);
             if (codecpar != null && codecpar.extradata_size() > 0) {
@@ -100,8 +98,7 @@ public class MoQMuxer extends Muxer {
     @Override
     public synchronized boolean addStream(AVCodecParameters codecParameters, AVRational timebase, int streamIndex) {
         int codecType = codecParameters.codec_type();
-        int extradataSize = codecParameters.extradata_size();
-        boolean result = super.addStream(codecParameters, timebase, streamIndex);
+        boolean result = callSuperAddStream(codecParameters, timebase, streamIndex);
         if (result && codecType == AVMEDIA_TYPE_VIDEO) {
             Integer outIdx = inputOutputStreamIndexMap.get(streamIndex);
             if (outIdx != null) {
@@ -122,27 +119,12 @@ public class MoQMuxer extends Muxer {
     public synchronized boolean addAudioStream(int sampleRate, AVChannelLayout channelLayout, int codecId, int streamIndex) {
         int nbChannels = channelLayout != null ? channelLayout.nb_channels() : -1;
 
-        boolean result = super.addAudioStream(sampleRate, channelLayout, codecId, streamIndex);
+        boolean result = callSuperAddAudioStream(sampleRate, channelLayout, codecId, streamIndex);
         if (result && codecId == AV_CODEC_ID_OPUS) {
             Integer outIdx = inputOutputStreamIndexMap.get(streamIndex);
             if (outIdx != null) {
                 AVStream outStream = getOutputFormatContext().streams(outIdx);
-                int ch = nbChannels > 0 ? nbChannels : 2;
-                int rate = sampleRate > 0 ? sampleRate : 48000;
-                // Build 19-byte OpusHead per RFC 7845 for the CMAF dOps box
-                byte[] head = new byte[19];
-                head[0]='O'; head[1]='p'; head[2]='u'; head[3]='s'; head[4]='H'; head[5]='e'; head[6]='a'; head[7]='d';
-                head[8] = 1;                              // version
-                head[9] = (byte) ch;                      // channel count
-                head[10] = 0x38; head[11] = 0x01;         // pre-skip = 312 (LE), standard for WebRTC Opus
-                head[12] = (byte)(rate & 0xFF);            // input sample rate (LE)
-                head[13] = (byte)((rate >>  8) & 0xFF);
-                head[14] = (byte)((rate >> 16) & 0xFF);
-                head[15] = (byte)((rate >> 24) & 0xFF);
-                head[16] = 0; head[17] = 0;               // output gain = 0 (LE)
-                head[18] = 0;                              // channel mapping family = 0 (simple stereo/mono)
-                setExtradata(outStream, head);
-                // logger.info("addAudioStream: synthesized OpusHead ch={} rate={} outIdx={} for {}", ch, sampleRate, outIdx, streamName);
+                setExtradata(outStream, buildOpusHead(nbChannels, sampleRate));
             } else {
                 logger.warn("addAudioStream: Opus stream not in outputMap for {}", streamName);
             }
@@ -150,6 +132,24 @@ public class MoQMuxer extends Muxer {
             logger.warn("addAudioStream: super.addAudioStream returned false for {}", streamName);
         }
         return result;
+    }
+
+    /** 19-byte OpusHead box per RFC 7845. Defaults: 2 channels, 48000Hz when inputs are <= 0. */
+    static byte[] buildOpusHead(int channels, int sampleRate) {
+        int ch = channels > 0 ? channels : 2;
+        int rate = sampleRate > 0 ? sampleRate : 48000;
+        byte[] head = new byte[19];
+        head[0]='O'; head[1]='p'; head[2]='u'; head[3]='s'; head[4]='H'; head[5]='e'; head[6]='a'; head[7]='d';
+        head[8] = 1;                              // version
+        head[9] = (byte) ch;                      // channel count
+        head[10] = 0x38; head[11] = 0x01;         // pre-skip = 312 (LE), standard for WebRTC Opus
+        head[12] = (byte)(rate & 0xFF);
+        head[13] = (byte)((rate >>  8) & 0xFF);
+        head[14] = (byte)((rate >> 16) & 0xFF);
+        head[15] = (byte)((rate >> 24) & 0xFF);
+        head[16] = 0; head[17] = 0;               // output gain = 0
+        head[18] = 0;                             // channel mapping family = 0 (mono/stereo)
+        return head;
     }
 
     @Override
@@ -220,7 +220,7 @@ public class MoQMuxer extends Muxer {
             }
         }
 
-        super.writePacket(pkt, inputTimebase, outputTimebase, codecType);
+        callSuperWritePacket(pkt, inputTimebase, outputTimebase, codecType);
     }
 
     /**
@@ -284,7 +284,7 @@ public class MoQMuxer extends Muxer {
             logger.debug("writeVideoFrame: header written successfully for {}", streamName);
         }
 
-        super.writeVideoFrame(pkt, context);
+        callSuperWriteVideoFrame(pkt, context);
     }
 
     private void setExtradata(AVStream outStream, byte[] data) {
@@ -363,46 +363,52 @@ public class MoQMuxer extends Muxer {
         return moqCliProcess != null ? moqCliProcess.getErrorStream() : null;
     }
 
-    private void startMoqCli() {
+    protected void startMoqCli() {
         try {
-            moqCliProcess = new ProcessBuilder(
-                    "moq-cli", "publish",
-                    "--url", relayUrl,
-                    "--tls-disable-verify",
-                    "--name", streamName,
-                    "fmp4")
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .start();
-
-            OutputStream moqStdin = moqCliProcess.getOutputStream();
-            drainThread = new Thread(() -> {
-                try {
-                    while (running || !queue.isEmpty()) {
-                        byte[] chunk = queue.poll(200, TimeUnit.MILLISECONDS);
-                        if (chunk != null) {
-                            moqStdin.write(chunk);
-                            moqStdin.flush();
-                        }
-                    }
-                    moqStdin.close();
-                } catch (Exception e) {
-                    if (running) logger.error("Drain error for {}", streamName, e);
-                }
-            }, "moq-drain-" + streamId);
-            drainThread.setDaemon(true);
-            drainThread.start();
+            moqCliProcess = spawnMoqCli();
+            startDrainThread(moqCliProcess.getOutputStream());
         } catch (Exception e) {
             logger.error("Failed to start moq-cli for {}", streamName, e);
         }
+    }
+
+    protected Process spawnMoqCli() throws IOException {
+        return new ProcessBuilder(
+                "moq-cli", "publish",
+                "--url", relayUrl,
+                "--tls-disable-verify",
+                "--name", streamName,
+                "fmp4")
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .start();
+    }
+
+    protected void startDrainThread(OutputStream moqStdin) {
+        drainThread = new Thread(() -> {
+            try {
+                while (running || !queue.isEmpty()) {
+                    byte[] chunk = queue.poll(200, TimeUnit.MILLISECONDS);
+                    if (chunk != null) {
+                        moqStdin.write(chunk);
+                        moqStdin.flush();
+                    }
+                }
+                moqStdin.close();
+            } catch (Exception e) {
+                if (running) logger.error("Drain error for {}", streamName, e);
+            }
+        }, "moq-drain-" + streamId);
+        drainThread.setDaemon(true);
+        drainThread.start();
     }
 
     @Override
     public synchronized void writeTrailer() {
         running = false;
         if (headerWritten) {
-            super.writeTrailer(); // flushes remaining data + frees AVFormatContext
+            callSuperWriteTrailer(); // flushes remaining data + frees AVFormatContext
         } else {
-            clearResource(); // header never written; just free resources
+            callSuperClearResource(); // header never written; just free resources
         }
 
         if (drainThread != null) {
@@ -435,5 +441,36 @@ public class MoQMuxer extends Muxer {
             opaque = null;
         }
         logger.debug("writeTrailer: cleanup complete for {}", streamName);
+    }
+
+    // Thin wrappers around super calls so tests can stub the FFmpeg interaction without going native
+
+    protected boolean callSuperAddVideoStream(int width, int height, AVRational timebase, int codecId,
+            int streamIndex, boolean isAVC, AVCodecParameters codecpar) {
+        return super.addVideoStream(width, height, timebase, codecId, streamIndex, isAVC, codecpar);
+    }
+
+    protected boolean callSuperAddStream(AVCodecParameters codecParameters, AVRational timebase, int streamIndex) {
+        return super.addStream(codecParameters, timebase, streamIndex);
+    }
+
+    protected boolean callSuperAddAudioStream(int sampleRate, AVChannelLayout channelLayout, int codecId, int streamIndex) {
+        return super.addAudioStream(sampleRate, channelLayout, codecId, streamIndex);
+    }
+
+    protected void callSuperWritePacket(AVPacket pkt, AVRational inputTimebase, AVRational outputTimebase, int codecType) {
+        super.writePacket(pkt, inputTimebase, outputTimebase, codecType);
+    }
+
+    protected void callSuperWriteVideoFrame(AVPacket pkt, AVFormatContext context) {
+        super.writeVideoFrame(pkt, context);
+    }
+
+    protected void callSuperWriteTrailer() {
+        super.writeTrailer();
+    }
+
+    protected void callSuperClearResource() {
+        super.clearResource();
     }
 }

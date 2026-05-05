@@ -6,19 +6,29 @@ import static org.mockito.ArgumentMatchers.*;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.AppSettings;
+import io.antmedia.EncoderSettings;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MoQMuxer;
 import io.antmedia.muxer.MuxAdaptor;
 import io.vertx.core.Vertx;
+import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.junit.Before;
 import org.junit.Test;
 import org.red5.server.api.scope.IScope;
 import org.springframework.context.ApplicationContext;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class MoQPluginTest {
@@ -59,7 +69,7 @@ public class MoQPluginTest {
         safe.setIngestEnabled(false);
         doReturn(safe).when(plugin).loadSettings();
 
-        // Stop real fetcher creation from blowing up on a mock IScope
+        // Real fetcher creation would NPE on a mock IScope, so stub it
         doReturn(fakeFetcher).when(plugin).createFetcher(any(), any(), any(), any());
 
         plugin.setApplicationContext(context);
@@ -104,9 +114,7 @@ public class MoQPluginTest {
 
         // No mux adaptor: nothing tracked
         when(streamHandler.getMuxAdaptor("ghost")).thenReturn(null);
-        Broadcast ghost = mock(Broadcast.class);
-        when(ghost.getStreamId()).thenReturn("ghost");
-        plugin.streamStarted(ghost);
+        plugin.streamStarted(broadcast("ghost"));
         assertFalse(map.containsKey("ghost"));
 
         // Adaptor present: muxer added and tracked
@@ -114,15 +122,52 @@ public class MoQPluginTest {
         when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
         when(adaptor.directMuxingSupported()).thenReturn(true);
         when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
-        when(adaptor.getEncoderSettingsList()).thenReturn(null);
 
-        Broadcast b = mock(Broadcast.class);
-        when(b.getStreamId()).thenReturn("s1");
-        plugin.streamStarted(b);
-
+        plugin.streamStarted(broadcast("s1"));
         verify(adaptor, atLeastOnce()).addMuxer(any(MoQMuxer.class), eq(0));
         assertTrue(map.containsKey("s1"));
         assertFalse(map.get("s1").isEmpty());
+    }
+
+    @Test
+    public void testStreamStarted_withEncoderSettings_addsOneMuxerPerVariant() throws Exception {
+        MuxAdaptor adaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
+        when(adaptor.directMuxingSupported()).thenReturn(true);
+        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+        when(adaptor.getEncoderSettingsList()).thenReturn(Arrays.asList(
+                new EncoderSettings(360, 500_000, 64_000, false),
+                new EncoderSettings(720, 2_000_000, 128_000, false)
+        ));
+
+        plugin.streamStarted(broadcast("s1"));
+
+        // 1 source muxer (height=0) + 2 variants (360, 720)
+        verify(adaptor).addMuxer(any(MoQMuxer.class), eq(0));
+        verify(adaptor).addMuxer(any(MoQMuxer.class), eq(360));
+        verify(adaptor).addMuxer(any(MoQMuxer.class), eq(720));
+
+        ConcurrentMap<String, Set<MoQMuxer>> map = getField(plugin, "muxersByStream");
+        assertEquals(3, map.get("s1").size());
+    }
+
+    @Test
+    public void testStreamStarted_webRTC_usesSourceHeight() throws Exception {
+        // WebRTC path: !directMuxingSupported && getVideoCodecParameters != null
+        MuxAdaptor adaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
+        when(adaptor.directMuxingSupported()).thenReturn(false);
+        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+
+        AVCodecParameters codecpar = new AVCodecParameters();
+        codecpar.height(720);
+        when(adaptor.getVideoCodecParameters()).thenReturn(codecpar);
+
+        plugin.streamStarted(broadcast("s1"));
+
+        // Source muxer added with the actual source height (720), not 0
+        verify(adaptor).addMuxer(any(MoQMuxer.class), eq(720));
+        codecpar.close();
     }
 
     @Test
@@ -130,9 +175,7 @@ public class MoQPluginTest {
         // Unknown stream: no-op
         MuxAdaptor unknownAdaptor = mock(MuxAdaptor.class);
         when(streamHandler.getMuxAdaptor("ghost")).thenReturn(unknownAdaptor);
-        Broadcast ghost = mock(Broadcast.class);
-        when(ghost.getStreamId()).thenReturn("ghost");
-        plugin.streamFinished(ghost);
+        plugin.streamFinished(broadcast("ghost"));
         verify(unknownAdaptor, never()).removeMuxer(any());
 
         // Tracked stream: muxer removed
@@ -140,12 +183,9 @@ public class MoQPluginTest {
         when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
         when(adaptor.directMuxingSupported()).thenReturn(true);
         when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
-        when(adaptor.getEncoderSettingsList()).thenReturn(null);
-        Broadcast b = mock(Broadcast.class);
-        when(b.getStreamId()).thenReturn("s1");
 
-        plugin.streamStarted(b);
-        plugin.streamFinished(b);
+        plugin.streamStarted(broadcast("s1"));
+        plugin.streamFinished(broadcast("s1"));
         verify(adaptor, atLeastOnce()).removeMuxer(any(MoQMuxer.class));
     }
 
@@ -154,8 +194,7 @@ public class MoQPluginTest {
         ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
 
         // Stream already in DB: fetcher created, no save needed
-        Broadcast existing = mock(Broadcast.class);
-        when(dataStore.get("s1")).thenReturn(existing);
+        when(dataStore.get("s1")).thenReturn(mock(Broadcast.class));
         plugin.startIngest("s1");
         verify(plugin).createFetcher(eq("s1"), eq("live"), anyString(), eq(scope));
         verify(fakeFetcher).startStream();
@@ -176,6 +215,13 @@ public class MoQPluginTest {
         plugin.startIngest("new");
         verify(dataStore).save(any(Broadcast.class));
         verify(plugin).createFetcher(eq("new"), eq("live"), anyString(), eq(scope));
+
+        // createFetcher throws: caught and logged, no entry added
+        when(dataStore.get("boom")).thenReturn(mock(Broadcast.class));
+        doThrow(new RuntimeException("simulated bind failure"))
+                .when(plugin).createFetcher(eq("boom"), any(), any(), any());
+        plugin.startIngest("boom");
+        assertFalse(ingests.containsKey("boom"));
     }
 
     @Test
@@ -183,12 +229,11 @@ public class MoQPluginTest {
         ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
         ingests.put("s1", fakeFetcher);
 
-        // Existing stream: stops and removes
         plugin.stopIngest("s1");
         verify(fakeFetcher).stopStream();
         assertFalse(ingests.containsKey("s1"));
 
-        // Non-existing: no throw, no second stopStream
+        // Non-existing: no throw, no second stopStream call
         plugin.stopIngest("nope");
         verify(fakeFetcher, times(1)).stopStream();
     }
@@ -205,6 +250,139 @@ public class MoQPluginTest {
         verify(fakeFetcher).stopStream();
         verify(f2).stopStream();
         assertTrue(ingests.isEmpty());
+    }
+
+    @Test
+    public void testSetApplicationContext_ingestEnabled_startsAnnouncePoller() throws Exception {
+        // Fresh vertx + fresh context so we count only this plugin's interactions
+        Vertx freshVertx = mock(Vertx.class);
+        when(freshVertx.setPeriodic(anyLong(), any())).thenReturn(7L);
+        ApplicationContext freshCtx = mock(ApplicationContext.class);
+        when(freshCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(streamHandler);
+        when(freshCtx.getBean(IAntMediaStreamHandler.VERTX_BEAN_NAME)).thenReturn(freshVertx);
+
+        MoQPlugin p = spy(new MoQPlugin());
+        doReturn(fakeFetcher).when(p).createFetcher(any(), any(), any(), any());
+        MoQSettings ingest = new MoQSettings();
+        ingest.setUseEmbeddedRelay(false);
+        ingest.setIngestEnabled(true);
+        doReturn(ingest).when(p).loadSettings();
+
+        p.setApplicationContext(freshCtx);
+
+        // Two periodics registered: one for log polling, one for the announce poller
+        verify(freshVertx, times(2)).setPeriodic(anyLong(), any());
+        assertNotNull(getField(p, "announcePoller"));
+
+        // destroy() routes through announcePoller.stop() which cancels timer id=7
+        p.destroy();
+        verify(freshVertx).cancelTimer(7L);
+    }
+
+    @Test
+    public void testPollCliLogs() throws Exception {
+        // Muxer side: getCliErrorStream is read and its URL is used as the log tag
+        MoQMuxer muxer = mock(MoQMuxer.class);
+        when(muxer.getCliErrorStream()).thenReturn(new ByteArrayInputStream("muxlog\n".getBytes()));
+        when(muxer.getOutputURL()).thenReturn("moq://live/s1/source");
+        ConcurrentMap<String, Set<MoQMuxer>> muxers = getField(plugin, "muxersByStream");
+        Set<MoQMuxer> set = ConcurrentHashMap.newKeySet();
+        set.add(muxer);
+        muxers.put("s1", set);
+
+        // Ingest side: f1 has data (must be drained), f2 returns null (must be tolerated)
+        ByteArrayInputStream withData = new ByteArrayInputStream("hello\n".getBytes());
+        MoQStreamFetcher f1 = mock(MoQStreamFetcher.class);
+        when(f1.getLogStream()).thenReturn(withData);
+        MoQStreamFetcher f2 = mock(MoQStreamFetcher.class);
+        when(f2.getLogStream()).thenReturn(null);
+        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
+        ingests.put("a", f1);
+        ingests.put("b", f2);
+
+        Method poll = MoQPlugin.class.getDeclaredMethod("pollCliLogs");
+        poll.setAccessible(true);
+        poll.invoke(plugin);
+
+        verify(muxer).getCliErrorStream();
+        verify(muxer).getOutputURL();
+        verify(f1).getLogStream();
+        verify(f2).getLogStream();
+        assertEquals("data stream must be drained, not just queried", 0, withData.available());
+    }
+
+    @Test
+    public void testReadAvailable_emptyAndThrowingStreams() throws Exception {
+        Method readAvailable = MoQPlugin.class.getDeclaredMethod(
+                "readAvailable", InputStream.class, String.class);
+        readAvailable.setAccessible(true);
+
+        // available()==0 short-circuits without reading
+        readAvailable.invoke(plugin, new ByteArrayInputStream(new byte[0]), "empty");
+
+        // IOException is swallowed
+        InputStream throwing = new InputStream() {
+            @Override public int read() throws IOException { throw new IOException("boom"); }
+            @Override public int available() throws IOException { throw new IOException("boom"); }
+        };
+        readAvailable.invoke(plugin, throwing, "throwing");
+
+        // null stream returns immediately
+        readAvailable.invoke(plugin, null, "null");
+    }
+
+    @Test
+    public void testStartRelay_alreadyRunning_returnsEarly() throws Exception {
+        Field f = MoQPlugin.class.getDeclaredField("relayProcess");
+        f.setAccessible(true);
+        Object saved = f.get(null);
+        try {
+            Process running = mock(Process.class);
+            f.set(null, running);
+
+            Method m = MoQPlugin.class.getDeclaredMethod("startRelay");
+            m.setAccessible(true);
+            m.invoke(null);
+
+            assertSame("the early-return guard should leave our mock process in place",
+                    running, f.get(null));
+            verify(running, never()).destroy();
+        } finally {
+            f.set(null, saved);
+        }
+    }
+
+    @Test
+    public void testBuildRelayProcessBuilder() throws Exception {
+        String savedRoot = System.getProperty("red5.root");
+        try {
+            // No cert files present -> self-signed mode with --tls-generate
+            System.setProperty("red5.root", "/tmp/__moq_no_such_dir__" + System.nanoTime());
+            ProcessBuilder pb = MoQPlugin.buildRelayProcessBuilder();
+            assertTrue(pb.command().contains("--tls-generate"));
+            assertFalse(pb.command().contains("--tls-cert"));
+
+            // With cert files present -> HTTPS mode with --tls-cert
+            Path root = Files.createTempDirectory("moqRoot");
+            Path conf = root.resolve("conf");
+            Files.createDirectories(conf);
+            Files.writeString(conf.resolve("fullchain.pem"), "cert");
+            Files.writeString(conf.resolve("privkey.pem"), "key");
+            System.setProperty("red5.root", root.toString());
+
+            ProcessBuilder pb2 = MoQPlugin.buildRelayProcessBuilder();
+            assertTrue(pb2.command().contains("--tls-cert"));
+            assertFalse(pb2.command().contains("--tls-generate"));
+        } finally {
+            if (savedRoot != null) System.setProperty("red5.root", savedRoot);
+            else System.clearProperty("red5.root");
+        }
+    }
+
+    private static Broadcast broadcast(String streamId) {
+        Broadcast b = mock(Broadcast.class);
+        when(b.getStreamId()).thenReturn(streamId);
+        return b;
     }
 
     @SuppressWarnings("unchecked")

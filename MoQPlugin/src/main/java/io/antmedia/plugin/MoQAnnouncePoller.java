@@ -103,15 +103,20 @@ public class MoQAnnouncePoller {
             }
 
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
-                return reader.lines()
-                        .map(String::trim)
-                        .filter(line -> line.endsWith("/publish"))
-                        .map(line -> line.substring(0, line.length() - "/publish".length()))
-                        .collect(Collectors.toCollection(HashSet::new));
+                return parseAnnouncements(reader);
             }
         } catch (Exception e) {
             logger.debug("MoQ announce poll failed: {}", e.getMessage());
             return Collections.emptySet();
         }
+    }
+
+    /** Strips the {@code /publish} suffix from each line and collects the stream IDs. */
+    static Set<String> parseAnnouncements(BufferedReader reader) {
+        return reader.lines()
+                .map(String::trim)
+                .filter(line -> line.endsWith("/publish"))
+                .map(line -> line.substring(0, line.length() - "/publish".length()))
+                .collect(Collectors.toCollection(HashSet::new));
     }
 }
