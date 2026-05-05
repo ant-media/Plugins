@@ -3,7 +3,9 @@ package io.antmedia.plugin;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.commons.lang3.RandomUtils;
@@ -21,6 +23,7 @@ import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.filter.utils.FilterConfiguration;
 import io.antmedia.filter.utils.MCUFilterTextGenerator;
 import io.antmedia.muxer.IAntMediaStreamHandler;
+import io.antmedia.plugin.MCUManager.RoomConfig;
 import io.antmedia.plugin.api.IStreamListener;
 import io.antmedia.websocket.WebSocketConstants;
 
@@ -38,7 +41,20 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	private String pluginType = FilterConfiguration.ASYNCHRONOUS;
 	private static Logger logger = LoggerFactory.getLogger(MCUManager.class);
 	private Queue<String> roomsHasCustomFilters = new ConcurrentLinkedQueue<>();
-	private Queue<String> customRooms = new ConcurrentLinkedQueue<>();
+	private Map<String, RoomConfig> rooms = new ConcurrentHashMap<>();
+	
+	public static class RoomConfig {
+		String roomId;
+		boolean videoEnabled;
+		boolean audioEnabled;
+
+		public RoomConfig(String roomId, boolean videoEnabled, boolean audioEnabled) {
+			this.roomId = roomId;
+			this.videoEnabled = videoEnabled;
+			this.audioEnabled = audioEnabled;
+		}
+		
+	}
 	
 
 
@@ -98,15 +114,14 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 			//Update room filter if there is no custom filter
 			try 
 			{
+				RoomConfig roomConfig = rooms.get(roomId);
 				List<String> streams = new ArrayList<>();
-				streams.addAll(room.getSubTrackStreamIds());
-
-				for (String streamId : room.getSubTrackStreamIds()) {
-					Broadcast broadcast = datastore.get(streamId);
-					if(broadcast == null || !broadcast.getStatus().equals(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING)) {
-						streams.remove(streamId);
-					}
+				List<Broadcast> broadcastList = datastore.getActiveSubtracks(roomId, null);
+				for (Broadcast broadcast : broadcastList) {
+					streams.add(broadcast.getStreamId());
 				}
+				
+
 				//
 				if (!streams.isEmpty()) 
 				{
@@ -118,8 +133,8 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 					filterConfiguration.setOutputStreams(outputStreams);
 					filterConfiguration.setVideoFilter(MCUFilterTextGenerator.createVideoFilter(streams.size()));
 					filterConfiguration.setAudioFilter(MCUFilterTextGenerator.createAudioFilter(streams.size()));
-					filterConfiguration.setVideoEnabled(!WebSocketConstants.AMCU.equals(room.getConferenceMode()));
-					filterConfiguration.setAudioEnabled(true);
+					filterConfiguration.setVideoEnabled(roomConfig.videoEnabled);
+					filterConfiguration.setAudioEnabled(roomConfig.audioEnabled);
 					filterConfiguration.setType(pluginType);
 	
 					result = getFiltersManager().createFilter(filterConfiguration, getApplication()).isSuccess();
@@ -139,13 +154,8 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 			 * This is to delete merged broadcast in case of non-zombi room and custom filter
 			 * delete if the all broadcasts are in non broadcasting status
 			 */
-			boolean deleteRoom = true;
-			for (String streamId : room.getSubTrackStreamIds()) {
-				Broadcast broadcast = datastore.get(streamId);
-				if(broadcast != null && broadcast.getStatus().equals(IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING)) {
-					deleteRoom = false;
-				}
-			} 
+			boolean deleteRoom = datastore.getActiveSubtracksCount(roomId, null) == 0;
+			
 			if(deleteRoom) {
 				result = getFiltersManager().delete(roomId, getApplication());
 			}	
@@ -158,9 +168,7 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		DataStore datastore = getApplication().getDataStore();
 		Broadcast room = datastore.get(roomId);
 
-		if ((room == null || WebSocketConstants.MCU.equals(room.getConferenceMode())
-				|| WebSocketConstants.AMCU.equals(room.getConferenceMode())
-				|| customRooms.contains(roomId))
+		if ((room == null || rooms.containsKey(roomId))
 				&& !conferenceRoomsUpdated.contains(roomId))
 		{
 			conferenceRoomsUpdated.add(roomId);
@@ -199,12 +207,12 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 	}
 
 	@Override
-	public void streamStarted(String streamId) {
+	public void streamStarted(Broadcast broadcast) {
 		//No need to implement for MCU
 	}
 
 	@Override
-	public void streamFinished(String streamId) {
+	public void streamFinished(Broadcast broadcast) {
 		//No need to implement for MCU
 	}
 
@@ -212,13 +220,13 @@ public class MCUManager implements ApplicationContextAware, IStreamListener{
 		this.pluginType = type;
 	}
 
-	public void addCustomRoom(String roomId) {
-		customRooms.add(roomId);	
+	public void addCustomRoom(String roomId, boolean videoEnabled, boolean audioEnabled) {
+		rooms.put(roomId, new RoomConfig(roomId, videoEnabled, audioEnabled));	
 		triggerUpdate(roomId, false);
 	}
 
 	public void removeCustomRoom(String roomId) {
-		customRooms.remove(roomId);	
-		filtersManager.delete(roomId, appAdaptor);
+		rooms.remove(roomId);	
+		getFiltersManager().delete(roomId, appAdaptor);
 	}
 }

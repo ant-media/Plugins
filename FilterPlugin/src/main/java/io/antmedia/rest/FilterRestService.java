@@ -71,16 +71,18 @@ public class FilterRestService {
 	    return new Result(getFiltersManager().delete(id, getAppAdaptor()));
 	}
 
-	@Operation(summary = "Creates MCU filter for non MCU room",
+	@Operation(summary = "Creates MCU for the roomo in the parameter",
 	           responses = {@ApiResponse(responseCode = "200", description = "MCU filter created for room")})
 	@POST
 	@Path("/room-mcu-filter/{roomId}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Result createMCU(@Parameter(description="Room Id") @PathParam("roomId") String roomId) {
+	public Result createMCU(@Parameter(description="Room Id") @PathParam("roomId") String roomId, 
+							@Parameter(description="Video enabled") @QueryParam("videoEnabled") boolean videoEnabled, 
+							@Parameter(description="Audio enabled") @QueryParam("audioEnabled") boolean audioEnabled) {
 	    ApplicationContext appCtx = (ApplicationContext) servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
 	    MCUManager mcuManager = (MCUManager) appCtx.getBean(MCUManager.BEAN_NAME);
-	    mcuManager.addCustomRoom(roomId);
+	    mcuManager.addCustomRoom(roomId, videoEnabled, audioEnabled);
 	    return new Result(true);
 	}
 
