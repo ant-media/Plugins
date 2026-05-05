@@ -128,7 +128,7 @@ public class MoQStreamFetcherTest {
     }
 
     @Test
-    public void testRunRelay_acceptTimeout_callsStopStream() throws Exception {
+    public void testRunRelay_acceptTimeout_callsStopStream() {
         int saved = MoQStreamFetcher.acceptTimeoutMs;
         try {
             MoQStreamFetcher.acceptTimeoutMs = 100; // tight timeout so accept() returns quickly
@@ -223,18 +223,4 @@ public class MoQStreamFetcherTest {
         throw new NoSuchFieldException(name);
     }
 
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Class<?> c = target.getClass();
-        while (c != null) {
-            try {
-                Field f = c.getDeclaredField(name);
-                f.setAccessible(true);
-                f.set(target, value);
-                return;
-            } catch (NoSuchFieldException e) {
-                c = c.getSuperclass();
-            }
-        }
-        throw new NoSuchFieldException(name);
-    }
 }

@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-@Component(value = "plugin.moq")
+@Component(value = "moqPlugin")
 public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     private static final Logger logger = LoggerFactory.getLogger(MoQPlugin.class);
@@ -240,8 +240,8 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         }
     }
 
-    @Override public void joinedTheRoom(String roomId, String streamId) { }
-    @Override public void leftTheRoom(String roomId, String streamId)   { }
+    @Override public void joinedTheRoom(String roomId, String streamId) { /* MoQ has no room concept */ }
+    @Override public void leftTheRoom(String roomId, String streamId)   { /* MoQ has no room concept */ }
 
     Set<String> getActiveIngestStreamIds() {
         return activeIngests.keySet();

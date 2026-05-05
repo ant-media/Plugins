@@ -250,8 +250,10 @@ public class MoQMuxer extends Muxer {
                 byte[] annexBExtradata = extractAnnexBSPSPPS(frameData);
                 if (annexBExtradata.length > 0) {
                     setExtradata(outStream, annexBExtradata);
-                    logger.debug("writeVideoFrame: set Annex B extradata ({} bytes, first byte=0x{}) for {}",
-                                annexBExtradata.length, Integer.toHexString(annexBExtradata[0] & 0xFF), streamName);
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("writeVideoFrame: set Annex B extradata ({} bytes, first byte=0x{}) for {}",
+                                    annexBExtradata.length, Integer.toHexString(annexBExtradata[0] & 0xFF), streamName);
+                    }
                 } else {
                     logger.warn("writeVideoFrame: could not extract SPS/PPS from keyframe for {}", streamName);
                 }
@@ -279,7 +281,9 @@ public class MoQMuxer extends Muxer {
             int ret = avformat_write_header(context, opts);
             if (opts != null) av_dict_free(opts);
             if (ret < 0) {
-                logger.warn("writeVideoFrame: avformat_write_header failed for {}: {}", streamName, getErrorDefinition(ret));
+                if (logger.isWarnEnabled()) {
+                    logger.warn("writeVideoFrame: avformat_write_header failed for {}: {}", streamName, getErrorDefinition(ret));
+                }
                 headerFailed = true;
                 return;
             }

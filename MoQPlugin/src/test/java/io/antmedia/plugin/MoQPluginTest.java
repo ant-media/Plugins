@@ -151,7 +151,7 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testStreamStarted_webRTC_usesSourceHeight() throws Exception {
+    public void testStreamStarted_webRTC_usesSourceHeight() {
         // WebRTC path: !directMuxingSupported && getVideoCodecParameters != null
         MuxAdaptor adaptor = mock(MuxAdaptor.class);
         when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
@@ -170,7 +170,7 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testStreamFinished() throws Exception {
+    public void testStreamFinished() {
         // Unknown stream: no-op
         MuxAdaptor unknownAdaptor = mock(MuxAdaptor.class);
         when(streamHandler.getMuxAdaptor("ghost")).thenReturn(unknownAdaptor);
