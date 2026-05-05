@@ -189,6 +189,44 @@ public class MoQPluginTest {
     }
 
     @Test
+    public void testStreamFinished_muxAdaptorNullAfterStart_skipsRemoveMuxer() throws Exception {
+        // Start: registers a muxer entry under "s1"
+        MuxAdaptor adaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
+        when(adaptor.directMuxingSupported()).thenReturn(true);
+        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+        plugin.streamStarted(broadcast("s1"));
+
+        // Adaptor disappears between start and finish (race / late teardown)
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(null);
+        plugin.streamFinished(broadcast("s1"));
+
+        // Loop body's `if (muxAdaptor != null)` guard short-circuits removal
+        verify(adaptor, never()).removeMuxer(any(MoQMuxer.class));
+
+        // Map entry still cleaned up
+        ConcurrentMap<String, ?> map = getField(plugin, "muxersByStream");
+        assertFalse(map.containsKey("s1"));
+    }
+
+    @Test
+    public void testListenerStubs_andIngestGetters() throws Exception {
+        // Room callbacks are no-ops for MoQ; just verify they don't throw
+        plugin.joinedTheRoom("room1", "stream1");
+        plugin.leftTheRoom("room1", "stream1");
+
+        // Empty before any ingest is started
+        assertTrue(plugin.getActiveIngestStreamIds().isEmpty());
+        assertNull(plugin.getIngestHandler("unknown"));
+
+        // After populating activeIngests directly, both getters reflect it
+        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
+        ingests.put("s1", fakeFetcher);
+        assertSame(fakeFetcher, plugin.getIngestHandler("s1"));
+        assertTrue(plugin.getActiveIngestStreamIds().contains("s1"));
+    }
+
+    @Test
     public void testStartIngest() throws Exception {
         ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
 

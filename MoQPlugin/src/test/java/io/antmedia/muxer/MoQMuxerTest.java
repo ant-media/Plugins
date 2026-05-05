@@ -172,6 +172,44 @@ public class MoQMuxerTest {
     }
 
     @Test
+    public void testAddVideoStream_copiesExtradataFromCodecpar() throws Exception {
+        MoQMuxer muxer = spy(newMuxer(0));
+        AVFormatContext ctx = muxer.getOutputFormatContext();
+        avformat_new_stream(ctx, null); // output stream at index 0
+        muxer.inputOutputStreamIndexMap.put(3, 0);
+        doReturn(true).when(muxer).callSuperAddVideoStream(
+                anyInt(), anyInt(), any(), anyInt(), anyInt(), anyBoolean(), any());
+
+        // codecpar carrying extradata -> the success branch copies it onto the output stream
+        byte[] data = { 1, 2, 3, 4, 5 };
+        AVCodecParameters cp = new AVCodecParameters();
+        BytePointer ed = new BytePointer(data);
+        cp.extradata(ed);
+        cp.extradata_size(data.length);
+
+        AVRational tb = new AVRational(); tb.num(1).den(90000);
+        assertTrue(muxer.addVideoStream(1920, 1080, tb, AV_CODEC_ID_H264, 3, true, cp));
+        assertEquals(0, getInt(muxer, "videoOutStreamIdx"));
+        assertEquals(data.length, ctx.streams(0).codecpar().extradata_size());
+
+        tb.close(); cp.close(); ed.close();
+    }
+
+    @Test
+    public void testAddVideoStream_nullCodecpar_takesWarnBranch() {
+        // null codecpar exercises the else (warn) branch; super=true keeps overall result true
+        MoQMuxer muxer = spy(newMuxer(0));
+        avformat_new_stream(muxer.getOutputFormatContext(), null);
+        muxer.inputOutputStreamIndexMap.put(0, 0);
+        doReturn(true).when(muxer).callSuperAddVideoStream(
+                anyInt(), anyInt(), any(), anyInt(), anyInt(), anyBoolean(), any());
+
+        AVRational tb = new AVRational(); tb.num(1).den(90000);
+        assertTrue(muxer.addVideoStream(1920, 1080, tb, AV_CODEC_ID_H264, 0, true, null));
+        tb.close();
+    }
+
+    @Test
     public void testAddAudioStream() {
         // AAC: super=true -> no OpusHead path executed
         MoQMuxer aac = spy(newMuxer(0));
@@ -182,6 +220,15 @@ public class MoQMuxerTest {
         MoQMuxer opusNoMap = spy(newMuxer(0));
         doReturn(true).when(opusNoMap).callSuperAddAudioStream(anyInt(), any(), anyInt(), anyInt());
         assertTrue(opusNoMap.addAudioStream(48000, null, AV_CODEC_ID_OPUS, 0));
+
+        // Opus + outIdx in map -> OpusHead synthesised and stored as 19-byte extradata
+        MoQMuxer opusInMap = spy(newMuxer(0));
+        AVFormatContext ctx = opusInMap.getOutputFormatContext();
+        avformat_new_stream(ctx, null); // index 0
+        opusInMap.inputOutputStreamIndexMap.put(0, 0);
+        doReturn(true).when(opusInMap).callSuperAddAudioStream(anyInt(), any(), anyInt(), anyInt());
+        assertTrue(opusInMap.addAudioStream(48000, null, AV_CODEC_ID_OPUS, 0));
+        assertEquals(19, ctx.streams(0).codecpar().extradata_size());
 
         // Super fails -> returns false (whatever the codec)
         MoQMuxer fail = spy(newMuxer(0));
