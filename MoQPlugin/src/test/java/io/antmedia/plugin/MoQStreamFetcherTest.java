@@ -93,7 +93,7 @@ public class MoQStreamFetcherTest {
         Process moq = mock(Process.class);
         InputStream errStream = new ByteArrayInputStream(new byte[0]);
         when(moq.getErrorStream()).thenReturn(errStream);
-        setField(fetcher, "moqProcess", moq);
+        setMoqProcess(fetcher, moq);
         assertSame(errStream, fetcher.getLogStream());
 
         fetcher.stopStream();
@@ -110,7 +110,7 @@ public class MoQStreamFetcherTest {
         bad.startStream();
         verify(bad, never()).startRelayThread();
         verify(bad, never()).callSuperStartStream();
-        assertNull(getField(bad, "moqProcess"));
+        assertNull(getMoqProcess(bad));
         ((ServerSocket) getField(bad, "serverSocket")).close();
 
         // Spawn succeeds: process stored, relay thread started, super called
@@ -121,7 +121,7 @@ public class MoQStreamFetcherTest {
         doNothing().when(ok).callSuperStartStream();
 
         ok.startStream();
-        assertSame(moq, getField(ok, "moqProcess"));
+        assertSame(moq, getMoqProcess(ok));
         verify(ok).startRelayThread();
         verify(ok).callSuperStartStream();
         ((ServerSocket) getField(ok, "serverSocket")).close();
@@ -151,14 +151,16 @@ public class MoQStreamFetcherTest {
         byte[] payload = "fmp4-bytes".getBytes();
         Process moq = mock(Process.class);
         when(moq.getInputStream()).thenReturn(new ByteArrayInputStream(payload));
-        setField(fetcher, "moqProcess", moq);
+        setMoqProcess(fetcher, moq);
 
         // Connect a client in a separate thread so accept() returns
         ByteArrayOutputStream received = new ByteArrayOutputStream();
         Thread client = new Thread(() -> {
             try (Socket s = new Socket("localhost", ss.getLocalPort())) {
                 s.getInputStream().transferTo(received);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                // test-only client; failure is reported by the assertion below
+            }
         });
         client.start();
 
@@ -171,10 +173,14 @@ public class MoQStreamFetcherTest {
     @Test
     public void testRunRelay_serverSocketClosed_swallowsIoException() throws Exception {
         MoQStreamFetcher fetcher = newFetcher("s1");
+        ServerSocket ss = getField(fetcher, "serverSocket");
         // Closed server socket -> accept() throws SocketException (an IOException, not SocketTimeoutException)
-        ((ServerSocket) getField(fetcher, "serverSocket")).close();
+        ss.close();
 
         fetcher.runRelay(); // must not throw
+
+        // No relay socket was ever set because accept() never returned
+        assertNull(getRelaySocket(fetcher));
     }
 
     @Test
@@ -187,6 +193,19 @@ public class MoQStreamFetcherTest {
         assertTrue(entered.await(2, TimeUnit.SECONDS));
 
         ((ServerSocket) getField(fetcher, "serverSocket")).close();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Process getMoqProcess(MoQStreamFetcher f) throws Exception {
+        return ((java.util.concurrent.atomic.AtomicReference<Process>) getField(f, "moqProcess")).get();
+    }
+    @SuppressWarnings("unchecked")
+    private static void setMoqProcess(MoQStreamFetcher f, Process p) throws Exception {
+        ((java.util.concurrent.atomic.AtomicReference<Process>) getField(f, "moqProcess")).set(p);
+    }
+    @SuppressWarnings("unchecked")
+    private static java.net.Socket getRelaySocket(MoQStreamFetcher f) throws Exception {
+        return ((java.util.concurrent.atomic.AtomicReference<java.net.Socket>) getField(f, "relaySocket")).get();
     }
 
     @SuppressWarnings("unchecked")

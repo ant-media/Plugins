@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -36,12 +37,14 @@ public class MoQMuxer extends Muxer {
         @Override
         public int call(Pointer opaque, BytePointer buf, int size) {
             MoQMuxer muxer = instances.get(opaque);
-            if (muxer == null) return size;
-            byte[] data = new byte[size];
-            buf.get(data);
-            if (!muxer.queue.offer(data)) {
-                muxer.logger.warn("Queue full, dropping chunk for {}", muxer.streamName);
+            if (muxer != null) {
+                byte[] data = new byte[size];
+                buf.get(data);
+                if (!muxer.queue.offer(data)) {
+                    muxer.logger.warn("Queue full, dropping chunk for {}", muxer.streamName);
+                }
             }
+            // From FFmpeg's POV all bytes are accepted; we buffer or drop internally.
             return size;
         }
     };
@@ -245,10 +248,10 @@ public class MoQMuxer extends Muxer {
                 byte[] frameData = new byte[pkt.size()];
                 pkt.data().get(frameData, 0, pkt.size());
                 byte[] annexBExtradata = extractAnnexBSPSPPS(frameData);
-                if (annexBExtradata != null) {
+                if (annexBExtradata.length > 0) {
                     setExtradata(outStream, annexBExtradata);
                     logger.debug("writeVideoFrame: set Annex B extradata ({} bytes, first byte=0x{}) for {}",
-                            annexBExtradata.length, Integer.toHexString(annexBExtradata[0] & 0xFF), streamName);
+                                annexBExtradata.length, Integer.toHexString(annexBExtradata[0] & 0xFF), streamName);
                 } else {
                     logger.warn("writeVideoFrame: could not extract SPS/PPS from keyframe for {}", streamName);
                 }
@@ -269,8 +272,8 @@ public class MoQMuxer extends Muxer {
             AVDictionary opts = null;
             if (!options.isEmpty()) {
                 opts = new AVDictionary();
-                for (String key : options.keySet()) {
-                    av_dict_set(opts, key, options.get(key), 0);
+                for (Map.Entry<String, String> entry : options.entrySet()) {
+                    av_dict_set(opts, entry.getKey(), entry.getValue(), 0);
                 }
             }
             int ret = avformat_write_header(context, opts);
@@ -288,7 +291,7 @@ public class MoQMuxer extends Muxer {
     }
 
     private void setExtradata(AVStream outStream, byte[] data) {
-        BytePointer ptr = new BytePointer(av_mallocz(data.length + AV_INPUT_BUFFER_PADDING_SIZE));
+        BytePointer ptr = new BytePointer(av_mallocz((long) data.length + AV_INPUT_BUFFER_PADDING_SIZE));
         for (int i = 0; i < data.length; i++) ptr.put(i, data[i]);
         if (outStream.codecpar().extradata() != null && !outStream.codecpar().extradata().isNull()) {
             av_free(outStream.codecpar().extradata());
@@ -307,10 +310,11 @@ public class MoQMuxer extends Muxer {
      * to the mp4 mdat. ff_isom_write_avcc() (which writes the avcC box) also
      * handles Annex B extradata natively.
      * <p>
-     * Returns null if SPS or PPS cannot be found or are too short.
+     * Returns an empty array if SPS or PPS cannot be found or are too short.
      */
     private byte[] extractAnnexBSPSPPS(byte[] annexB) {
-        byte[] sps = null, pps = null;
+        byte[] sps = null;
+        byte[] pps = null;
         int i = 0;
         while (i < annexB.length) {
             int scLen = 0;
@@ -346,7 +350,7 @@ public class MoQMuxer extends Muxer {
             i = j;
         }
 
-        if (sps == null || pps == null) return null;
+        if (sps == null || pps == null) return new byte[0];
 
         // 00 00 00 01 <sps> 00 00 00 01 <pps>  — first byte is 0x00, not 0x01
         byte[] out = new byte[4 + sps.length + 4 + pps.length];
@@ -394,6 +398,9 @@ public class MoQMuxer extends Muxer {
                     }
                 }
                 moqStdin.close();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                if (running) logger.error("Drain interrupted for {}", streamName, e);
             } catch (Exception e) {
                 if (running) logger.error("Drain error for {}", streamName, e);
             }

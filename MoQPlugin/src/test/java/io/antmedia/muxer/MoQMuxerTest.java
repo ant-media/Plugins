@@ -9,8 +9,13 @@ import io.vertx.core.Vertx;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avformat.AVFormatContext;
+import org.bytedeco.ffmpeg.avformat.AVStream;
+import org.bytedeco.ffmpeg.avformat.Write_packet_Pointer_BytePointer_int;
 import org.bytedeco.ffmpeg.avutil.AVRational;
+import org.bytedeco.javacpp.BytePointer;
 import org.junit.Test;
+
+import static org.bytedeco.ffmpeg.global.avformat.avformat_new_stream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -20,6 +25,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 
 public class MoQMuxerTest {
@@ -83,10 +89,11 @@ public class MoQMuxerTest {
         byte[] sei = { 0x00, 0x00, 0x00, 0x01, 0x06, 0x05, 0x10, 0x20 };
         assertArrayEquals(expected, (byte[]) m.invoke(muxer, (Object) concat(sei, sps4, pps4)));
 
-        assertNull(m.invoke(muxer, (Object) new byte[0]));
-        assertNull(m.invoke(muxer, (Object) sps4));
-        assertNull(m.invoke(muxer, (Object) pps4));
-        assertNull(m.invoke(muxer, (Object) new byte[] { 0x67, 0x42, 0x00, 0x0A }));
+        // Negative cases all return an empty array, not null
+        assertEquals(0, ((byte[]) m.invoke(muxer, (Object) new byte[0])).length);
+        assertEquals(0, ((byte[]) m.invoke(muxer, (Object) sps4)).length);
+        assertEquals(0, ((byte[]) m.invoke(muxer, (Object) pps4)).length);
+        assertEquals(0, ((byte[]) m.invoke(muxer, (Object) new byte[] { 0x67, 0x42, 0x00, 0x0A })).length);
     }
 
     @Test
@@ -342,6 +349,79 @@ public class MoQMuxerTest {
         bad.startMoqCli();
         assertNull(getField(bad, "moqCliProcess"));
         verify(bad, never()).startDrainThread(any());
+    }
+
+    @Test
+    public void testWriteCallback() throws Exception {
+        MoQMuxer muxer = newMuxer(0);
+
+        // Pull the static callback and the instances map by reflection
+        Field cbField = MoQMuxer.class.getDeclaredField("writeCallback");
+        cbField.setAccessible(true);
+        Write_packet_Pointer_BytePointer_int callback = (Write_packet_Pointer_BytePointer_int) cbField.get(null);
+
+        Field instancesField = MoQMuxer.class.getDeclaredField("instances");
+        instancesField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<BytePointer, MoQMuxer> instances = (Map<BytePointer, MoQMuxer>) instancesField.get(null);
+
+        BytePointer opaque = new BytePointer("test-opaque");
+
+        // Unknown opaque -> returns size, no queue side effect
+        BytePointer buf = new BytePointer("hello".getBytes());
+        assertEquals(5, callback.call(opaque, buf, 5));
+
+        // Registered opaque -> bytes copied to queue, returns size
+        instances.put(opaque, muxer);
+        assertEquals(5, callback.call(opaque, buf, 5));
+        @SuppressWarnings("unchecked")
+        ArrayBlockingQueue<byte[]> queue = (ArrayBlockingQueue<byte[]>) getField(muxer, "queue");
+        assertArrayEquals("hello".getBytes(), queue.poll());
+
+        // Queue full -> still returns size, drops chunk silently
+        for (int i = 0; i < 64; i++) queue.offer(new byte[1]); // QUEUE_CAPACITY
+        assertEquals(5, callback.call(opaque, buf, 5));
+
+        instances.remove(opaque);
+    }
+
+    @Test
+    public void testSetExtradata_replacesExistingPointer() throws Exception {
+        MoQMuxer muxer = newMuxer(0);
+        AVFormatContext ctx = muxer.getOutputFormatContext();
+        AVStream stream = avformat_new_stream(ctx, null);
+        Method m = MoQMuxer.class.getDeclaredMethod("setExtradata", AVStream.class, byte[].class);
+        m.setAccessible(true);
+
+        m.invoke(muxer, stream, new byte[] { 1, 2, 3, 4 });
+        assertEquals(4, stream.codecpar().extradata_size());
+
+        // Second call: old pointer is freed (no leak), new one installed
+        m.invoke(muxer, stream, new byte[] { 5, 6, 7 });
+        assertEquals(3, stream.codecpar().extradata_size());
+    }
+
+    @Test
+    public void testWriteVideoFrame_noExtradataAndExtractFails_returnsEarly() throws Exception {
+        MoQMuxer muxer = spy(newMuxer(0));
+        AVFormatContext ctx = muxer.getOutputFormatContext();
+        avformat_new_stream(ctx, null); // creates output stream at index 0
+        setInt(muxer, "videoOutStreamIdx", 0);
+        setBoolean(muxer, "headerWritten", false);
+
+        // Frame contains no SPS/PPS, so extractAnnexBSPSPPS returns null and the second
+        // extradata-size check still sees 0 -> early return before avformat_write_header
+        AVPacket pkt = new AVPacket();
+        BytePointer data = new BytePointer("garbage-not-a-nal".getBytes());
+        pkt.data(data);
+        pkt.size((int) data.limit());
+
+        Method m = MoQMuxer.class.getDeclaredMethod("writeVideoFrame", AVPacket.class, AVFormatContext.class);
+        m.setAccessible(true);
+        m.invoke(muxer, pkt, ctx);
+
+        verify(muxer, never()).callSuperWriteVideoFrame(any(), any());
+        pkt.close();
     }
 
     @Test

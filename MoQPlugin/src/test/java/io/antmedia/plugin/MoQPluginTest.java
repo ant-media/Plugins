@@ -2,7 +2,6 @@ package io.antmedia.plugin;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
-import static org.mockito.ArgumentMatchers.*;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.AppSettings;
@@ -280,25 +279,47 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testPollCliLogs() throws Exception {
-        // Muxer side: getCliErrorStream is read and its URL is used as the log tag
+    public void testPollCliLogs_ingestSide() throws Exception {
+        // f1 has small data (drained in one read), f2 has > 2000 bytes (forces the skip-overflow loop),
+        // f3 returns null (must be tolerated)
+        ByteArrayInputStream small = new ByteArrayInputStream("hello\n".getBytes());
+        byte[] big = new byte[3000];
+        ByteArrayInputStream large = new ByteArrayInputStream(big);
+
+        MoQStreamFetcher f1 = mock(MoQStreamFetcher.class);
+        when(f1.getLogStream()).thenReturn(small);
+        MoQStreamFetcher f2 = mock(MoQStreamFetcher.class);
+        when(f2.getLogStream()).thenReturn(large);
+        MoQStreamFetcher f3 = mock(MoQStreamFetcher.class);
+        when(f3.getLogStream()).thenReturn(null);
+
+        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
+        ingests.put("a", f1);
+        ingests.put("b", f2);
+        ingests.put("c", f3);
+
+        Method poll = MoQPlugin.class.getDeclaredMethod("pollCliLogs");
+        poll.setAccessible(true);
+        poll.invoke(plugin);
+
+        verify(f1).getLogStream();
+        verify(f2).getLogStream();
+        verify(f3).getLogStream();
+        assertEquals("small stream fully drained", 0, small.available());
+        assertEquals("large stream's overflow skipped past the 2000-byte read window", 0, large.available());
+    }
+
+    @Test
+    public void testPollCliLogs_muxerSide() throws Exception {
+        // Separate test because mock(MoQMuxer.class) requires FFmpeg natives
         MoQMuxer muxer = mock(MoQMuxer.class);
         when(muxer.getCliErrorStream()).thenReturn(new ByteArrayInputStream("muxlog\n".getBytes()));
         when(muxer.getOutputURL()).thenReturn("moq://live/s1/source");
+
         ConcurrentMap<String, Set<MoQMuxer>> muxers = getField(plugin, "muxersByStream");
         Set<MoQMuxer> set = ConcurrentHashMap.newKeySet();
         set.add(muxer);
         muxers.put("s1", set);
-
-        // Ingest side: f1 has data (must be drained), f2 returns null (must be tolerated)
-        ByteArrayInputStream withData = new ByteArrayInputStream("hello\n".getBytes());
-        MoQStreamFetcher f1 = mock(MoQStreamFetcher.class);
-        when(f1.getLogStream()).thenReturn(withData);
-        MoQStreamFetcher f2 = mock(MoQStreamFetcher.class);
-        when(f2.getLogStream()).thenReturn(null);
-        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
-        ingests.put("a", f1);
-        ingests.put("b", f2);
 
         Method poll = MoQPlugin.class.getDeclaredMethod("pollCliLogs");
         poll.setAccessible(true);
@@ -306,9 +327,6 @@ public class MoQPluginTest {
 
         verify(muxer).getCliErrorStream();
         verify(muxer).getOutputURL();
-        verify(f1).getLogStream();
-        verify(f2).getLogStream();
-        assertEquals("data stream must be drained, not just queried", 0, withData.available());
     }
 
     @Test
@@ -317,17 +335,20 @@ public class MoQPluginTest {
                 "readAvailable", InputStream.class, String.class);
         readAvailable.setAccessible(true);
 
-        // available()==0 short-circuits without reading
-        readAvailable.invoke(plugin, new ByteArrayInputStream(new byte[0]), "empty");
+        // available()==0 short-circuits after the first available() call
+        InputStream empty = spy(new ByteArrayInputStream(new byte[0]));
+        readAvailable.invoke(plugin, empty, "empty");
+        verify(empty).available();
+        verify(empty, never()).read(any(byte[].class), anyInt(), anyInt());
 
-        // IOException is swallowed
-        InputStream throwing = new InputStream() {
-            @Override public int read() throws IOException { throw new IOException("boom"); }
-            @Override public int available() throws IOException { throw new IOException("boom"); }
-        };
+        // IOException from available() is swallowed; read() never reached
+        InputStream throwing = mock(InputStream.class);
+        when(throwing.available()).thenThrow(new IOException("boom"));
         readAvailable.invoke(plugin, throwing, "throwing");
+        verify(throwing).available();
+        verify(throwing, never()).read(any(byte[].class), anyInt(), anyInt());
 
-        // null stream returns immediately
+        // null stream returns immediately without throwing
         readAvailable.invoke(plugin, null, "null");
     }
 
@@ -335,20 +356,48 @@ public class MoQPluginTest {
     public void testStartRelay_alreadyRunning_returnsEarly() throws Exception {
         Field f = MoQPlugin.class.getDeclaredField("relayProcess");
         f.setAccessible(true);
-        Object saved = f.get(null);
+        @SuppressWarnings("unchecked")
+        java.util.concurrent.atomic.AtomicReference<Process> ref =
+                (java.util.concurrent.atomic.AtomicReference<Process>) f.get(null);
+        Process saved = ref.get();
         try {
             Process running = mock(Process.class);
-            f.set(null, running);
+            ref.set(running);
 
             Method m = MoQPlugin.class.getDeclaredMethod("startRelay");
             m.setAccessible(true);
             m.invoke(null);
 
             assertSame("the early-return guard should leave our mock process in place",
-                    running, f.get(null));
+                    running, ref.get());
             verify(running, never()).destroy();
         } finally {
-            f.set(null, saved);
+            ref.set(saved);
+        }
+    }
+
+    @Test
+    public void testStartRelay_spawnFails_catchesIOException() throws Exception {
+        Field f = MoQPlugin.class.getDeclaredField("relayProcess");
+        f.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.concurrent.atomic.AtomicReference<Process> ref =
+                (java.util.concurrent.atomic.AtomicReference<Process>) f.get(null);
+        Process saved = ref.get();
+        ref.set(null);
+        try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+            // Replace buildRelayProcessBuilder with one that points at a non-existent binary,
+            // so .start() throws IOException -> startRelay's catch path runs
+            mocked.when(MoQPlugin::buildRelayProcessBuilder)
+                  .thenReturn(new ProcessBuilder("/__moq_no_such_binary_" + System.nanoTime()));
+
+            Method m = MoQPlugin.class.getDeclaredMethod("startRelay");
+            m.setAccessible(true);
+            m.invoke(null);
+
+            assertNull("relayProcess stays null when spawn fails", ref.get());
+        } finally {
+            ref.set(saved);
         }
     }
 

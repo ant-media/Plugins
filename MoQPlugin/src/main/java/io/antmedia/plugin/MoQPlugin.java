@@ -25,6 +25,7 @@ import java.io.InputStream;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Component(value = "plugin.moq")
 public class MoQPlugin implements ApplicationContextAware, IStreamListener {
@@ -32,11 +33,15 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     private static final Logger logger = LoggerFactory.getLogger(MoQPlugin.class);
     private static final long LOG_POLL_INTERVAL_MS = 2000;
     public  static final int EMBEDDED_RELAY_PORT = 4443;
-    public  static final String PUBLISH_TYPE_MOQ    = "MoQ";
+    public  static final String PUBLISH_TYPE_MOQ = "MoQ";
+    public  static final String SETTINGS_KEY     = "plugin.moq";
+
+    private static final String MOQ_RELAY_BIN = "moq-relay";
+    private static final String BIND_ADDR     = "[::]:";
 
     private static final Gson gson = new Gson();
 
-    private static volatile Process relayProcess;
+    private static final AtomicReference<Process> relayProcess = new AtomicReference<>();
 
     private ApplicationContext applicationContext;
     private AppSettings appSettings;
@@ -76,13 +81,14 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     }
 
     private static synchronized void startRelay() {
-        if (relayProcess != null) {
+        if (relayProcess.get() != null) {
             // already running — only one relay per JVM
             return;
         }
         try {
-            relayProcess = buildRelayProcessBuilder().redirectErrorStream(true).start();
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> relayProcess.destroy()));
+            Process p = buildRelayProcessBuilder().redirectErrorStream(true).start();
+            relayProcess.set(p);
+            Runtime.getRuntime().addShutdownHook(new Thread(p::destroy));
             logger.info("MoQ: embedded relay started on port {}", EMBEDDED_RELAY_PORT);
         } catch (IOException e) {
             logger.error("MoQ: failed to start embedded relay", e);
@@ -94,15 +100,16 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         String amsRoot = System.getProperty("red5.root");
         File certFile = new File(amsRoot != null ? amsRoot : ".", "conf/fullchain.pem");
         File keyFile  = new File(amsRoot != null ? amsRoot : ".", "conf/privkey.pem");
+        String bind = BIND_ADDR + EMBEDDED_RELAY_PORT;
 
         if (certFile.exists() && keyFile.exists()) {
             logger.info("MoQ: found TLS certificate at {}, starting relay with HTTPS/WSS", certFile.getAbsolutePath());
             return new ProcessBuilder(
-                    "moq-relay",
-                    "--server-bind",      "[::]:" + EMBEDDED_RELAY_PORT,
+                    MOQ_RELAY_BIN,
+                    "--server-bind",      bind,
                     "--tls-cert",         certFile.getAbsolutePath(),
                     "--tls-key",          keyFile.getAbsolutePath(),
-                    "--web-https-listen", "[::]:" + EMBEDDED_RELAY_PORT,
+                    "--web-https-listen", bind,
                     "--web-https-cert",   certFile.getAbsolutePath(),
                     "--web-https-key",    keyFile.getAbsolutePath(),
                     "--web-ws",
@@ -111,16 +118,16 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
         logger.info("MoQ: no TLS certificate found, starting relay with HTTP/WS (localhost only)");
         return new ProcessBuilder(
-                "moq-relay",
-                "--server-bind",     "[::]:" + EMBEDDED_RELAY_PORT,
+                MOQ_RELAY_BIN,
+                "--server-bind",     bind,
                 "--tls-generate",    "localhost",
-                "--web-http-listen", "[::]:" + EMBEDDED_RELAY_PORT,
+                "--web-http-listen", bind,
                 "--web-ws",
                 "--auth-public", "/");
     }
 
     public MoQSettings loadSettings() {
-        Object raw = appSettings.getCustomSetting("plugin.moq");
+        Object raw = appSettings.getCustomSetting(SETTINGS_KEY);
         if (raw != null) {
             try {
                 return gson.fromJson(raw.toString(), MoQSettings.class);
@@ -143,8 +150,9 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     /** Called on the Vert.x timer thread — non-blocking poll of moq-cli stderr for all active streams. */
     private void pollCliLogs() {
-        if (relayProcess != null) {
-            readAvailable(relayProcess.getInputStream(), "moq-relay");
+        Process relay = relayProcess.get();
+        if (relay != null) {
+            readAvailable(relay.getInputStream(), MOQ_RELAY_BIN);
         }
         muxersByStream.values().forEach(muxers ->
             muxers.forEach(muxer -> readAvailable(muxer.getCliErrorStream(), muxer.getOutputURL()))
@@ -162,11 +170,19 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
             byte[] buf = new byte[Math.min(available, 2000)];
             int n = stream.read(buf, 0, buf.length);
-            if (n > 0) {
+            if (n > 0 && logger.isInfoEnabled()) {
                 logger.info("[moq-cli {}] {}", name, new String(buf, 0, n));
             }
-            stream.skip(stream.available()); // discard any overflow
-        } catch (IOException ignored) {}
+            // Discard any overflow so the buffer doesn't keep growing across polls.
+            long remaining = stream.available();
+            while (remaining > 0) {
+                long s = stream.skip(remaining);
+                if (s <= 0) break;
+                remaining -= s;
+            }
+        } catch (IOException e) {
+            // poll cycle is best-effort; ignore IO failures and try next time
+        }
     }
 
     @Override
@@ -224,8 +240,8 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         }
     }
 
-    @Override public void joinedTheRoom(String roomId, String streamId) {}
-    @Override public void leftTheRoom(String roomId, String streamId) {}
+    @Override public void joinedTheRoom(String roomId, String streamId) { }
+    @Override public void leftTheRoom(String roomId, String streamId)   { }
 
     Set<String> getActiveIngestStreamIds() {
         return activeIngests.keySet();
@@ -285,7 +301,6 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     }
 
     private MuxAdaptor getMuxAdaptor(String streamId) {
-        IAntMediaStreamHandler app = getApplication();
-        return app != null ? app.getMuxAdaptor(streamId) : null;
+        return getApplication().getMuxAdaptor(streamId);
     }
 }

@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Pulls an external MoQ broadcast into AMS by spawning {@code moq-cli subscribe ... fmp4}
@@ -54,8 +55,8 @@ public class MoQStreamFetcher extends StreamFetcher {
     private final String relayUrl;
     private final ServerSocket serverSocket;
 
-    private volatile Process moqProcess;
-    private volatile Socket relaySocket;
+    private final AtomicReference<Process> moqProcess  = new AtomicReference<>();
+    private final AtomicReference<Socket>  relaySocket = new AtomicReference<>();
 
     public MoQStreamFetcher(String streamId, String appName, String relayUrl, IScope scope, Vertx vertx) {
         super(allocateUrl(), streamId, AntMediaApplicationAdapter.LIVE_STREAM, scope, vertx, 0);
@@ -80,7 +81,7 @@ public class MoQStreamFetcher extends StreamFetcher {
             socketCarrier.set(ss);
             return "tcp://localhost:" + ss.getLocalPort();
         } catch (IOException e) {
-            throw new RuntimeException("MoQ: failed to bind local TCP port for ingest", e);
+            throw new IllegalStateException("MoQ: failed to bind local TCP port for ingest", e);
         }
     }
 
@@ -91,13 +92,14 @@ public class MoQStreamFetcher extends StreamFetcher {
 
     /** moq-cli stderr — polled by MoQPlugin for log output. */
     public InputStream getLogStream() {
-        return moqProcess != null ? moqProcess.getErrorStream() : null;
+        Process p = moqProcess.get();
+        return p != null ? p.getErrorStream() : null;
     }
 
     @Override
     public void startStream() {
         try {
-            moqProcess = spawnMoqCli();
+            moqProcess.set(spawnMoqCli());
         } catch (IOException e) {
             logger.error("MoQ: failed to spawn moq-cli for stream {}", streamId, e);
             return;
@@ -129,11 +131,12 @@ public class MoQStreamFetcher extends StreamFetcher {
     @Override
     public void stopStream() {
         // 1. Kill moq-cli → transferTo() in relay thread gets IOException/EOF → relay exits.
-        if (moqProcess != null) {
-            moqProcess.destroy();
+        Process p = moqProcess.get();
+        if (p != null) {
+            p.destroy();
         }
         // 2. Close relay socket → unblocks FFmpeg's av_read_frame with EOF.
-        closeQuietly(relaySocket);
+        closeQuietly(relaySocket.get());
         // 3. Close server socket → unblocks accept() if relay thread is still waiting.
         closeQuietly(serverSocket);
 
@@ -150,16 +153,17 @@ public class MoQStreamFetcher extends StreamFetcher {
     void runRelay() {
         try {
             serverSocket.setSoTimeout(acceptTimeoutMs);
-            relaySocket = serverSocket.accept();
-            relaySocket.setTcpNoDelay(true);
+            Socket s = serverSocket.accept();
+            s.setTcpNoDelay(true);
+            relaySocket.set(s);
             logger.info("MoQ: relay connected for stream {}", streamId);
 
             // Pump moq-cli stdout → FFmpeg. Blocks until moq-cli exits or socket closes.
-            moqProcess.getInputStream().transferTo(relaySocket.getOutputStream());
+            moqProcess.get().getInputStream().transferTo(s.getOutputStream());
 
             logger.info("MoQ: relay ended for stream {}", streamId);
             // Close socket so FFmpeg receives clean EOF rather than hanging.
-            closeQuietly(relaySocket);
+            closeQuietly(s);
 
         } catch (SocketTimeoutException e) {
             logger.error("MoQ: FFmpeg did not connect within {}ms for stream {}, stopping",
@@ -173,6 +177,10 @@ public class MoQStreamFetcher extends StreamFetcher {
 
     private static void closeQuietly(AutoCloseable c) {
         if (c == null) return;
-        try { c.close(); } catch (Exception ignored) {}
+        try {
+            c.close();
+        } catch (Exception e) {
+            // best-effort cleanup; nothing useful we can do here
+        }
     }
 }
