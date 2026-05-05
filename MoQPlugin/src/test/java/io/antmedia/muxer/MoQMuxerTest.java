@@ -5,89 +5,60 @@ import static org.mockito.Mockito.*;
 import static org.bytedeco.ffmpeg.global.avcodec.*;
 
 import io.vertx.core.Vertx;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
 
 public class MoQMuxerTest {
 
-    private MoQMuxer muxer;
-
-    @Before
-    public void setUp() {
-        muxer = new MoQMuxer(mock(Vertx.class), "stream1", 0, "live", "http://localhost:4443/moq");
+    private MoQMuxer newMuxer(int height) {
+        return new MoQMuxer(mock(Vertx.class), "stream1", height, "live", "http://localhost:4443/moq");
     }
 
     @Test
-    public void testGetOutputURL_source() {
-        assertEquals("moq://live/stream1/source", muxer.getOutputURL());
+    public void testFreshMuxer() {
+        // height=0 -> "source", height=N -> "Np"
+        assertEquals("moq://live/stream1/source", newMuxer(0).getOutputURL());
+        assertEquals("moq://live/stream1/720p", newMuxer(720).getOutputURL());
+
+        // moq-cli not started yet -> no error stream
+        assertNull(newMuxer(0).getCliErrorStream());
     }
 
     @Test
-    public void testGetOutputURL_qualityVariant() {
-        MoQMuxer variantMuxer = new MoQMuxer(mock(Vertx.class), "stream1", 720, "live", "http://localhost:4443/moq");
-        assertEquals("moq://live/stream1/720p", variantMuxer.getOutputURL());
+    public void testIsCodecSupported() {
+        MoQMuxer m = newMuxer(0);
+
+        assertTrue(m.isCodecSupported(AV_CODEC_ID_H264));
+        assertTrue(m.isCodecSupported(AV_CODEC_ID_H265));
+        assertTrue(m.isCodecSupported(AV_CODEC_ID_AAC));
+        assertTrue(m.isCodecSupported(AV_CODEC_ID_OPUS));
+
+        assertFalse(m.isCodecSupported(AV_CODEC_ID_VP8));
+        assertFalse(m.isCodecSupported(AV_CODEC_ID_NONE));
     }
 
     @Test
-    public void testIsCodecSupported_supported() {
-        assertTrue(muxer.isCodecSupported(AV_CODEC_ID_H264));
-        assertTrue(muxer.isCodecSupported(AV_CODEC_ID_H265));
-        assertTrue(muxer.isCodecSupported(AV_CODEC_ID_AAC));
-        assertTrue(muxer.isCodecSupported(AV_CODEC_ID_OPUS));
-    }
+    public void testExtractAnnexBSPSPPS() throws Exception {
+        Method m = MoQMuxer.class.getDeclaredMethod("extractAnnexBSPSPPS", byte[].class);
+        m.setAccessible(true);
+        MoQMuxer muxer = newMuxer(0);
 
-    @Test
-    public void testIsCodecSupported_unsupported() {
-        assertFalse(muxer.isCodecSupported(AV_CODEC_ID_VP8));
-        assertFalse(muxer.isCodecSupported(AV_CODEC_ID_NONE));
-    }
+        // SPS (type=7) + PPS (type=8) -> valid extradata, first byte must be 0x00
+        byte[] sps = { 0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x0A, (byte) 0xDA };
+        byte[] pps = { 0x00, 0x00, 0x00, 0x01, 0x68, (byte) 0xCE, 0x38, (byte) 0x80 };
+        byte[] full = new byte[sps.length + pps.length];
+        System.arraycopy(sps, 0, full, 0, sps.length);
+        System.arraycopy(pps, 0, full, sps.length, pps.length);
 
-    @Test
-    public void testGetCliErrorStream_noProcessStarted_returnsNull() {
-        assertNull(muxer.getCliErrorStream());
-    }
-
-    @Test
-    public void testExtractAnnexBSPSPPS_validInput_returnsExtradata() throws Exception {
-        // Build synthetic Annex B buffer with SPS (nal_unit_type=7) and PPS (nal_unit_type=8)
-        // SPS: 00 00 00 01 67 42 00 0A DA (nal_unit_type = 0x67 & 0x1F = 7)
-        // PPS: 00 00 00 01 68 CE 38 80    (nal_unit_type = 0x68 & 0x1F = 8)
-        byte[] annexB = new byte[] {
-            0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x0A, (byte) 0xDA,
-            0x00, 0x00, 0x00, 0x01, 0x68, (byte) 0xCE, 0x38, (byte) 0x80
-        };
-
-        Method method = MoQMuxer.class.getDeclaredMethod("extractAnnexBSPSPPS", byte[].class);
-        method.setAccessible(true);
-        byte[] result = (byte[]) method.invoke(muxer, (Object) annexB);
-
+        byte[] result = (byte[]) m.invoke(muxer, (Object) full);
         assertNotNull(result);
-        // First byte should be 0x00 (Annex B format marker)
         assertEquals(0x00, result[0]);
-    }
 
-    @Test
-    public void testExtractAnnexBSPSPPS_emptyInput_returnsNull() throws Exception {
-        Method method = MoQMuxer.class.getDeclaredMethod("extractAnnexBSPSPPS", byte[].class);
-        method.setAccessible(true);
-        byte[] result = (byte[]) method.invoke(muxer, (Object) new byte[0]);
+        // Empty input -> null
+        assertNull(m.invoke(muxer, (Object) new byte[0]));
 
-        assertNull(result);
-    }
-
-    @Test
-    public void testExtractAnnexBSPSPPS_onlySps_returnsNull() throws Exception {
-        // Buffer with only SPS, no PPS
-        byte[] annexB = new byte[] {
-            0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x0A, (byte) 0xDA
-        };
-
-        Method method = MoQMuxer.class.getDeclaredMethod("extractAnnexBSPSPPS", byte[].class);
-        method.setAccessible(true);
-        byte[] result = (byte[]) method.invoke(muxer, (Object) annexB);
-
-        assertNull(result);
+        // SPS without PPS -> null
+        assertNull(m.invoke(muxer, (Object) sps));
     }
 }

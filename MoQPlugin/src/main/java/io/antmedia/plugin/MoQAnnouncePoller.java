@@ -66,7 +66,7 @@ public class MoQAnnouncePoller {
         }
     }
 
-    private void reconcile() {
+    void reconcile() {
         Set<String> announced = fetchAnnounced();
         Set<String> active    = owner.getActiveIngestStreamIds();
 
@@ -92,7 +92,7 @@ public class MoQAnnouncePoller {
     }
 
     /** GET the announce endpoint and return the set of stream IDs with a {@code /publish} suffix. */
-    private Set<String> fetchAnnounced() {
+    Set<String> fetchAnnounced() {
         try {
             HttpURLConnection conn = (HttpURLConnection) new URL(announceUrl).openConnection();
             conn.setConnectTimeout(1500);

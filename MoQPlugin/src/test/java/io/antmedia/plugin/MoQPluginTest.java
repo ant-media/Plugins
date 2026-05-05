@@ -30,6 +30,7 @@ public class MoQPluginTest {
     private IScope scope;
     private AppSettings appSettings;
     private DataStore dataStore;
+    private MoQStreamFetcher fakeFetcher;
 
     @Before
     public void setUp() throws Exception {
@@ -41,6 +42,7 @@ public class MoQPluginTest {
         scope = mock(IScope.class);
         appSettings = mock(AppSettings.class);
         dataStore = mock(DataStore.class);
+        fakeFetcher = mock(MoQStreamFetcher.class);
 
         when(context.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(streamHandler);
         when(context.getBean(IAntMediaStreamHandler.VERTX_BEAN_NAME)).thenReturn(vertx);
@@ -49,215 +51,171 @@ public class MoQPluginTest {
         when(streamHandler.getAppSettings()).thenReturn(appSettings);
         when(streamHandler.getDataStore()).thenReturn(dataStore);
         when(vertx.setPeriodic(anyLong(), any())).thenReturn(1L);
-
-        MoQSettings safeSettings = new MoQSettings();
-        safeSettings.setUseEmbeddedRelay(false);
-        safeSettings.setIngestEnabled(false);
-        doReturn(safeSettings).when(plugin).loadSettings();
-
         when(appSettings.getCustomSetting(any())).thenReturn(null);
+
+        // Disable embedded relay and ingest poller to keep init side effects out of tests
+        MoQSettings safe = new MoQSettings();
+        safe.setUseEmbeddedRelay(false);
+        safe.setIngestEnabled(false);
+        doReturn(safe).when(plugin).loadSettings();
+
+        // Stop real fetcher creation from blowing up on a mock IScope
+        doReturn(fakeFetcher).when(plugin).createFetcher(any(), any(), any(), any());
 
         plugin.setApplicationContext(context);
     }
 
     @Test
-    public void testSetApplicationContext_registersListener() {
+    public void testSetApplicationContext_wiresUp() {
         verify(streamHandler).addStreamListener(plugin);
-    }
-
-    @Test
-    public void testSetApplicationContext_setupsPeriodic() {
         verify(vertx).setPeriodic(anyLong(), any());
     }
 
     @Test
-    public void testLoadSettings_noCustomSetting_returnsDefaults() throws Exception {
-        // Use a fresh non-spy plugin with field-injected appSettings
-        MoQPlugin freshPlugin = new MoQPlugin();
-        AppSettings freshAppSettings = mock(AppSettings.class);
-        when(freshAppSettings.getCustomSetting("plugin.moq")).thenReturn(null);
-        setField(freshPlugin, "appSettings", freshAppSettings);
+    public void testLoadSettings() throws Exception {
+        MoQPlugin p = new MoQPlugin();
+        AppSettings as = mock(AppSettings.class);
+        setField(p, "appSettings", as);
 
-        MoQSettings result = freshPlugin.loadSettings();
-        assertNotNull(result);
-        assertTrue(result.isUseEmbeddedRelay());
-        assertTrue(result.isIngestEnabled());
-        assertEquals(2000, result.getIngestPollIntervalMs());
-    }
+        // No JSON: defaults
+        when(as.getCustomSetting("plugin.moq")).thenReturn(null);
+        MoQSettings def = p.loadSettings();
+        assertTrue(def.isUseEmbeddedRelay());
+        assertTrue(def.isIngestEnabled());
+        assertEquals(2000, def.getIngestPollIntervalMs());
 
-    @Test
-    public void testLoadSettings_validJson_parsesSettings() throws Exception {
-        MoQPlugin freshPlugin = new MoQPlugin();
-        AppSettings freshAppSettings = mock(AppSettings.class);
-        when(freshAppSettings.getCustomSetting("plugin.moq"))
+        // Valid JSON: parsed
+        when(as.getCustomSetting("plugin.moq"))
                 .thenReturn("{\"useEmbeddedRelay\":false,\"ingestEnabled\":false}");
-        setField(freshPlugin, "appSettings", freshAppSettings);
+        MoQSettings parsed = p.loadSettings();
+        assertFalse(parsed.isUseEmbeddedRelay());
+        assertFalse(parsed.isIngestEnabled());
 
-        MoQSettings result = freshPlugin.loadSettings();
-        assertNotNull(result);
-        assertFalse(result.isUseEmbeddedRelay());
-        assertFalse(result.isIngestEnabled());
+        // Garbage JSON: defaults
+        when(as.getCustomSetting("plugin.moq")).thenReturn("not valid json {{{");
+        MoQSettings fallback = p.loadSettings();
+        assertTrue(fallback.isUseEmbeddedRelay());
+        assertTrue(fallback.isIngestEnabled());
     }
 
     @Test
-    public void testLoadSettings_invalidJson_returnsDefaults() throws Exception {
-        MoQPlugin freshPlugin = new MoQPlugin();
-        AppSettings freshAppSettings = mock(AppSettings.class);
-        when(freshAppSettings.getCustomSetting("plugin.moq")).thenReturn("not valid json {{{");
-        setField(freshPlugin, "appSettings", freshAppSettings);
+    public void testStreamStarted() throws Exception {
+        ConcurrentMap<String, Set<MoQMuxer>> map = getField(plugin, "muxersByStream");
 
-        MoQSettings result = freshPlugin.loadSettings();
-        assertNotNull(result);
-        assertTrue(result.isUseEmbeddedRelay());
-        assertTrue(result.isIngestEnabled());
+        // No mux adaptor: nothing tracked
+        when(streamHandler.getMuxAdaptor("ghost")).thenReturn(null);
+        Broadcast ghost = mock(Broadcast.class);
+        when(ghost.getStreamId()).thenReturn("ghost");
+        plugin.streamStarted(ghost);
+        assertFalse(map.containsKey("ghost"));
+
+        // Adaptor present: muxer added and tracked
+        MuxAdaptor adaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
+        when(adaptor.directMuxingSupported()).thenReturn(true);
+        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+        when(adaptor.getEncoderSettingsList()).thenReturn(null);
+
+        Broadcast b = mock(Broadcast.class);
+        when(b.getStreamId()).thenReturn("s1");
+        plugin.streamStarted(b);
+
+        verify(adaptor, atLeastOnce()).addMuxer(any(MoQMuxer.class), eq(0));
+        assertTrue(map.containsKey("s1"));
+        assertFalse(map.get("s1").isEmpty());
     }
 
     @Test
-    public void testStreamStarted_nullMuxAdaptor_noMuxersAdded() throws Exception {
-        when(streamHandler.getMuxAdaptor("testStream")).thenReturn(null);
+    public void testStreamFinished() throws Exception {
+        // Unknown stream: no-op
+        MuxAdaptor unknownAdaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("ghost")).thenReturn(unknownAdaptor);
+        Broadcast ghost = mock(Broadcast.class);
+        when(ghost.getStreamId()).thenReturn("ghost");
+        plugin.streamFinished(ghost);
+        verify(unknownAdaptor, never()).removeMuxer(any());
 
-        Broadcast broadcast = mock(Broadcast.class);
-        when(broadcast.getStreamId()).thenReturn("testStream");
+        // Tracked stream: muxer removed
+        MuxAdaptor adaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
+        when(adaptor.directMuxingSupported()).thenReturn(true);
+        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+        when(adaptor.getEncoderSettingsList()).thenReturn(null);
+        Broadcast b = mock(Broadcast.class);
+        when(b.getStreamId()).thenReturn("s1");
 
-        plugin.streamStarted(broadcast);
-
-        // muxersByStream should not have an entry for this stream
-        ConcurrentMap<String, Set<MoQMuxer>> muxersByStream = getField(plugin, "muxersByStream");
-        assertFalse(muxersByStream.containsKey("testStream"));
+        plugin.streamStarted(b);
+        plugin.streamFinished(b);
+        verify(adaptor, atLeastOnce()).removeMuxer(any(MoQMuxer.class));
     }
 
     @Test
-    public void testStreamStarted_withDirectMuxAdaptor_addsMuxers() throws Exception {
-        String streamId = "testStream";
-        MuxAdaptor mockAdaptor = mock(MuxAdaptor.class);
-        when(streamHandler.getMuxAdaptor(streamId)).thenReturn(mockAdaptor);
-        when(mockAdaptor.directMuxingSupported()).thenReturn(true);
-        when(mockAdaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
-        when(mockAdaptor.getEncoderSettingsList()).thenReturn(null);
-
-        Broadcast broadcast = mock(Broadcast.class);
-        when(broadcast.getStreamId()).thenReturn(streamId);
-
-        plugin.streamStarted(broadcast);
-
-        verify(mockAdaptor, atLeastOnce()).addMuxer(any(MoQMuxer.class), anyInt());
-    }
-
-    @Test
-    public void testStreamFinished_noTrackedStream_noError() {
-        when(streamHandler.getMuxAdaptor("unknownStream")).thenReturn(null);
-
-        Broadcast broadcast = mock(Broadcast.class);
-        when(broadcast.getStreamId()).thenReturn("unknownStream");
-
-        // Should not throw
-        plugin.streamFinished(broadcast);
-    }
-
-    @Test
-    public void testStreamFinished_trackedStream_removesMuxers() throws Exception {
-        String streamId = "testStream";
-        MuxAdaptor mockAdaptor = mock(MuxAdaptor.class);
-        when(streamHandler.getMuxAdaptor(streamId)).thenReturn(mockAdaptor);
-        when(mockAdaptor.directMuxingSupported()).thenReturn(true);
-        when(mockAdaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
-        when(mockAdaptor.getEncoderSettingsList()).thenReturn(null);
-
-        Broadcast broadcast = mock(Broadcast.class);
-        when(broadcast.getStreamId()).thenReturn(streamId);
-
-        // First populate
-        plugin.streamStarted(broadcast);
-
-        // Then finish
-        plugin.streamFinished(broadcast);
-
-        verify(mockAdaptor, atLeastOnce()).removeMuxer(any(MoQMuxer.class));
-    }
-
-    @Test
-    public void testDestroy_clearsIngests() throws Exception {
-        MoQStreamFetcher mockFetcher = mock(MoQStreamFetcher.class);
+    public void testStartIngest() throws Exception {
         ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
-        ingests.put("stream1", mockFetcher);
+
+        // Stream already in DB: fetcher created, no save needed
+        Broadcast existing = mock(Broadcast.class);
+        when(dataStore.get("s1")).thenReturn(existing);
+        plugin.startIngest("s1");
+        verify(plugin).createFetcher(eq("s1"), eq("live"), anyString(), eq(scope));
+        verify(fakeFetcher).startStream();
+        verify(dataStore, never()).save(any(Broadcast.class));
+        assertSame(fakeFetcher, ingests.get("s1"));
+
+        // Unknown stream + acceptOnly: early return, no save, no fetcher
+        when(dataStore.get("ghost")).thenReturn(null);
+        when(appSettings.isAcceptOnlyStreamsInDataStore()).thenReturn(true);
+        plugin.startIngest("ghost");
+        verify(dataStore, never()).save(any(Broadcast.class));
+        verify(plugin, never()).createFetcher(eq("ghost"), any(), any(), any());
+        assertFalse(ingests.containsKey("ghost"));
+
+        // Unknown stream + acceptAll: saves a Broadcast and creates a fetcher
+        when(dataStore.get("new")).thenReturn(null);
+        when(appSettings.isAcceptOnlyStreamsInDataStore()).thenReturn(false);
+        plugin.startIngest("new");
+        verify(dataStore).save(any(Broadcast.class));
+        verify(plugin).createFetcher(eq("new"), eq("live"), anyString(), eq(scope));
+    }
+
+    @Test
+    public void testStopIngest() throws Exception {
+        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
+        ingests.put("s1", fakeFetcher);
+
+        // Existing stream: stops and removes
+        plugin.stopIngest("s1");
+        verify(fakeFetcher).stopStream();
+        assertFalse(ingests.containsKey("s1"));
+
+        // Non-existing: no throw, no second stopStream
+        plugin.stopIngest("nope");
+        verify(fakeFetcher, times(1)).stopStream();
+    }
+
+    @Test
+    public void testDestroy_stopsAllIngests() throws Exception {
+        MoQStreamFetcher f2 = mock(MoQStreamFetcher.class);
+        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
+        ingests.put("a", fakeFetcher);
+        ingests.put("b", f2);
 
         plugin.destroy();
 
-        verify(mockFetcher).stopStream();
+        verify(fakeFetcher).stopStream();
+        verify(f2).stopStream();
         assertTrue(ingests.isEmpty());
     }
 
-    @Test
-    public void testStartIngest_streamInDataStore_createsFetcher() throws Exception {
-        String streamId = "ingestStream";
-        Broadcast broadcast = mock(Broadcast.class);
-        when(dataStore.get(streamId)).thenReturn(broadcast);
-
-        plugin.startIngest(streamId);
-
-        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
-        assertTrue(ingests.containsKey(streamId));
-    }
-
-    @Test
-    public void testStartIngest_notInDataStore_acceptOnlyDatastore_returnsEarly() throws Exception {
-        String streamId = "unknownStream";
-        when(dataStore.get(streamId)).thenReturn(null);
-        when(appSettings.isAcceptOnlyStreamsInDataStore()).thenReturn(true);
-
-        plugin.startIngest(streamId);
-
-        verify(dataStore, never()).save(any(Broadcast.class));
-        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
-        assertFalse(ingests.containsKey(streamId));
-    }
-
-    @Test
-    public void testStartIngest_notInDataStore_acceptAll_savesBroadcast() throws Exception {
-        String streamId = "newStream";
-        when(dataStore.get(streamId)).thenReturn(null);
-        when(appSettings.isAcceptOnlyStreamsInDataStore()).thenReturn(false);
-
-        plugin.startIngest(streamId);
-
-        verify(dataStore).save(any(Broadcast.class));
-    }
-
-    @Test
-    public void testStopIngest_existing_stopsAndRemoves() throws Exception {
-        String streamId = "stream1";
-        MoQStreamFetcher mockFetcher = mock(MoQStreamFetcher.class);
-        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
-        ingests.put(streamId, mockFetcher);
-
-        plugin.stopIngest(streamId);
-
-        verify(mockFetcher).stopStream();
-        assertFalse(ingests.containsKey(streamId));
-    }
-
-    @Test
-    public void testStopIngest_nonExisting_noError() {
-        // Should not throw
-        plugin.stopIngest("nonExistentStream");
-    }
-
-    @Test
-    public void testJoinedLeftRoom_noOp() {
-        // Should not throw
-        plugin.joinedTheRoom("room1", "stream1");
-        plugin.leftTheRoom("room1", "stream1");
-    }
-
     @SuppressWarnings("unchecked")
-    private <T> T getField(Object target, String fieldName) throws Exception {
-        Field f = target.getClass().getDeclaredField(fieldName);
+    private static <T> T getField(Object target, String name) throws Exception {
+        Field f = target.getClass().getDeclaredField(name);
         f.setAccessible(true);
         return (T) f.get(target);
     }
 
-    private void setField(Object target, String fieldName, Object value) throws Exception {
-        Field f = target.getClass().getDeclaredField(fieldName);
+    private static void setField(Object target, String name, Object value) throws Exception {
+        Field f = target.getClass().getDeclaredField(name);
         f.setAccessible(true);
         f.set(target, value);
     }

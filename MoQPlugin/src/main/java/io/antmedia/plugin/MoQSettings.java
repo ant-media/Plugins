@@ -14,8 +14,6 @@ public class MoQSettings {
     /** How often to poll the relay's /announced endpoint, in milliseconds. */
     private int ingestPollIntervalMs = 2000;
 
-    // ── Derived URLs ──────────────────────────────────────────────────────────
-
     /** WebTransport URL used by moq-cli to connect to the relay. */
     public String getRelayUrl() {
         if (useEmbeddedRelay) {
@@ -24,16 +22,7 @@ public class MoQSettings {
         return externalRelayUrl;
     }
 
-    /**
-     * Base HTTP URL used for polling the relay's /announced endpoint.
-     * Derived by stripping the "/moq" path suffix from the relay URL.
-     */
-    public String getAnnounceBaseUrl() {
-        String relay = getRelayUrl();
-        return relay.endsWith("/moq") ? relay.substring(0, relay.length() - 4) : relay;
-    }
-
-    // ── Getters / setters ─────────────────────────────────────────────────────
+    // Getters / setters
 
     public boolean isUseEmbeddedRelay() { return useEmbeddedRelay; }
     public void setUseEmbeddedRelay(boolean v) { this.useEmbeddedRelay = v; }
