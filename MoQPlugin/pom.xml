@@ -3,7 +3,7 @@
 	<parent>
 		<groupId>io.antmedia</groupId>
 		<artifactId>parent</artifactId>
-		<version>3.0.0-SNAPSHOT</version>
+		<version>4.0.0-SNAPSHOT</version>
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.antmedia.plugin</groupId>
@@ -22,8 +22,8 @@
 	</properties>
 	<developers>
     		<developer>
-      		<id>burak</id>
-      		<email>burak@antmedia.io</email>
+      		<id>petar</id>
+      		<email>petar.ostojic@antmedia.io</email>
     		</developer>
   	</developers>
   	<licenses>
@@ -55,16 +55,6 @@
 		    </snapshots>
 		</repository>
     </repositories>
-	<distributionManagement>
-		<snapshotRepository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
-		</snapshotRepository>
-		<repository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-		</repository>
-	</distributionManagement>
 	<build>
 		<finalName>MoQPlugin</finalName>
 		<testSourceDirectory>src/test/java</testSourceDirectory>
