@@ -91,6 +91,17 @@
 			</plugin>
 			<plugin>
 				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifestEntries>
+							<AMS-Plugin-Name>HLS Merger Plugin</AMS-Plugin-Name>
+							<AMS-Plugin-Author>Ant Media Inc.</AMS-Plugin-Author>
+							<AMS-Plugin-Version>${project.version}</AMS-Plugin-Version>
+							<AMS-Plugin-Requires-Version>2.16.0</AMS-Plugin-Requires-Version>
+							<AMS-Plugin-Description>Merges multi-bitrate HLS playlists into a single master playlist.</AMS-Plugin-Description>
+						</manifestEntries>
+					</archive>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.felix</groupId>
