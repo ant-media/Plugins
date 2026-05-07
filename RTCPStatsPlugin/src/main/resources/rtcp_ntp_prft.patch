@@ -1,0 +1,62 @@
+diff --git a/libavcodec/defs.h b/libavcodec/defs.h
+index 1234567..8901234 100644
+--- a/libavcodec/defs.h
++++ b/libavcodec/defs.h
+@@ -324,6 +324,11 @@ typedef struct AVProducerReferenceTime {
+      */
+     int64_t wallclock;
+     int flags;
++    uint64_t last_rtcp_ntp_time;
++    uint64_t last_rtcp_reception_time;
++    uint32_t last_rtcp_packet_count;
++    uint32_t last_rtp_timestamp;
++    uint32_t last_rtcp_timestamp;
+ } AVProducerReferenceTime;
+
+ /**
+
+diff --git a/libavformat/rtpdec.h b/libavformat/rtpdec.h
+index 1234567..8901234 100644
+--- a/libavformat/rtpdec.h
++++ b/libavformat/rtpdec.h
+@@ -176,6 +176,7 @@ typedef struct RTPDemuxContext {
+     uint32_t last_rtcp_timestamp;
+     int64_t rtcp_ts_offset;
++    uint32_t last_rtcp_sr_packet_count;
+
+     /* rtcp sender statistics */
+     unsigned int packet_count;
+
+diff --git a/libavformat/rtpdec.c b/libavformat/rtpdec.c
+index 1234567..8901234 100644
+--- a/libavformat/rtpdec.c
++++ b/libavformat/rtpdec.c
+@@ -190,7 +190,7 @@ static int rtcp_parse_packet(RTPDemuxContext *s, const unsigned char *buf,
+
+         switch (buf[1]) {
+         case RTCP_SR:
+-            if (payload_len < 20) {
++            if (payload_len < 24) {
+                 av_log(s->ic, AV_LOG_ERROR, "Invalid RTCP SR packet length\n");
+                 return AVERROR_INVALIDDATA;
+             }
+@@ -198,6 +198,8 @@ static int rtcp_parse_packet(RTPDemuxContext *s, const unsigned char *buf,
+             s->last_rtcp_reception_time = av_gettime_relative();
+             s->last_rtcp_ntp_time  = AV_RB64(buf + 8);
+             s->last_rtcp_timestamp = AV_RB32(buf + 16);
++            if (payload_len >= 24)
++                s->last_rtcp_sr_packet_count = AV_RB32(buf + 20);
+             if (s->first_rtcp_ntp_time == AV_NOPTS_VALUE) {
+                 s->first_rtcp_ntp_time = s->last_rtcp_ntp_time;
+                 if (!s->base_timestamp)
+@@ -647,6 +649,11 @@ static int rtp_set_prft(RTPDemuxContext *s, AVPacket *pkt, uint32_t timestamp)
+
+     prft->wallclock = rtcp_time + delta_time;
+     prft->flags = 24;
++    prft->last_rtcp_ntp_time = s->last_rtcp_ntp_time;
++    prft->last_rtcp_reception_time = s->last_rtcp_reception_time;
++    prft->last_rtcp_packet_count = s->last_rtcp_sr_packet_count;
++    prft->last_rtcp_timestamp = s->last_rtcp_timestamp;
++    prft->last_rtp_timestamp = timestamp;
+     return 0;
+ }
