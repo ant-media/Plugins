@@ -1,0 +1,30 @@
+# Ollama inference for vision queue / monitor. Start before using those features.
+#
+#   docker compose up -d
+#   docker exec -it <ollama-container> ollama pull llava
+#   docker exec -it <ollama-container> ollama pull llama3.2
+#
+# If AMS runs on the host: LOCAL_VLM_BASE_URL=http://127.0.0.1:11434 (default) works if this port is published.
+# If AMS runs inside Docker and Ollama is on the host: set OLLAMA_VISION_OLLAMA_URL to host.docker.internal:11434
+# or join both services on the same compose network and use http://ollama:11434 .
+# GPU (optional): install NVIDIA Container Toolkit, then uncomment the deploy section below.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "0.0.0.0:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # Uncomment on Linux + nvidia-docker for GPU inference:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama_data:

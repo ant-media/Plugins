@@ -1,0 +1,8 @@
+/target/
+/.classpath
+/.project
+/.settings/
+/src/main/java/io/antmedia/app/__pycache__/
+/dist/
+/.idea/
+/pythonAIPlugin.zip
