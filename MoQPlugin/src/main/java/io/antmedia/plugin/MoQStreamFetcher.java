@@ -115,7 +115,7 @@ public class MoQStreamFetcher extends StreamFetcher {
     protected Process spawnMoqCli() throws IOException {
         String broadcastName = appName + "/" + streamId + "/publish";
         // stdout → Java pipe (relay thread reads it); stderr → Java pipe (log polling)
-        Process p = new ProcessBuilder("moq-cli", "subscribe",
+        Process p = new ProcessBuilder(MoqBinaries.resolve("moq-cli"), "subscribe",
                 "--url",  relayUrl,
                 "--name", broadcastName,
                 "fmp4")

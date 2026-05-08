@@ -105,7 +105,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         if (certFile.exists() && keyFile.exists()) {
             logger.info("MoQ: found TLS certificate at {}, starting relay with HTTPS/WSS", certFile.getAbsolutePath());
             return new ProcessBuilder(
-                    MOQ_RELAY_BIN,
+                    MoqBinaries.resolve(MOQ_RELAY_BIN),
                     "--server-bind",      bind,
                     "--tls-cert",         certFile.getAbsolutePath(),
                     "--tls-key",          keyFile.getAbsolutePath(),
@@ -118,7 +118,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
         logger.info("MoQ: no TLS certificate found, starting relay with HTTP/WS (localhost only)");
         return new ProcessBuilder(
-                MOQ_RELAY_BIN,
+                MoqBinaries.resolve(MOQ_RELAY_BIN),
                 "--server-bind",     bind,
                 "--tls-generate",    "localhost",
                 "--web-http-listen", bind,

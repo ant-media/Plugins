@@ -1,5 +1,6 @@
 package io.antmedia.muxer;
 
+import io.antmedia.plugin.MoqBinaries;
 import io.vertx.core.Vertx;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
@@ -382,7 +383,7 @@ public class MoQMuxer extends Muxer {
 
     protected Process spawnMoqCli() throws IOException {
         return new ProcessBuilder(
-                "moq-cli", "publish",
+                MoqBinaries.resolve("moq-cli"), "publish",
                 "--url", relayUrl,
                 "--tls-disable-verify",
                 "--name", streamName,
