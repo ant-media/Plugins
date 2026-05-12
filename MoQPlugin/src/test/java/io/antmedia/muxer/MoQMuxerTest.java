@@ -31,7 +31,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 public class MoQMuxerTest {
 
     private MoQMuxer newMuxer(int height) {
-        return new MoQMuxer(mock(Vertx.class), "stream1", height, "live", "http://localhost:4443/moq");
+        return new MoQMuxer(mock(Vertx.class), "stream1", height, "live", "http://localhost:4443/moq", true);
     }
 
     @Test

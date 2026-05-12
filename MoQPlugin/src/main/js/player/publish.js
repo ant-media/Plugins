@@ -208,6 +208,15 @@ btnPublish.addEventListener("click", async () => {
   infoUrl.textContent = workingUrl;
   infoName.textContent = broadcastName;
 
+  // Force H.264. moq-cli's fmp4 exporter only supports H.264/H.265, but browsers with
+  // VP9 hardware encoding (macOS/Apple Silicon) auto-select VP9 first → publish fails with
+  // "unsupported video codec for fmp4 export". The encoder filters its candidate list with
+  // `codec.startsWith(required)`, so "avc1" narrows selection to avc1.* (still tries
+  // hardware first, then software) without locking a specific profile.
+  // Done here (not at module load) so `publisher.broadcast` is guaranteed initialized,
+  // and before `url` is set so the encoder's reactive config picks it up before connecting.
+  publisher.broadcast.video.hd.config.set({ codec: "avc1" });
+
   publisher.setAttribute("url", workingUrl);
   publisher.setAttribute("name", broadcastName);
 

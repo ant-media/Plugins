@@ -16,7 +16,9 @@ import org.bytedeco.javacpp.Pointer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,6 +54,7 @@ public class MoQMuxer extends Muxer {
 
     private final String streamName;
     private final String relayUrl;
+    private final boolean tlsDisableVerify;
     private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
 
     private volatile boolean running;
@@ -63,12 +66,13 @@ public class MoQMuxer extends Muxer {
     private Process moqCliProcess;
     private Thread drainThread;
 
-    public MoQMuxer(Vertx vertx, String streamId, int height, String appName, String relayUrl) {
+    public MoQMuxer(Vertx vertx, String streamId, int height, String appName, String relayUrl, boolean tlsDisableVerify) {
         super(vertx);
         this.streamId = streamId;
         this.format = "mp4";
         this.streamName = appName + "/" + streamId + "/" + (height == 0 ? "source" : height + "p");
         this.relayUrl = relayUrl;
+        this.tlsDisableVerify = tlsDisableVerify;
         this.firstAudioDts = -1;
         this.firstVideoDts = -1;
     }
@@ -382,12 +386,16 @@ public class MoQMuxer extends Muxer {
     }
 
     protected Process spawnMoqCli() throws IOException {
-        return new ProcessBuilder(
-                MoqBinaries.resolve("moq-cli"), "publish",
-                "--url", relayUrl,
-                "--tls-disable-verify",
-                "--name", streamName,
-                "fmp4")
+        List<String> cmd = new ArrayList<>();
+        cmd.add(MoqBinaries.resolve("moq-cli"));
+        cmd.add("publish");
+        cmd.add("--url");
+        cmd.add(relayUrl);
+        if (tlsDisableVerify) cmd.add("--tls-disable-verify");
+        cmd.add("--name");
+        cmd.add(streamName);
+        cmd.add("fmp4");
+        return new ProcessBuilder(cmd)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .start();
     }

@@ -15,7 +15,7 @@ import java.util.Set;
 public class MoQAnnouncePollerTest {
 
     private MoQAnnouncePoller newPoller(String relayUrl, String app, MoQPlugin owner) {
-        return new MoQAnnouncePoller(relayUrl, app, owner);
+        return new MoQAnnouncePoller(relayUrl, app, owner, false);
     }
 
     @Test
@@ -25,9 +25,9 @@ public class MoQAnnouncePollerTest {
         MoQAnnouncePoller p1 = newPoller("http://localhost:4443/moq", "live", owner);
         assertEquals("http://localhost:4443/announced/moq/live", getField(p1, "announceUrl"));
 
-        // External relay over https collapses to http, port preserved
+        // Scheme is preserved on the announce endpoint (https in -> https out).
         MoQAnnouncePoller p2 = newPoller("https://relay.example.com:9000/moq", "myapp", owner);
-        assertEquals("http://relay.example.com:9000/announced/moq/myapp", getField(p2, "announceUrl"));
+        assertEquals("https://relay.example.com:9000/announced/moq/myapp", getField(p2, "announceUrl"));
 
         // No port specified -> URL has no :port suffix
         MoQAnnouncePoller p3 = newPoller("http://example.com/moq", "live", owner);

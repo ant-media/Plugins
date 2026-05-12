@@ -30,15 +30,4 @@ public class MoQSettingsTest {
         assertEquals(5000, s.getIngestPollIntervalMs());
     }
 
-    @Test
-    public void testGetRelayUrl() {
-        MoQSettings s = new MoQSettings();
-
-        s.setUseEmbeddedRelay(true);
-        assertEquals("http://localhost:" + MoQPlugin.EMBEDDED_RELAY_PORT + "/moq", s.getRelayUrl());
-
-        s.setUseEmbeddedRelay(false);
-        s.setExternalRelayUrl("https://relay.example.com:9000/moq");
-        assertEquals("https://relay.example.com:9000/moq", s.getRelayUrl());
-    }
 }

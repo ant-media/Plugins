@@ -72,12 +72,13 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
             logger.info("Not using embedded relay.");
         }
 
+        String relayUrl = getRelayUrl(settings);
         if (settings.isIngestEnabled()) {
-            announcePoller = new MoQAnnouncePoller(settings.getRelayUrl(), app.getScope().getName(), this);
+            announcePoller = new MoQAnnouncePoller(relayUrl, app.getScope().getName(), this, settings.isUseEmbeddedRelay());
             announcePoller.start(vertx);
         }
 
-        logger.info("MoQ plugin initialized for app: {}, relay: {}", app.getScope().getName(), settings.getRelayUrl());
+        logger.info("MoQ plugin initialized for app: {}, relay: {}", app.getScope().getName(), relayUrl);
     }
 
     private static synchronized void startRelay() {
@@ -95,23 +96,38 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         }
     }
 
+    /** True when both AMS TLS cert files are present on disk.
+     *  embedded relay will run HTTPS/WSS. */
+    static boolean embeddedRelayHasTls() {
+        return certFile().exists() && keyFile().exists();
+    }
+
+    private static File certFile() {
+        String amsRoot = System.getProperty("red5.root");
+        return new File(amsRoot != null ? amsRoot : ".", "conf/fullchain.pem");
+    }
+
+    private static File keyFile() {
+        String amsRoot = System.getProperty("red5.root");
+        return new File(amsRoot != null ? amsRoot : ".", "conf/privkey.pem");
+    }
+
     /** Picks the moq-relay command line: with TLS cert files if both exist, otherwise self-signed for localhost. */
     static ProcessBuilder buildRelayProcessBuilder() {
-        String amsRoot = System.getProperty("red5.root");
-        File certFile = new File(amsRoot != null ? amsRoot : ".", "conf/fullchain.pem");
-        File keyFile  = new File(amsRoot != null ? amsRoot : ".", "conf/privkey.pem");
         String bind = BIND_ADDR + EMBEDDED_RELAY_PORT;
 
-        if (certFile.exists() && keyFile.exists()) {
-            logger.info("MoQ: found TLS certificate at {}, starting relay with HTTPS/WSS", certFile.getAbsolutePath());
+        if (embeddedRelayHasTls()) {
+            File cert = certFile();
+            File key  = keyFile();
+            logger.info("MoQ: found TLS certificate at {}, starting relay with HTTPS/WSS", cert.getAbsolutePath());
             return new ProcessBuilder(
                     MoqBinaries.resolve(MOQ_RELAY_BIN),
                     "--server-bind",      bind,
-                    "--tls-cert",         certFile.getAbsolutePath(),
-                    "--tls-key",          keyFile.getAbsolutePath(),
+                    "--tls-cert",         cert.getAbsolutePath(),
+                    "--tls-key",          key.getAbsolutePath(),
                     "--web-https-listen", bind,
-                    "--web-https-cert",   certFile.getAbsolutePath(),
-                    "--web-https-key",    keyFile.getAbsolutePath(),
+                    "--web-https-cert",   cert.getAbsolutePath(),
+                    "--web-https-key",    key.getAbsolutePath(),
                     "--web-ws",
                     "--auth-public", "/");
         }
@@ -124,6 +140,31 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
                 "--web-http-listen", bind,
                 "--web-ws",
                 "--auth-public", "/");
+    }
+
+    /**
+     * Resolves the relay URL based on the given settings + runtime relay state.
+     *
+     * <p>For embedded relay, the scheme tracks the cert files on disk: {@code https://} when
+     * {@link #embeddedRelayHasTls()} (matches what {@link #buildRelayProcessBuilder()} does),
+     * otherwise {@code http://}. For external relay, returns the configured URL verbatim.
+     */
+    String getRelayUrl(MoQSettings s) {
+        if (!s.isUseEmbeddedRelay()) {
+            return s.getExternalRelayUrl();
+        }
+        String scheme = embeddedRelayHasTls() ? "https" : "http";
+        return scheme + "://localhost:" + EMBEDDED_RELAY_PORT + "/moq";
+    }
+
+    /** Convenience overload that loads settings — prefer {@link #getRelayUrl(MoQSettings)} when settings are already loaded. */
+    public String getRelayUrl() {
+        return getRelayUrl(loadSettings());
+    }
+
+    /** True when current settings point at the embedded localhost relay (so self-signed TLS is expected). */
+    public boolean isLocalRelay() {
+        return loadSettings().isUseEmbeddedRelay();
     }
 
     public MoQSettings loadSettings() {
@@ -195,7 +236,9 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         }
 
         String appName = getApplication().getScope().getName();
-        String relayUrl = loadSettings().getRelayUrl();
+        MoQSettings settings = loadSettings();
+        String relayUrl = getRelayUrl(settings);
+        boolean tlsDisableVerify = settings.isUseEmbeddedRelay();
         Set<MoQMuxer> muxers = ConcurrentHashMap.newKeySet();
 
         // For direct-muxing (RTMP/SRT), height=0 means "match any resolution".
@@ -206,14 +249,14 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         if (!muxAdaptor.directMuxingSupported() && muxAdaptor.getVideoCodecParameters() != null) {
             sourceAddHeight = muxAdaptor.getVideoCodecParameters().height();
         }
-        MoQMuxer sourceMuxer = new MoQMuxer(vertx, streamId, 0, appName, relayUrl);
+        MoQMuxer sourceMuxer = new MoQMuxer(vertx, streamId, 0, appName, relayUrl, tlsDisableVerify);
         if (muxAdaptor.addMuxer(sourceMuxer, sourceAddHeight)) {
             muxers.add(sourceMuxer);
         }
 
         if (muxAdaptor.getEncoderSettingsList() != null) {
             for (var encoderSettings : muxAdaptor.getEncoderSettingsList()) {
-                MoQMuxer muxer = new MoQMuxer(vertx, streamId, encoderSettings.getHeight(), appName, relayUrl);
+                MoQMuxer muxer = new MoQMuxer(vertx, streamId, encoderSettings.getHeight(), appName, relayUrl, tlsDisableVerify);
                 if (muxAdaptor.addMuxer(muxer, encoderSettings.getHeight())){
                     muxers.add(muxer);
                 }
@@ -272,10 +315,9 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
             app.getDataStore().save(b);
         }
 
-        MoQSettings settings = loadSettings();
         MoQStreamFetcher fetcher;
         try {
-            fetcher = createFetcher(streamId, app.getScope().getName(), settings.getRelayUrl(), app.getScope());
+            fetcher = createFetcher(streamId, app.getScope().getName(), getRelayUrl(), app.getScope());
         } catch (RuntimeException e) {
             logger.error("MoQ: cannot create stream fetcher for stream {}", streamId, e);
             return;
@@ -293,7 +335,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     }
 
     protected MoQStreamFetcher createFetcher(String streamId, String appName, String relayUrl, IScope scope) {
-        return new MoQStreamFetcher(streamId, appName, relayUrl, scope, vertx);
+        return new MoQStreamFetcher(streamId, appName, relayUrl, scope, vertx, isLocalRelay());
     }
 
     private IAntMediaStreamHandler getApplication() {

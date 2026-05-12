@@ -45,7 +45,7 @@ public class MoQStreamFetcherTest {
     }
 
     private MoQStreamFetcher newFetcher(String streamId) {
-        return new MoQStreamFetcher(streamId, "live", "http://localhost:4443/moq", scope, vertx);
+        return new MoQStreamFetcher(streamId, "live", "http://localhost:4443/moq", scope, vertx, true);
     }
 
     @Test

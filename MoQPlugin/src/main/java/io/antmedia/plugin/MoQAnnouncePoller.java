@@ -8,10 +8,15 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * Polls the MoQ relay's {@code /announced/moq/{appName}} endpoint every N milliseconds
@@ -27,28 +32,48 @@ public class MoQAnnouncePoller {
 
     private static final Logger logger = LoggerFactory.getLogger(MoQAnnouncePoller.class);
 
+    /** SSLContext that skips certificate validation. Installed only when polling the embedded localhost relay. */
+    private static final SSLContext TRUST_ALL_CTX = buildTrustAllContext();
+
+    private static SSLContext buildTrustAllContext() {
+        try {
+            SSLContext ctx = SSLContext.getInstance("TLS");
+            ctx.init(null, new TrustManager[]{ new X509TrustManager() {
+                public void checkClientTrusted(X509Certificate[] c, String a) { /* trust all */ }
+                public void checkServerTrusted(X509Certificate[] c, String a) { /* trust all */ }
+                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+            }}, null);
+            return ctx;
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
     private final String announceUrl;
     private final MoQPlugin owner;
+    private final boolean trustSelfSignedCerts;
     private long timerId = -1;
 
     /**
-     * @param relayBaseUrl  WebTransport relay URL (e.g. {@code https://localhost:4443/moq}).
-     *                      The HTTP announce endpoint is derived by forcing HTTP and stripping the path.
-     * @param appName       AMS application name (e.g. {@code LiveApp})
-     * @param owner         Plugin that owns the ingest handler map
+     * @param relayBaseUrl          WebTransport relay URL (e.g. {@code https://localhost:4443/moq}).
+     *                              The announce endpoint is derived by preserving the scheme and stripping the path.
+     * @param appName               AMS application name (e.g. {@code LiveApp})
+     * @param owner                 Plugin that owns the ingest handler map
+     * @param trustSelfSignedCerts  When true (embedded relay), skip TLS verification on the announce HTTPS poll.
      */
-    public MoQAnnouncePoller(String relayBaseUrl, String appName, MoQPlugin owner) {
-        // Derive plain HTTP announce URL from the relay URL (which may be https/wss).
-        // e.g. "https://localhost:4443/moq" → "http://localhost:4443/announced/moq/LiveApp"
+    public MoQAnnouncePoller(String relayBaseUrl, String appName, MoQPlugin owner, boolean trustSelfSignedCerts) {
+        // Derive the announce URL from the relay URL, preserving the scheme (http or https).
+        // e.g. "https://localhost:4443/moq" → "https://localhost:4443/announced/moq/LiveApp"
         try {
             java.net.URL parsed = new java.net.URL(relayBaseUrl);
             int port = parsed.getPort(); // -1 if absent
             String hostPort = parsed.getHost() + (port > 0 ? ":" + port : "");
-            this.announceUrl = "http://" + hostPort + "/announced/moq/" + appName;
+            this.announceUrl = parsed.getProtocol() + "://" + hostPort + "/announced/moq/" + appName;
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid relay URL: " + relayBaseUrl, e);
         }
         this.owner = owner;
+        this.trustSelfSignedCerts = trustSelfSignedCerts;
     }
 
     public void start(Vertx vertx) {
@@ -95,6 +120,10 @@ public class MoQAnnouncePoller {
     Set<String> fetchAnnounced() {
         try {
             HttpURLConnection conn = (HttpURLConnection) new URL(announceUrl).openConnection();
+            if (trustSelfSignedCerts && conn instanceof HttpsURLConnection) {
+                ((HttpsURLConnection) conn).setSSLSocketFactory(TRUST_ALL_CTX.getSocketFactory());
+                ((HttpsURLConnection) conn).setHostnameVerifier((h, s) -> true);
+            }
             conn.setConnectTimeout(1500);
             conn.setReadTimeout(1500);
 

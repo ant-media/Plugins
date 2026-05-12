@@ -12,6 +12,8 @@ import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -53,12 +55,13 @@ public class MoQStreamFetcher extends StreamFetcher {
     private final String streamId;
     private final String appName;
     private final String relayUrl;
+    private final boolean tlsDisableVerify;
     private final ServerSocket serverSocket;
 
     private final AtomicReference<Process> moqProcess  = new AtomicReference<>();
     private final AtomicReference<Socket>  relaySocket = new AtomicReference<>();
 
-    public MoQStreamFetcher(String streamId, String appName, String relayUrl, IScope scope, Vertx vertx) {
+    public MoQStreamFetcher(String streamId, String appName, String relayUrl, IScope scope, Vertx vertx, boolean tlsDisableVerify) {
         super(allocateUrl(), streamId, AntMediaApplicationAdapter.LIVE_STREAM, scope, vertx, 0);
         this.serverSocket = socketCarrier.get();
         socketCarrier.remove();
@@ -66,6 +69,7 @@ public class MoQStreamFetcher extends StreamFetcher {
         this.streamId = streamId;
         this.appName  = appName;
         this.relayUrl = relayUrl;
+        this.tlsDisableVerify = tlsDisableVerify;
 
         setRestartStream(false); // poller owns restart logic
     }
@@ -115,11 +119,16 @@ public class MoQStreamFetcher extends StreamFetcher {
     protected Process spawnMoqCli() throws IOException {
         String broadcastName = appName + "/" + streamId + "/publish";
         // stdout → Java pipe (relay thread reads it); stderr → Java pipe (log polling)
-        Process p = new ProcessBuilder(MoqBinaries.resolve("moq-cli"), "subscribe",
-                "--url",  relayUrl,
-                "--name", broadcastName,
-                "fmp4")
-            .start();
+        List<String> cmd = new ArrayList<>();
+        cmd.add(MoqBinaries.resolve("moq-cli"));
+        cmd.add("subscribe");
+        cmd.add("--url");
+        cmd.add(relayUrl);
+        if (tlsDisableVerify) cmd.add("--tls-disable-verify");
+        cmd.add("--name");
+        cmd.add(broadcastName);
+        cmd.add("fmp4");
+        Process p = new ProcessBuilder(cmd).start();
         logger.info("MoQ: moq-cli subscribe started for {}", broadcastName);
         return p;
     }
