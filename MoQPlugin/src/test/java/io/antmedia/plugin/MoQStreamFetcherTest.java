@@ -184,6 +184,32 @@ public class MoQStreamFetcherTest {
     }
 
     @Test
+    public void testBuildMoqCliCommand_includesTlsDisableVerifyWhenSet() throws Exception {
+        MoQStreamFetcher fetcher = newFetcher("s1"); // newFetcher passes tlsDisableVerify=true
+        java.util.List<String> cmd = fetcher.buildMoqCliCommand();
+
+        assertEquals("subscribe", cmd.get(1));
+        assertTrue("--url present", cmd.contains("--url"));
+        assertTrue("relay URL passed through", cmd.contains("http://localhost:4443/moq"));
+        assertTrue("--tls-disable-verify added when embedded relay", cmd.contains("--tls-disable-verify"));
+        assertTrue("broadcast name has /publish suffix", cmd.contains("live/s1/publish"));
+        assertEquals("fmp4 is the last token", "fmp4", cmd.get(cmd.size() - 1));
+
+        ((ServerSocket) getField(fetcher, "serverSocket")).close();
+    }
+
+    @Test
+    public void testBuildMoqCliCommand_omitsTlsDisableVerifyWhenUnset() throws Exception {
+        MoQStreamFetcher fetcher = new MoQStreamFetcher("s2", "live", "https://relay.example.com/moq", scope, vertx, false);
+        java.util.List<String> cmd = fetcher.buildMoqCliCommand();
+
+        assertFalse("--tls-disable-verify omitted for external relay", cmd.contains("--tls-disable-verify"));
+        assertTrue("external relay URL passed through", cmd.contains("https://relay.example.com/moq"));
+
+        ((ServerSocket) getField(fetcher, "serverSocket")).close();
+    }
+
+    @Test
     public void testStartRelayThread_runsRelayInBackground() throws Exception {
         MoQStreamFetcher fetcher = spy(newFetcher("s1"));
         CountDownLatch entered = new CountDownLatch(1);

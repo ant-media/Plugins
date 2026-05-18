@@ -117,8 +117,16 @@ public class MoQStreamFetcher extends StreamFetcher {
     }
 
     protected Process spawnMoqCli() throws IOException {
-        String broadcastName = appName + "/" + streamId + "/publish";
+        List<String> cmd = buildMoqCliCommand();
         // stdout → Java pipe (relay thread reads it); stderr → Java pipe (log polling)
+        Process p = new ProcessBuilder(cmd).start();
+        logger.info("MoQ: moq-cli subscribe started for {}", cmd.get(cmd.size() - 2));
+        return p;
+    }
+
+    /** Builds the moq-cli subscribe command; the {@code --tls-disable-verify} flag is added only for the embedded localhost relay. */
+    List<String> buildMoqCliCommand() {
+        String broadcastName = appName + "/" + streamId + "/publish";
         List<String> cmd = new ArrayList<>();
         cmd.add(MoqBinaries.resolve("moq-cli"));
         cmd.add("subscribe");
@@ -128,9 +136,7 @@ public class MoQStreamFetcher extends StreamFetcher {
         cmd.add("--name");
         cmd.add(broadcastName);
         cmd.add("fmp4");
-        Process p = new ProcessBuilder(cmd).start();
-        logger.info("MoQ: moq-cli subscribe started for {}", broadcastName);
-        return p;
+        return cmd;
     }
 
     protected void callSuperStartStream() {
