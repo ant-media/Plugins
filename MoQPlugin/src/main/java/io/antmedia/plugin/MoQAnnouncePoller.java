@@ -35,12 +35,17 @@ public class MoQAnnouncePoller {
     /** SSLContext that skips certificate validation. Installed only when polling the embedded localhost relay. */
     private static final SSLContext TRUST_ALL_CTX = buildTrustAllContext();
 
+    // Trust-all is only ever applied in fetchAnnounced() when trustSelfSignedCerts == true,
+    // which the plugin sets only for the embedded localhost relay (self-signed or hostname-mismatched
+    // cert against localhost:4443). For external relays the standard JDK trust store + hostname
+    // verification stays in effect — see MoQPlugin.isLocalRelay().
+    @SuppressWarnings({"java:S4830", "java:S4426"})
     private static SSLContext buildTrustAllContext() {
         try {
             SSLContext ctx = SSLContext.getInstance("TLS");
             ctx.init(null, new TrustManager[]{ new X509TrustManager() {
-                public void checkClientTrusted(X509Certificate[] c, String a) { /* trust all */ }
-                public void checkServerTrusted(X509Certificate[] c, String a) { /* trust all */ }
+                public void checkClientTrusted(X509Certificate[] c, String a) { /* embedded localhost relay only */ }
+                public void checkServerTrusted(X509Certificate[] c, String a) { /* embedded localhost relay only */ }
                 public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
             }}, null);
             return ctx;
@@ -117,6 +122,7 @@ public class MoQAnnouncePoller {
     }
 
     /** GET the announce endpoint and return the set of stream IDs with a {@code /publish} suffix. */
+    @SuppressWarnings({"java:S5527", "java:S4830"}) // trust-all + permissive hostname verifier are gated on trustSelfSignedCerts (embedded localhost only)
     Set<String> fetchAnnounced() {
         try {
             HttpURLConnection conn = (HttpURLConnection) new URL(announceUrl).openConnection();

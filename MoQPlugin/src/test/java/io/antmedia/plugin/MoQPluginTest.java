@@ -201,7 +201,7 @@ public class MoQPluginTest {
         when(streamHandler.getMuxAdaptor("s1")).thenReturn(null);
         plugin.streamFinished(broadcast("s1"));
 
-        // Loop body's `if (muxAdaptor != null)` guard short-circuits removal
+        // Null muxAdaptor guard in streamFinished short-circuits removeMuxer
         verify(adaptor, never()).removeMuxer(any(MoQMuxer.class));
 
         // Map entry still cleaned up

@@ -241,62 +241,69 @@ public class MoQMuxer extends Muxer {
      */
     @Override
     protected void writeVideoFrame(AVPacket pkt, AVFormatContext context) {
-        if (!headerWritten) {
-            if (videoOutStreamIdx < 0) {
-                return;
-            }
-            AVStream outStream = context.streams(videoOutStreamIdx);
-            int existingExtradataSize = outStream.codecpar().extradata_size();
-
-            if (existingExtradataSize <= 0) {
-                logger.debug("writeVideoFrame: no extradata on outStream, extracting SPS/PPS in Annex B format for {}", streamName);
-                byte[] frameData = new byte[pkt.size()];
-                pkt.data().get(frameData, 0, pkt.size());
-                byte[] annexBExtradata = extractAnnexBSPSPPS(frameData);
-                if (annexBExtradata.length > 0) {
-                    setExtradata(outStream, annexBExtradata);
-                    if (logger.isDebugEnabled()) {
-                        logger.debug("writeVideoFrame: set Annex B extradata ({} bytes, first byte=0x{}) for {}",
-                                    annexBExtradata.length, Integer.toHexString(annexBExtradata[0] & 0xFF), streamName);
-                    }
-                } else {
-                    logger.warn("writeVideoFrame: could not extract SPS/PPS from keyframe for {}", streamName);
-                }
-            }
-
-            if (outStream.codecpar().extradata_size() <= 0) {
-                logger.debug("writeVideoFrame: still no extradata, dropping keyframe for {}", streamName);
-                return;
-            }
-
-            if (headerFailed) {
-                logger.debug("writeVideoFrame: headerFailed=true, skipping for {}", streamName);
-                return;
-            }
-
-            // Call avformat_write_header directly — writeHeader() calls clearResource() on failure,
-            // which would free tmpPacket/videoPkt still held by Muxer.writePacket up the call stack
-            AVDictionary opts = null;
-            if (!options.isEmpty()) {
-                opts = new AVDictionary();
-                for (Map.Entry<String, String> entry : options.entrySet()) {
-                    av_dict_set(opts, entry.getKey(), entry.getValue(), 0);
-                }
-            }
-            int ret = avformat_write_header(context, opts);
-            if (opts != null) av_dict_free(opts);
-            if (ret < 0) {
-                if (logger.isWarnEnabled()) {
-                    logger.warn("writeVideoFrame: avformat_write_header failed for {}: {}", streamName, getErrorDefinition(ret));
-                }
-                headerFailed = true;
-                return;
-            }
-            headerWritten = true;
-            logger.debug("writeVideoFrame: header written successfully for {}", streamName);
+        if (!headerWritten && !ensureHeaderWritten(pkt, context)) {
+            return;
         }
-
         callSuperWriteVideoFrame(pkt, context);
+    }
+
+    /** Lazily prepares extradata + writes the AVFormat header on the first keyframe. Returns true once {@code headerWritten}. */
+    private boolean ensureHeaderWritten(AVPacket pkt, AVFormatContext context) {
+        if (videoOutStreamIdx < 0 || headerFailed) {
+            return false;
+        }
+        AVStream outStream = context.streams(videoOutStreamIdx);
+        if (outStream.codecpar().extradata_size() <= 0) {
+            populateExtradataFromKeyframe(pkt, outStream);
+        }
+        if (outStream.codecpar().extradata_size() <= 0) {
+            logger.debug("writeVideoFrame: still no extradata, dropping keyframe for {}", streamName);
+            return false;
+        }
+        return writeFormatHeader(context);
+    }
+
+    private void populateExtradataFromKeyframe(AVPacket pkt, AVStream outStream) {
+        logger.debug("writeVideoFrame: no extradata on outStream, extracting SPS/PPS in Annex B format for {}", streamName);
+        byte[] frameData = new byte[pkt.size()];
+        pkt.data().get(frameData, 0, pkt.size());
+        byte[] annexBExtradata = extractAnnexBSPSPPS(frameData);
+        if (annexBExtradata.length == 0) {
+            logger.warn("writeVideoFrame: could not extract SPS/PPS from keyframe for {}", streamName);
+            return;
+        }
+        setExtradata(outStream, annexBExtradata);
+        if (logger.isDebugEnabled()) {
+            logger.debug("writeVideoFrame: set Annex B extradata ({} bytes, first byte=0x{}) for {}",
+                        annexBExtradata.length, Integer.toHexString(annexBExtradata[0] & 0xFF), streamName);
+        }
+    }
+
+    // Call avformat_write_header directly — writeHeader() calls clearResource() on failure,
+    // which would free tmpPacket/videoPkt still held by Muxer.writePacket up the call stack.
+    private boolean writeFormatHeader(AVFormatContext context) {
+        AVDictionary opts = buildOptionsDict();
+        int ret = avformat_write_header(context, opts);
+        if (opts != null) av_dict_free(opts);
+        if (ret < 0) {
+            if (logger.isWarnEnabled()) {
+                logger.warn("writeVideoFrame: avformat_write_header failed for {}: {}", streamName, getErrorDefinition(ret));
+            }
+            headerFailed = true;
+            return false;
+        }
+        headerWritten = true;
+        logger.debug("writeVideoFrame: header written successfully for {}", streamName);
+        return true;
+    }
+
+    private AVDictionary buildOptionsDict() {
+        if (options.isEmpty()) return null;
+        AVDictionary opts = new AVDictionary();
+        for (Map.Entry<String, String> entry : options.entrySet()) {
+            av_dict_set(opts, entry.getKey(), entry.getValue(), 0);
+        }
+        return opts;
     }
 
     private void setExtradata(AVStream outStream, byte[] data) {
@@ -326,37 +333,23 @@ public class MoQMuxer extends Muxer {
         byte[] pps = null;
         int i = 0;
         while (i < annexB.length) {
-            int scLen = 0;
-            if (i + 4 <= annexB.length
-                    && (annexB[i] & 0xFF) == 0 && (annexB[i+1] & 0xFF) == 0
-                    && (annexB[i+2] & 0xFF) == 0 && (annexB[i+3] & 0xFF) == 1) {
-                scLen = 4;
-            } else if (i + 3 <= annexB.length
-                    && (annexB[i] & 0xFF) == 0 && (annexB[i+1] & 0xFF) == 0
-                    && (annexB[i+2] & 0xFF) == 1) {
-                scLen = 3;
+            int scLen = startCodeLength(annexB, i);
+            if (scLen == 0) {
+                i++;
+                continue;
             }
-            if (scLen == 0) { i++; continue; }
-
             int naluStart = i + scLen;
-            if (naluStart >= annexB.length) break;
-            int naluType = annexB[naluStart] & 0x1F;
-
-            int j = naluStart + 1;
-            while (j < annexB.length) {
-                if (j + 3 <= annexB.length
-                        && (annexB[j] & 0xFF) == 0 && (annexB[j+1] & 0xFF) == 0
-                        && ((annexB[j+2] & 0xFF) == 1
-                            || (j + 4 <= annexB.length && (annexB[j+2] & 0xFF) == 0 && (annexB[j+3] & 0xFF) == 1))) {
-                    break;
-                }
-                j++;
+            if (naluStart >= annexB.length) {
+                break;
             }
-
-            if (naluType == 7 && j - naluStart >= 4) sps = Arrays.copyOfRange(annexB, naluStart, j);
-            else if (naluType == 8)                   pps = Arrays.copyOfRange(annexB, naluStart, j);
-
-            i = j;
+            int naluEnd = findNextStartCode(annexB, naluStart + 1);
+            int naluType = annexB[naluStart] & 0x1F;
+            if (naluType == 7 && naluEnd - naluStart >= 4) {
+                sps = Arrays.copyOfRange(annexB, naluStart, naluEnd);
+            } else if (naluType == 8) {
+                pps = Arrays.copyOfRange(annexB, naluStart, naluEnd);
+            }
+            i = naluEnd;
         }
 
         if (sps == null || pps == null) return new byte[0];
@@ -369,6 +362,29 @@ public class MoQMuxer extends Muxer {
         out[4 + sps.length + 3] = 1; // 00 00 00 01
         System.arraycopy(pps, 0, out, 4 + sps.length + 4, pps.length);
         return out;
+    }
+
+    /** Returns 4 for {@code 00 00 00 01}, 3 for {@code 00 00 01}, 0 otherwise. */
+    private static int startCodeLength(byte[] buf, int i) {
+        if (i + 4 <= buf.length
+                && buf[i] == 0 && buf[i + 1] == 0 && buf[i + 2] == 0 && buf[i + 3] == 1) {
+            return 4;
+        }
+        if (i + 3 <= buf.length
+                && buf[i] == 0 && buf[i + 1] == 0 && buf[i + 2] == 1) {
+            return 3;
+        }
+        return 0;
+    }
+
+    /** Scans forward from {@code from} and returns the offset of the next start code, or {@code buf.length} if none. */
+    private static int findNextStartCode(byte[] buf, int from) {
+        for (int j = from; j < buf.length; j++) {
+            if (startCodeLength(buf, j) > 0) {
+                return j;
+            }
+        }
+        return buf.length;
     }
 
     /** Returns moq-cli stderr stream for external log draining, or null if not started. */
@@ -401,25 +417,27 @@ public class MoQMuxer extends Muxer {
     }
 
     protected void startDrainThread(OutputStream moqStdin) {
-        drainThread = new Thread(() -> {
-            try {
-                while (running || !queue.isEmpty()) {
-                    byte[] chunk = queue.poll(200, TimeUnit.MILLISECONDS);
-                    if (chunk != null) {
-                        moqStdin.write(chunk);
-                        moqStdin.flush();
-                    }
-                }
-                moqStdin.close();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                if (running) logger.error("Drain interrupted for {}", streamName, e);
-            } catch (Exception e) {
-                if (running) logger.error("Drain error for {}", streamName, e);
-            }
-        }, "moq-drain-" + streamId);
+        drainThread = new Thread(() -> drainLoop(moqStdin), "moq-drain-" + streamId);
         drainThread.setDaemon(true);
         drainThread.start();
+    }
+
+    private void drainLoop(OutputStream moqStdin) {
+        try {
+            while (running || !queue.isEmpty()) {
+                byte[] chunk = queue.poll(200, TimeUnit.MILLISECONDS);
+                if (chunk != null) {
+                    moqStdin.write(chunk);
+                    moqStdin.flush();
+                }
+            }
+            moqStdin.close();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (running) logger.error("Drain interrupted for {}", streamName, e);
+        } catch (Exception e) {
+            if (running) logger.error("Drain error for {}", streamName, e);
+        }
     }
 
     @Override
