@@ -162,6 +162,7 @@ public class MutedStreamReplicatorPlugin implements ApplicationContextAware, ISt
 			logger.info("Started muted replica stream: {}", mutedReplicaStreamId);
 			Endpoint replicaEndpoint = new Endpoint();
 			replicaEndpoint.setEndpointUrl(replicaEndpointUrl);
+			replicaEndpoint.setEndpointServiceId("muted-" + replicaEndpointUrl.hashCode());
 			app.getDataStore().addEndpoint(sourceStreamId, replicaEndpoint);
 		}
 		else {
