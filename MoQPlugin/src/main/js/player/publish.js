@@ -92,28 +92,72 @@ invisCheck.addEventListener("change", () => {
 });
 
 // ─── Build URL candidates ─────────────────────────────────────────────────────
-function extractHost(raw) {
-  if (raw && raw.includes("://")) {
-    try { return new URL(raw).hostname; } catch { /* fall through */ }
-  }
-  if (raw) return raw.split(":")[0];
-  return window.location.hostname || "localhost";
+function formatHost(hostname) {
+  return hostname.includes(":") ? `[${hostname}]` : hostname;
 }
 
-const host = extractHost(rawUrl);
-const proto = window.location.protocol; // "https:" or "http:"
-const candidates = [
-  `${proto}//${host}/moq`,
-  `${proto}//${host}:4443/moq`,
-];
+function parseRawUrl(raw) {
+  if (!raw) return {};
+  if (raw.includes("://")) {
+    try {
+      const u = new URL(raw);
+      return { hostname: u.hostname, port: u.port || null, fullUrl: raw };
+    } catch {}
+  }
+  try {
+    const u = new URL(`https://${raw}/`);
+    return { hostname: u.hostname, port: u.port || null };
+  } catch {
+    return {};
+  }
+}
 
-if (proto === "http:") {
-  const httpsUrl = window.location.href.replace(/^http:/, "https:");
+function buildCandidates(rawUrl) {
+  const parsed = parseRawUrl(rawUrl);
+  const hostname = parsed.hostname || window.location.hostname || "localhost";
+  const h = formatHost(hostname);
+  const pageIsSecure = window.location.protocol === "https:";
+  const list = [];
+
+  if (parsed.fullUrl) {
+    try {
+      const u = new URL(parsed.fullUrl);
+      if (!u.pathname || u.pathname === "/") u.pathname = "/moq";
+      list.push(u.toString().replace(/\/$/, ""));
+    } catch {}
+  } else if (parsed.port) {
+    list.push(`${pageIsSecure ? "https:" : "http:"}//${h}:${parsed.port}/moq`);
+  }
+
+  if (pageIsSecure) {
+    list.push(`https://${h}/moq`);
+    list.push(`https://${h}:4443/moq`);
+  } else {
+    list.push(`http://${h}/moq`);
+    list.push(`http://${h}:4443/moq`);
+    list.push(`https://${h}/moq`);
+    list.push(`https://${h}:4443/moq`);
+  }
+
+  return [...new Set(list)];
+}
+
+const candidates = buildCandidates(rawUrl);
+
+if (typeof WebTransport === "undefined") {
   const warn = document.createElement("div");
   warn.className = "banner banner-warn";
-  warn.innerHTML =
-    `⚠️ <strong>Page loaded over HTTP.</strong> WebTransport requires HTTPS — publishing may fail. ` +
-    `<a href="${httpsUrl}" style="color:inherit;font-weight:bold;">Switch to HTTPS →</a>`;
+  if (window.location.protocol !== "https:") {
+    const httpsUrl = window.location.href.replace(/^http:/, "https:");
+    warn.innerHTML =
+      `⚠️ <strong>WebTransport unavailable on this page.</strong> ` +
+      `Publishing will fall back to WebSocket (higher latency). ` +
+      `<a href="${httpsUrl}" style="color:inherit;font-weight:bold;">Switch to HTTPS →</a> for low-latency.`;
+  } else {
+    warn.innerHTML =
+      `⚠️ <strong>WebTransport not supported in this browser.</strong> ` +
+      `Falling back to WebSocket — try Chrome/Edge 97+ or Firefox 114+ for low-latency.`;
+  }
   errors.appendChild(warn);
 }
 
@@ -139,16 +183,40 @@ function setRowStatus(i, state, label) {
 
 // ─── Probe a URL ──────────────────────────────────────────────────────────────
 async function probeUrl(url, timeoutMs = 4000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const parsed = new URL(url);
+
+  // http:// uses the lib's dev cert-pin flow — probe that endpoint instead of WT.
+  if (parsed.protocol === "http:") {
+    const fp = new URL(parsed);
+    fp.pathname = "/certificate.sha256";
+    fp.search = "";
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(fp.toString(), { signal: controller.signal });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  if (typeof WebTransport === "undefined") return false;
+
+  let wt;
+  try { wt = new WebTransport(url); } catch { return false; }
+
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
+  });
+
   try {
-    await fetch(url, { method: "HEAD", mode: "no-cors", signal: controller.signal });
-    return true;
-  } catch (e) {
-    if (e.name === "AbortError") return false;
-    return !(e instanceof TypeError);
+    return await Promise.race([wt.ready.then(() => true, () => false), timeout]);
   } finally {
     clearTimeout(timer);
+    try { wt.close(); } catch {}
   }
 }
 

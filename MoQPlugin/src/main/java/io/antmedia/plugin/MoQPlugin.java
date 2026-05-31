@@ -32,6 +32,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     private static final Logger logger = LoggerFactory.getLogger(MoQPlugin.class);
     private static final long LOG_POLL_INTERVAL_MS = 2000;
+    private static final long RELAY_RESTART_GRACE_MS = 5000;
     public  static final int EMBEDDED_RELAY_PORT = 4443;
     public  static final String PUBLISH_TYPE_MOQ = "MoQ";
     public  static final String SETTINGS_KEY     = "plugin.moq";
@@ -42,6 +43,8 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     private static final Gson gson = new Gson();
 
     private static final AtomicReference<Process> relayProcess = new AtomicReference<>();
+    private static volatile long lastRelayRestartAttempt = 0;
+    private static volatile boolean shutdownHookRegistered = false;
 
     private ApplicationContext applicationContext;
     private AppSettings appSettings;
@@ -89,11 +92,39 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         try {
             Process p = buildRelayProcessBuilder().redirectErrorStream(true).start();
             relayProcess.set(p);
-            Runtime.getRuntime().addShutdownHook(new Thread(p::destroy));
+            if (!shutdownHookRegistered) {
+                // resolves current process at shutdown
+                Runtime.getRuntime().addShutdownHook(new Thread(MoQPlugin::destroyRelayOnShutdown));
+                shutdownHookRegistered = true;
+            }
             logger.info("MoQ: embedded relay started on port {}", EMBEDDED_RELAY_PORT);
         } catch (IOException e) {
             logger.error("MoQ: failed to start embedded relay", e);
         }
+    }
+
+    static void destroyRelayOnShutdown() {
+        Process curr = relayProcess.get();
+        if (curr != null) {
+            curr.destroy();
+        }
+    }
+
+    static void maybeRestartRelay(Process relay) {
+        if (relay.isAlive()) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastRelayRestartAttempt < RELAY_RESTART_GRACE_MS) {
+            return;
+        }
+
+        lastRelayRestartAttempt = now;
+
+        logger.warn("MoQ: embedded relay exited (code {}), restarting", relay.exitValue());
+        relayProcess.compareAndSet(relay, null);
+        startRelay();
     }
 
     /** True when both AMS TLS cert files are present on disk.
@@ -194,6 +225,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         Process relay = relayProcess.get();
         if (relay != null) {
             readAvailable(relay.getInputStream(), MOQ_RELAY_BIN);
+            maybeRestartRelay(relay);
         }
         muxersByStream.values().forEach(muxers ->
             muxers.forEach(muxer -> readAvailable(muxer.getCliErrorStream(), muxer.getOutputURL()))

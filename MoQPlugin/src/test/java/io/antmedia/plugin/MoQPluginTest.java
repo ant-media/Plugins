@@ -440,6 +440,177 @@ public class MoQPluginTest {
     }
 
     @Test
+    public void testMaybeRestartRelay_aliveProcess_doesNothing() throws Exception {
+        Process alive = mock(Process.class);
+        when(alive.isAlive()).thenReturn(true);
+
+        Process savedSlot = relaySlot().get();
+        long savedAttempt = (long) staticField("lastRelayRestartAttempt");
+        relaySlot().set(alive);
+        setStaticField("lastRelayRestartAttempt", 12345L);
+        try {
+            MoQPlugin.maybeRestartRelay(alive);
+
+            assertSame("alive branch must not touch the slot", alive, relaySlot().get());
+            assertEquals("alive branch must not bump lastRelayRestartAttempt",
+                    12345L, (long) staticField("lastRelayRestartAttempt"));
+            verify(alive, never()).exitValue();
+        } finally {
+            relaySlot().set(savedSlot);
+            setStaticField("lastRelayRestartAttempt", savedAttempt);
+        }
+    }
+
+    @Test
+    public void testMaybeRestartRelay_deadProcess_clearsSlotAndAttemptsRespawn() throws Exception {
+        Process savedSlot = relaySlot().get();
+        long savedAttempt = (long) staticField("lastRelayRestartAttempt");
+        try {
+            Process dead = mock(Process.class);
+            when(dead.isAlive()).thenReturn(false);
+            when(dead.exitValue()).thenReturn(139);
+            relaySlot().set(dead);
+            setStaticField("lastRelayRestartAttempt", 0L); // outside grace window
+
+            // Stub spawn to a bogus binary — startRelay's IOException path runs (no real process leaks)
+            try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+                mocked.when(MoQPlugin::buildRelayProcessBuilder)
+                      .thenReturn(new ProcessBuilder("/__moq_no_such_binary_" + System.nanoTime()));
+
+                long before = System.currentTimeMillis();
+                MoQPlugin.maybeRestartRelay(dead);
+
+                // Slot CAS'd out, attempt time bumped past the grace floor, exit code was logged
+                assertNull("dead process must be CAS'd out of the slot", relaySlot().get());
+                long after = (long) staticField("lastRelayRestartAttempt");
+                assertTrue("lastRelayRestartAttempt must be bumped to now", after >= before);
+                verify(dead).exitValue();
+            }
+        } finally {
+            relaySlot().set(savedSlot);
+            setStaticField("lastRelayRestartAttempt", savedAttempt);
+        }
+    }
+
+    @Test
+    public void testMaybeRestartRelay_withinGracePeriod_skipsRestart() throws Exception {
+        Process savedSlot = relaySlot().get();
+        long savedAttempt = (long) staticField("lastRelayRestartAttempt");
+        try {
+            Process dead = mock(Process.class);
+            when(dead.isAlive()).thenReturn(false);
+            relaySlot().set(dead);
+            long graceStart = System.currentTimeMillis();
+            setStaticField("lastRelayRestartAttempt", graceStart); // inside grace window
+
+            // If grace were ignored, startRelay would hit buildRelayProcessBuilder — assert it isn't called
+            try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+                MoQPlugin.maybeRestartRelay(dead);
+                mocked.verify(MoQPlugin::buildRelayProcessBuilder, never());
+            }
+
+            assertSame("grace window must keep the dead process in the slot", dead, relaySlot().get());
+            assertEquals("grace window must not bump lastRelayRestartAttempt",
+                    graceStart, (long) staticField("lastRelayRestartAttempt"));
+            verify(dead, never()).exitValue();
+        } finally {
+            relaySlot().set(savedSlot);
+            setStaticField("lastRelayRestartAttempt", savedAttempt);
+        }
+    }
+
+    @Test
+    public void testStartRelay_successPath_setsSlotAndRegistersHookOnce() throws Exception {
+        Process savedSlot = relaySlot().get();
+        boolean savedHook = (boolean) staticField("shutdownHookRegistered");
+        relaySlot().set(null);
+        setStaticField("shutdownHookRegistered", false);
+        try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+            // /bin/sh exit 0 — universally available, exits immediately, harmless
+            mocked.when(MoQPlugin::buildRelayProcessBuilder)
+                  .thenReturn(new ProcessBuilder("/bin/sh", "-c", "exit 0"));
+
+            // 1st call: should spawn + register hook
+            Method m = MoQPlugin.class.getDeclaredMethod("startRelay");
+            m.setAccessible(true);
+            m.invoke(null);
+
+            Process firstProc = relaySlot().get();
+            assertNotNull("startRelay success path must populate the slot", firstProc);
+            assertTrue("shutdownHookRegistered must be flipped to true",
+                    (boolean) staticField("shutdownHookRegistered"));
+
+            // 2nd call: relay already in slot — early return, no re-spawn
+            m.invoke(null);
+            assertSame("startRelay with non-null slot must short-circuit", firstProc, relaySlot().get());
+
+            // 3rd call after clearing slot: spawns again BUT skips hook block (flag stays true)
+            firstProc.destroy();
+            firstProc.waitFor();
+            relaySlot().set(null);
+            m.invoke(null);
+            assertNotNull("re-entry must spawn a new process", relaySlot().get());
+            assertTrue("hook stays registered across restarts",
+                    (boolean) staticField("shutdownHookRegistered"));
+        } finally {
+            Process leftover = relaySlot().get();
+            if (leftover != null) leftover.destroy();
+            relaySlot().set(savedSlot);
+            setStaticField("shutdownHookRegistered", savedHook);
+        }
+    }
+
+    @Test
+    public void testDestroyRelayOnShutdown() throws Exception {
+        Process savedSlot = relaySlot().get();
+        try {
+            // null slot: no-op, must not throw
+            relaySlot().set(null);
+            MoQPlugin.destroyRelayOnShutdown();
+
+            // non-null slot: destroy() is called on the held process
+            Process p = mock(Process.class);
+            relaySlot().set(p);
+            MoQPlugin.destroyRelayOnShutdown();
+            verify(p).destroy();
+        } finally {
+            relaySlot().set(savedSlot);
+        }
+    }
+
+    @Test
+    public void testPollCliLogs_deadRelay_triggersRestart() throws Exception {
+        Process savedSlot = relaySlot().get();
+        long savedAttempt = (long) staticField("lastRelayRestartAttempt");
+        try {
+            Process dead = mock(Process.class);
+            when(dead.isAlive()).thenReturn(false);
+            when(dead.exitValue()).thenReturn(137);
+            when(dead.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+            relaySlot().set(dead);
+            setStaticField("lastRelayRestartAttempt", 0L);
+
+            try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+                mocked.when(MoQPlugin::buildRelayProcessBuilder)
+                      .thenReturn(new ProcessBuilder("/__moq_no_such_binary_" + System.nanoTime()));
+
+                Method poll = MoQPlugin.class.getDeclaredMethod("pollCliLogs");
+                poll.setAccessible(true);
+                poll.invoke(plugin);
+
+                // pollCliLogs reached the relay branch, drained stdin, and routed dead process to restart
+                verify(dead).getInputStream();
+                verify(dead).exitValue();
+                assertNull("pollCliLogs must propagate dead process clearing through maybeRestartRelay",
+                        relaySlot().get());
+            }
+        } finally {
+            relaySlot().set(savedSlot);
+            setStaticField("lastRelayRestartAttempt", savedAttempt);
+        }
+    }
+
+    @Test
     public void testBuildRelayProcessBuilder() throws Exception {
         String savedRoot = System.getProperty("red5.root");
         try {
@@ -483,5 +654,26 @@ public class MoQPluginTest {
         Field f = target.getClass().getDeclaredField(name);
         f.setAccessible(true);
         f.set(target, value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.concurrent.atomic.AtomicReference<Process> relaySlot() {
+        return (java.util.concurrent.atomic.AtomicReference<Process>) staticField("relayProcess");
+    }
+
+    private static Object staticField(String name) {
+        try {
+            Field f = MoQPlugin.class.getDeclaredField(name);
+            f.setAccessible(true);
+            return f.get(null);
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    private static void setStaticField(String name, Object value) {
+        try {
+            Field f = MoQPlugin.class.getDeclaredField(name);
+            f.setAccessible(true);
+            f.set(null, value);
+        } catch (Exception e) { throw new RuntimeException(e); }
     }
 }
