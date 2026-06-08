@@ -268,19 +268,26 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	}
 
 	public ClipCreatorSettings getClipCreatorSettings(AppSettings appSettingsParameter) {
-		Object clipCreatorSettingsString = appSettingsParameter.getCustomSetting("plugin."+ClipCreatorPlugin.PLUGIN_KEY);
+		Object clipCreatorSettingsValue = appSettingsParameter.getCustomSetting("plugin."+ClipCreatorPlugin.PLUGIN_KEY);
 
 		ClipCreatorSettings clipCreatorSettingsLocal = null;
-		if (clipCreatorSettingsString == null) 
+		if (clipCreatorSettingsValue == null)
 		{
-			logger.error("Using default settings for Clip Creator because no Clip Creator settings in the AppSettings for app:{} ", appName);
+			logger.info("Using default settings for Clip Creator because no Clip Creator settings in the AppSettings for app:{} ", appName);
 			clipCreatorSettingsLocal = new ClipCreatorSettings();
-		} 
-		else 
+		}
+		else
 		{
 			try {
-				clipCreatorSettingsLocal = gson.fromJson(clipCreatorSettingsString.toString(), ClipCreatorSettings.class);
-				logger.error("Using Clip Creator settings for app:{} ", appName);
+				// Don't go through toString(): the stored value is a structured object whose runtime type
+				// depends on the persistence backend. In standalone it's a Map, but in cluster mode it's
+				// an org.bson.Document (Morphia/BSON), whose toString() is "Document{{...}}" — not valid JSON.
+				// Parsing that threw and we silently fell back to defaults (enabled=true), so the plugin kept
+				// creating clips even when disabled. Convert structurally instead so every backend works.
+				clipCreatorSettingsLocal = clipCreatorSettingsValue instanceof String
+						? gson.fromJson((String) clipCreatorSettingsValue, ClipCreatorSettings.class)
+						: gson.fromJson(gson.toJsonTree(clipCreatorSettingsValue), ClipCreatorSettings.class);
+				logger.info("Using Clip Creator settings for app:{} ", appName);
 			} catch (Exception e) {
 				logger.error("Invalid Clip Creator settings, using default settings for app:{}", appName);
 				clipCreatorSettingsLocal = new ClipCreatorSettings();
