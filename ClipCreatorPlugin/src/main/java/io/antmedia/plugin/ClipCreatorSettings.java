@@ -4,10 +4,13 @@ public class ClipCreatorSettings {
 
     //10 minutes
     private int mp4CreationIntervalSeconds = 600;
-    
+
     private boolean deleteHLSFilesAfterCreatedMp4 = false;
-    
+
     private boolean enabled = true;
+
+    //6 hours — hard upper bound on (endTimestamp - startTimestamp) for the range endpoint
+    private int maxClipDurationSeconds = 21600;
 
     public int getMp4CreationIntervalSeconds() {
         return mp4CreationIntervalSeconds;
@@ -45,5 +48,12 @@ public class ClipCreatorSettings {
 		this.deleteHLSFilesAfterCreatedMp4 = deleteHLSFilesAfterCreatedMp4;
 	}
 
-	
+	public int getMaxClipDurationSeconds() {
+		return maxClipDurationSeconds;
+	}
+
+	public void setMaxClipDurationSeconds(int maxClipDurationSeconds) {
+		this.maxClipDurationSeconds = maxClipDurationSeconds;
+	}
+
 }

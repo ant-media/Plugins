@@ -305,7 +305,29 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		return convertHlsToMp4(broadcast, updateLastMp4CreateTime, System.currentTimeMillis());
 	}
 
+	// `synchronized` here is a webapp-wide mutex shared with convertHlsToMp4Range —
+	// concurrent conversions across all streams serialize. Acceptable for v1; revisit
+	// with a per-stream lock if range-endpoint throughput becomes a problem under load.
 	public synchronized Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime, long endTime) {
+
+		Long startTime = lastMp4CreateTimeMSForStream.get(broadcast.getStreamId());
+		if (startTime == null) {
+			startTime = endTime - (clipCreatorSettings.getMp4CreationIntervalSeconds() * 1000);
+		}
+
+		return doConvert(broadcast, startTime, endTime, updateLastMp4CreateTime);
+	}
+
+	/**
+	 * Create an MP4 clip from HLS segments whose program-date-time falls between two UTC timestamps.
+	 * Does NOT touch lastMp4CreateTimeMSForStream — range clips are out-of-band and must not interfere
+	 * with the periodic recorder's bookkeeping.
+	 */
+	public synchronized Mp4CreationResponse convertHlsToMp4Range(Broadcast broadcast, long startTimeMs, long endTimeMs) {
+		return doConvert(broadcast, startTimeMs, endTimeMs, false);
+	}
+
+	private Mp4CreationResponse doConvert(Broadcast broadcast, long startTime, long endTime, boolean updateLastMp4CreateTime) {
 
 		Mp4CreationResponse response = new Mp4CreationResponse();
 		String streamId = broadcast.getStreamId();
@@ -325,13 +347,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 			response.setMessage("No HLS playlist found for stream " + streamId);
 			return response;
-		}
-
-		Long startTime = lastMp4CreateTimeMSForStream.get(streamId);
-
-
-		if (startTime == null) {
-			startTime = endTime - (clipCreatorSettings.getMp4CreationIntervalSeconds() * 1000);
 		}
 
 		ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, startTime, endTime, m3u8File);
