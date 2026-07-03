@@ -112,7 +112,8 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
     }
 
     @Override
-    public void streamStarted(String streamId) {
+    public void streamStarted(Broadcast broadcast) {
+        String streamId = broadcast.getStreamId();
         logger.info("Stream started: {} - Adding SCTE-35 packet listener", streamId);
         
         IAntMediaStreamHandler app = getApplication();
@@ -132,7 +133,6 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
             return;
         }
 
-        Broadcast broadcast = dataStore.get(streamId);
         List<EncoderSettings> encoderSettingsList = null;
 
         if (broadcast != null) {
@@ -208,9 +208,10 @@ public class SCTE35Plugin implements ApplicationContextAware, IStreamListener {
     }
 
     @Override
-    public void streamFinished(String streamId) {
+    public void streamFinished(Broadcast broadcast) {
+        String streamId = broadcast.getStreamId();
         logger.info("Stream finished: {} - Removing SCTE-35 packet listener", streamId);
-        
+
         SCTE35PacketListener scte35Listener = scte35ListenerMap.remove(streamId);
         if (scte35Listener != null) {
             getApplication().removePacketListener(streamId, scte35Listener);
