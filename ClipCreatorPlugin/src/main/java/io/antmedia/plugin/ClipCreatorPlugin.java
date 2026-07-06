@@ -324,30 +324,10 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 		return doConvert(broadcast, startTime, endTime, updateLastMp4CreateTime);
 	}
-
-	/**
-	 * Create an MP4 clip from HLS segments whose program-date-time falls between two UTC timestamps.
-	 * Synchronous: blocks until ffmpeg finishes and the file is on disk. Used by the returnFile=true
-	 * path where the caller wants the bytes back in the same request.
-	 * Does NOT touch lastMp4CreateTimeMSForStream — range clips are out-of-band and must not interfere
-	 * with the periodic recorder's bookkeeping.
-	 */
 	public synchronized Mp4CreationResponse convertHlsToMp4Range(Broadcast broadcast, long startTimeMs, long endTimeMs) {
 		return doConvert(broadcast, startTimeMs, endTimeMs, false);
 	}
 
-	/**
-	 * Asynchronous range clip. Validates the request and registers a placeholder VoD synchronously
-	 * (so the caller gets the vodId back instantly), then runs the ffmpeg concat+trim in the
-	 * background. On completion the VoD is filled in (the vodReady webhook fires) and its process
-	 * status flips to finished; on failure it flips to failed. Designed for long (multi-hour) clips
-	 * where the caller must not block on ffmpeg. returnFile=true callers use the synchronous path
-	 * instead — you can't stream a file that doesn't exist yet.
-	 *
-	 * The returned response only carries the vodId; the file is not available yet. A non-success
-	 * response means the cheap up-front validation failed (no playlist / no segments in range) and
-	 * no background job was started nor placeholder VoD registered.
-	 */
 	public Mp4CreationResponse convertHlsToMp4RangeAsync(Broadcast broadcast, long startTimeMs, long endTimeMs) {
 		String streamId = broadcast.getStreamId();
 
@@ -389,11 +369,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		return runConversion(broadcast, input, startTime, endTime, updateLastMp4CreateTime);
 	}
 
-	/**
-	 * Fast, ffmpeg-free part of a conversion: locate the playlist, pick the segments in range and
-	 * mint the vodId / output path. Returns a not-ready input (with failureMessage set) when there is
-	 * no playlist or no segment covers the range.
-	 */
 	private ConversionInput prepareConversion(Broadcast broadcast, long startTime, long endTime) {
 		String streamId = broadcast.getStreamId();
 		ConversionInput input = new ConversionInput();
@@ -427,12 +402,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		input.mp4FilePath = m3u8File.getParentFile().getAbsolutePath() + File.separator + input.vodId + ".mp4";
 		return input;
 	}
-
-	/**
-	 * Heavy part of a conversion: concat+trim the segments into the MP4 and register it as a VoD.
-	 * synchronized == webapp-wide mutex shared with the periodic recorder, so conversions serialize.
-	 * Acceptable for v1; revisit with a per-stream lock if range-endpoint throughput becomes a problem.
-	 */
 	private synchronized Mp4CreationResponse runConversion(Broadcast broadcast, ConversionInput input,
 			long startTime, long endTime, boolean updateLastMp4CreateTime) {
 
@@ -485,11 +454,6 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		return response;
 	}
 
-	/**
-	 * Register a placeholder VoD in "processing" state so a caller holding the vodId can poll it
-	 * immediately (and observe processing -> finished/failed) before the background ffmpeg finishes.
-	 * The row is overwritten with the real metadata by muxingFinished when the clip completes.
-	 */
 	private void registerProcessingVod(Broadcast broadcast, String vodId, String mp4FilePath, long startTime) {
 		String relativePath = AntMediaApplicationAdapter.getRelativePath(mp4FilePath);
 		String vodName = new File(mp4FilePath).getName();
