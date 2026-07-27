@@ -146,10 +146,11 @@ public class RestServiceTest {
         broadcast.setStreamId(streamId);
         clipCreatorPlugin.getDataStore().save(broadcast);
 
+        // returnFile=false is async: the cheap up-front validation fails, so no vodId comes back
         Mp4CreationResponse failed = mock(Mp4CreationResponse.class);
         when(failed.isSuccess()).thenReturn(false);
         when(failed.getMessage()).thenReturn("No segment file found for stream " + streamId);
-        when(clipCreatorPlugin.convertHlsToMp4Range(any(), anyLong(), anyLong())).thenReturn(failed);
+        when(clipCreatorPlugin.convertHlsToMp4RangeAsync(any(), anyLong(), anyLong())).thenReturn(failed);
 
         long now = System.currentTimeMillis();
         Response response = restService.createMp4Range(streamId, now - 60_000, now - 1000, false);
@@ -160,7 +161,7 @@ public class RestServiceTest {
     }
 
     @Test
-    public void testCreateMp4Range_SuccessJson() throws Exception {
+    public void testCreateMp4Range_SuccessAsync() throws Exception {
         String streamId = "rangeStream";
         when(clipCreatorSettings.getMaxClipDurationSeconds()).thenReturn(21600);
 
@@ -168,16 +169,19 @@ public class RestServiceTest {
         broadcast.setStreamId(streamId);
         clipCreatorPlugin.getDataStore().save(broadcast);
 
-        Mp4CreationResponse ok = new Mp4CreationResponse(new File("range.mp4"), "vodRangeId");
+        // async path returns only the vodId; the file is produced in the background
+        Mp4CreationResponse ok = new Mp4CreationResponse(null, "vodRangeId");
         ok.setSuccess(true);
-        when(clipCreatorPlugin.convertHlsToMp4Range(any(), anyLong(), anyLong())).thenReturn(ok);
+        when(clipCreatorPlugin.convertHlsToMp4RangeAsync(any(), anyLong(), anyLong())).thenReturn(ok);
 
         long now = System.currentTimeMillis();
         Response response = restService.createMp4Range(streamId, now - 60_000, now - 1000, false);
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
         Result result = (Result) response.getEntity();
         assertTrue(result.isSuccess());
         assertEquals("vodRangeId", result.getDataId());
+        // the synchronous conversion must not be invoked on the async path
+        verify(clipCreatorPlugin, never()).convertHlsToMp4Range(any(), anyLong(), anyLong());
     }
 
     @Test
