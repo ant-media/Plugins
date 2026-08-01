@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AMS MoQ Player</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #f0f0f0;
+      font-family: sans-serif;
+      padding: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 { font-size: 1.3rem; margin-bottom: 14px; }
+    h2 { font-size: 0.95rem; color: #aaa; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    moq-watch canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    moq-watch video {
+      width: 100%;
+      max-height: 80vh;
+      object-fit: contain;
+      display: block;
+      display: block;
+      background: #111;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    /* Info panel */
+    #info-panel {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      font-size: 13px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .info-item { display: flex; flex-direction: column; gap: 2px; }
+    .info-label { color: #666; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .info-value { font-weight: 600; font-size: 13px; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .badge-green  { background: #14532d; color: #86efac; }
+    .badge-yellow { background: #713f12; color: #fde68a; }
+    .badge-red    { background: #7f1d1d; color: #fca5a5; }
+    .badge-blue   { background: #1e3a5f; color: #93c5fd; }
+    .badge-gray   { background: #1f1f1f; color: #9ca3af; }
+
+    /* URL probe table */
+    #url-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    #url-table th {
+      text-align: left;
+      padding: 6px 10px;
+      border-bottom: 1px solid #2a2a2a;
+      color: #666;
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    #url-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #1a1a1a;
+      font-family: monospace;
+    }
+    .url-row.active td { background: #0d1f0d; }
+    .status-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .dot-pending { background: #444; }
+    .dot-trying  { background: #f59e0b; animation: pulse 1s infinite; }
+    .dot-ok      { background: #22c55e; }
+    .dot-fail    { background: #ef4444; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* Error / warning banners */
+    .banner {
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 14px;
+    }
+    .banner-error  { background: #7f1d1d; color: #fca5a5; }
+    .banner-warn   { background: #854d0e; color: #fef9c3; }
+
+    /* Stream ID input */
+    #stream-control {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+    #stream-control > span { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+    #stream-input {
+      flex: 1;
+      max-width: 300px;
+      background: #0a0a0a;
+      border: 1px solid #3a3a3a;
+      border-radius: 5px;
+      color: #f0f0f0;
+      font-size: 13px;
+      padding: 5px 10px;
+      outline: none;
+    }
+    #stream-input:focus { border-color: #3b82f6; }
+    #stream-btn {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 5px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #stream-btn:hover { opacity: 0.85; }
+
+    /* Quality selection */
+    #quality-panel {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 8px 16px;
+      margin-bottom: 14px;
+      display: none;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 13px;
+    }
+    #quality-panel > span { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+    .quality-btn {
+      background: #1a2e1a;
+      color: #4ade80;
+      border: 1px solid #2d4a2d;
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-family: monospace;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .quality-btn:hover { background: #2d4a2d; border-color: #4ade80; }
+    .quality-btn.active { background: #2d4a2d; border-color: #4ade80; font-weight: bold; }
+
+    /* Player mode selector */
+    #mode-selector {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 13px;
+    }
+    #mode-selector span { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .mode-radio { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .mode-radio input[type=radio] { accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer; }
+    .mode-radio label { cursor: pointer; font-size: 13px; }
+
+    /* Volume control */
+    #volume-control {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+    }
+    #volume-control span { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    #volume-icon { font-size: 16px; cursor: pointer; user-select: none; }
+    #volume-slider { accent-color: #3b82f6; flex: 1; max-width: 200px; cursor: pointer; }
+    #volume-label { font-size: 12px; color: #aaa; min-width: 36px; }
+
+    /* Jitter slider */
+    #jitter-control {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+    }
+    #jitter-control > span:first-child { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    #jitter-slider { accent-color: #3b82f6; flex: 1; max-width: 200px; cursor: pointer; }
+    #jitter-label { font-size: 12px; color: #aaa; min-width: 50px; }
+
+    /* Debug panel */
+    #debug-panel {
+      background: #0d0d0d;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      font-family: monospace;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px 20px;
+    }
+    .dbg-item { display: flex; flex-direction: column; gap: 2px; }
+    .dbg-label { color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .dbg-value { color: #e2e8f0; font-size: 12px; }
+    .dbg-value.stalled { color: #f87171; }
+    .dbg-value.ok      { color: #4ade80; }
+
+    /* Compat section */
+    moq-watch-support { display: block; margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+  <h1>AMS MoQ Player</h1>
+
+  <!-- Errors injected here by JS -->
+  <div id="errors"></div>
+
+  <!-- Info bar -->
+  <div id="info-panel">
+    <div class="info-item">
+      <span class="info-label">Broadcast</span>
+      <span class="info-value" id="info-name">—</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Connected URL</span>
+      <span class="info-value" id="info-url" style="font-family:monospace;font-size:12px">—</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Active Player</span>
+      <span class="info-value" id="info-mode"><span class="badge badge-gray">detecting…</span></span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Status</span>
+      <span class="info-value" id="info-status"><span class="badge badge-gray">idle</span></span>
+    </div>
+  </div>
+
+  <!-- URL probe attempts -->
+  <h2>Relay URL Candidates</h2>
+  <table id="url-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>URL</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="url-rows"></tbody>
+  </table>
+
+  <!-- Stream ID input -->
+  <form id="stream-control" autocomplete="off">
+    <span>Stream ID:</span>
+    <input id="stream-input" type="text" placeholder="e.g. myStream" spellcheck="false" />
+    <button id="stream-btn" type="submit">Watch</button>
+  </form>
+
+  <!-- Quality selection -->
+  <div id="quality-panel">
+    <span>Qualities:</span>
+    <div id="quality-buttons"></div>
+  </div>
+
+  <!-- Player mode selector -->
+  <div id="mode-selector">
+    <span>Force player:</span>
+    <label class="mode-radio">
+      <input type="radio" name="mode" value="auto" checked />
+      <span>Auto</span>
+    </label>
+    <label class="mode-radio">
+      <input type="radio" name="mode" value="webcodecs" />
+      <span>WebCodecs (canvas)</span>
+    </label>
+    <label class="mode-radio">
+      <input type="radio" name="mode" value="mse" />
+      <span>MSE (video)</span>
+    </label>
+  </div>
+
+  <!-- Volume control -->
+  <div id="volume-control">
+    <span>Volume:</span>
+    <span id="volume-icon">🔇</span>
+    <input id="volume-slider" type="range" min="0" max="100" value="0" />
+    <span id="volume-label">muted</span>
+  </div>
+
+  <!-- Jitter / buffer slider -->
+  <div id="jitter-control">
+    <span>Buffer (jitter):</span>
+    <input id="jitter-slider" type="range" min="50" max="2000" step="50" value="100" />
+    <span id="jitter-label">100 ms</span>
+  </div>
+
+  <!-- Player -->
+  <moq-watch id="player" muted reload jitter="100">
+    <canvas></canvas>
+  </moq-watch>
+
+  <!-- Debug stats -->
+  <h2>Debug</h2>
+  <div id="debug-panel">
+    <div class="dbg-item"><span class="dbg-label">FPS</span><span class="dbg-value" id="dbg-fps">—</span></div>
+    <div class="dbg-item"><span class="dbg-label">Buffer size</span><span class="dbg-value" id="dbg-buf">—</span></div>
+    <div class="dbg-item"><span class="dbg-label">Stalled</span><span class="dbg-value" id="dbg-stalled">—</span></div>
+    <div class="dbg-item"><span class="dbg-label">Latency</span><span class="dbg-value" id="dbg-latency">—</span></div>
+    <div class="dbg-item"><span class="dbg-label">Jitter (active)</span><span class="dbg-value" id="dbg-jitter">—</span></div>
+    <div class="dbg-item"><span class="dbg-label">Video bytes rx</span><span class="dbg-value" id="dbg-vbytes">—</span></div>
+    <div class="dbg-item"><span class="dbg-label">Codec</span><span class="dbg-value" id="dbg-codec">—</span></div>
+  </div>
+
+  <!-- Browser compatibility -->
+  <h2>Browser Compatibility</h2>
+  <moq-watch-support show="always"></moq-watch-support>
+
+  <script type="module" src="play.js"></script>
+</body>
+</html>

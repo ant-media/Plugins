@@ -90,6 +90,86 @@ public class ClipCreatorRestService {
 
 	}
 	
+	@Operation(description = "Create an MP4 clip from HLS segments between two UTC timestamps for the given stream. " +
+			"The segments must still be present on disk — i.e. the requested range must lie within the HLS retention window " +
+			"(controlled by the app's hlsListSize × hlsTime when running in live mode with hls_flags=delete_segments).")
+	@POST
+	@Path("/mp4/{streamId}/range")
+	@Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_OCTET_STREAM})
+	public Response createMp4Range(
+			@Parameter(description = "streamId of the broadcast that the clip will be created for", required = true) @PathParam("streamId") String streamId,
+			@Parameter(description = "Inclusive start of the clip range, in UTC milliseconds since epoch", required = true) @QueryParam("startTimestamp") long startTimestamp,
+			@Parameter(description = "Inclusive end of the clip range, in UTC milliseconds since epoch", required = true) @QueryParam("endTimestamp") long endTimestamp,
+			@Parameter(description = "If true, returns the MP4 file content. If false, returns a JSON Result with the vodId.") @QueryParam("returnFile") @DefaultValue("false") boolean returnFile)
+	{
+		ClipCreatorPlugin clipCreator = getPluginApp();
+
+		if (endTimestamp <= startTimestamp) {
+			return Response.status(Status.BAD_REQUEST)
+					.entity(new Result(false, "endTimestamp must be greater than startTimestamp")).build();
+		}
+
+		long now = System.currentTimeMillis();
+		if (endTimestamp > now) {
+			return Response.status(Status.BAD_REQUEST)
+					.entity(new Result(false, "endTimestamp must not be in the future")).build();
+		}
+
+		int maxClipDurationSeconds = clipCreator.getClipCreatorSettings().getMaxClipDurationSeconds();
+		long requestedDurationSeconds = (endTimestamp - startTimestamp) / 1000;
+		if (requestedDurationSeconds > maxClipDurationSeconds) {
+			return Response.status(Status.BAD_REQUEST)
+					.entity(new Result(false, "Requested clip duration " + requestedDurationSeconds
+							+ "s exceeds maxClipDurationSeconds=" + maxClipDurationSeconds
+							+ ". Raise the plugin setting if you need longer clips.")).build();
+		}
+
+		Broadcast broadcast = clipCreator.getDataStore().get(streamId);
+		if (broadcast == null) {
+			return Response.status(Status.EXPECTATION_FAILED)
+					.entity(new Result(false, "No broadcast exists for stream " + streamId)).build();
+		}
+
+		// returnFile=true is synchronous: the caller wants the bytes in this response, so we must
+		// block until ffmpeg finishes. returnFile=false (default) is asynchronous: we return the
+		// vodId immediately and create the (potentially multi-hour) clip in the background.
+		if (returnFile) {
+			Mp4CreationResponse response = clipCreator.convertHlsToMp4Range(broadcast, startTimestamp, endTimestamp);
+			if (response == null || !response.isSuccess()) {
+				return Response.status(Status.EXPECTATION_FAILED)
+						.entity(new Result(false, rangeFailureMessage(response)))
+						.build();
+			}
+			return Response.ok(response.getFile())
+					.header("Content-Disposition", "attachment; filename=\"" + response.getFile().getName() + "\"")
+					.header("X-vodId", response.getVodId())
+					.build();
+		}
+
+		Mp4CreationResponse response = clipCreator.convertHlsToMp4RangeAsync(broadcast, startTimestamp, endTimestamp);
+		if (response == null || !response.isSuccess()) {
+			// only the cheap up-front validation runs before we return, so a failure here means
+			// no playlist / no segments in range — the background job was never started.
+			return Response.status(Status.EXPECTATION_FAILED)
+					.entity(new Result(false, rangeFailureMessage(response)))
+					.build();
+		}
+
+		// 202 Accepted: the clip is being produced. The caller polls the vodId
+		// (GET /rest/v2/vods/{vodId} -> processStatus) or waits for the vodReady webhook.
+		Result result = new Result(true, "MP4 creation started for stream " + streamId
+				+ ". Poll the returned vodId or wait for the vodReady webhook for completion.");
+		result.setDataId(response.getVodId());
+		return Response.status(Status.ACCEPTED).entity(result).build();
+	}
+
+	private static String rangeFailureMessage(Mp4CreationResponse response) {
+		String message = response != null && response.getMessage() != null
+				? response.getMessage()
+				: "MP4 creation failed";
+		return message + " (the requested range may be outside the HLS retention window or the stream had no data then)";
+	}
+
 	@Operation(description = "Delete the mp4 files in the disk that are not recorded in the database. If there are unmatched files, it may delete them according to the parameter ")
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "If there are unmatched files or not deleted them Result#success is false. If operations are successfull, its value is true. It gives extra information in the message field",

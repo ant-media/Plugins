@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1400" height="900" viewBox="0 0 1400 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pluginGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E0F2FE"/>
+      <stop offset="100%" stop-color="#CCFBF1"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0F766E"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .title { font: 700 34px Arial, Helvetica, sans-serif; fill: #0F172A; }
+      .subtitle { font: 400 17px Arial, Helvetica, sans-serif; fill: #475569; }
+      .box-title { font: 700 24px Arial, Helvetica, sans-serif; fill: #0F172A; }
+      .box-text { font: 400 18px Arial, Helvetica, sans-serif; fill: #334155; }
+      .small-text { font: 400 16px Arial, Helvetica, sans-serif; fill: #475569; }
+      .chip-text { font: 600 18px Arial, Helvetica, sans-serif; fill: #0F172A; }
+      .label-text { font: 600 17px Arial, Helvetica, sans-serif; fill: #0F766E; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="900" fill="#F8FAFC"/>
+
+  <text x="700" y="70" text-anchor="middle" class="title">Python AI Plugin Architecture</text>
+  <text x="700" y="105" text-anchor="middle" class="subtitle">High-level user view of how streams and AI features flow through the plugin</text>
+
+  <rect x="70" y="250" rx="26" ry="26" width="220" height="180" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2" filter="url(#shadow)"/>
+  <text x="180" y="295" text-anchor="middle" class="box-title">User / Client</text>
+  <text x="180" y="338" text-anchor="middle" class="box-text">Browser or app</text>
+  <text x="180" y="370" text-anchor="middle" class="box-text">Publishes stream</text>
+  <text x="180" y="402" text-anchor="middle" class="box-text">Sends API requests</text>
+
+  <rect x="360" y="250" rx="26" ry="26" width="250" height="180" fill="#FFFFFF" stroke="#93C5FD" stroke-width="2" filter="url(#shadow)"/>
+  <text x="485" y="295" text-anchor="middle" class="box-title">Ant Media Server</text>
+  <text x="485" y="338" text-anchor="middle" class="box-text">Receives live video</text>
+  <text x="485" y="370" text-anchor="middle" class="box-text">Runs plugin lifecycle</text>
+  <text x="485" y="402" text-anchor="middle" class="box-text">Exposes stream access</text>
+
+  <rect x="680" y="180" rx="34" ry="34" width="360" height="320" fill="url(#pluginGrad)" stroke="#14B8A6" stroke-width="3" filter="url(#shadow)"/>
+  <text x="860" y="230" text-anchor="middle" class="box-title">Python AI Plugin</text>
+  <text x="860" y="265" text-anchor="middle" class="box-text">Feeds video frames to your logic</text>
+  <text x="860" y="295" text-anchor="middle" class="box-text">Processes frames and writes output</text>
+
+  <rect x="735" y="330" rx="18" ry="18" width="250" height="48" fill="#FFFFFF" stroke="#99F6E4" stroke-width="2"/>
+  <text x="860" y="361" text-anchor="middle" class="chip-text">Your AI Plugin Implementation</text>
+
+  <rect x="735" y="392" rx="18" ry="18" width="250" height="48" fill="#FFFFFF" stroke="#99F6E4" stroke-width="2"/>
+  <text x="860" y="423" text-anchor="middle" class="chip-text">Frame Processing</text>
+
+  <rect x="735" y="454" rx="18" ry="18" width="250" height="48" fill="#FFFFFF" stroke="#99F6E4" stroke-width="2"/>
+  <text x="860" y="485" text-anchor="middle" class="chip-text">Video Output</text>
+
+  <rect x="1060" y="190" rx="26" ry="26" width="250" height="150" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1185" y="235" text-anchor="middle" class="box-title">REST API / Sample UI</text>
+  <text x="1185" y="278" text-anchor="middle" class="box-text">User controls</text>
+  <text x="1185" y="310" text-anchor="middle" class="box-text">Monitoring and queries</text>
+
+  <rect x="1040" y="600" rx="26" ry="26" width="270" height="160" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1175" y="645" text-anchor="middle" class="box-title">HLS File</text>
+  <text x="1175" y="688" text-anchor="middle" class="box-text">Processed video</text>
+  <text x="1175" y="720" text-anchor="middle" class="box-text">Playlist and segments</text>
+  <text x="1175" y="752" text-anchor="middle" class="box-text">Ready for playback</text>
+
+  <line x1="860" y1="378" x2="860" y2="392" stroke="#0F766E" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="860" y1="440" x2="860" y2="454" stroke="#0F766E" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <line x1="290" y1="340" x2="360" y2="340" stroke="#0F766E" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="610" y1="340" x2="680" y2="340" stroke="#0F766E" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1040" y1="255" x2="1060" y2="255" stroke="#0F766E" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="950" y1="500" x2="1090" y2="600" stroke="#0F766E" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <text x="325" y="325" text-anchor="middle" class="label-text">stream</text>
+  <text x="645" y="325" text-anchor="middle" class="label-text">video frames</text>
+  <text x="1050" y="235" text-anchor="end" class="label-text">control + query</text>
+  <text x="890" y="388" text-anchor="start" class="label-text">video frame</text>
+  <text x="890" y="450" text-anchor="start" class="label-text">processing</text>
+  <text x="1025" y="575" text-anchor="middle" class="label-text">processed video</text>
+
+  <text x="700" y="835" text-anchor="middle" class="subtitle">Simple flow: user publishes a stream, Ant Media passes video frames to the Python AI Plugin, your implementation processes them, and the output is written to an HLS file.</text>
+</svg>

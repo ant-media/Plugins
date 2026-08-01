@@ -1,0 +1,23 @@
+{
+  "name": "ams-moq-player",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "@moq/watch": "file:../../../../../../moq/js/watch/dist",
+    "@moq/publish": "file:../../../../../../moq/js/publish/dist"
+  },
+  "overrides": {
+    "@moq/hang": "file:../../../../../../moq/js/hang/dist",
+    "@moq/lite": "file:../../../../../../moq/js/lite/dist",
+    "@moq/signals": "file:../../../../../../moq/js/signals/dist",
+    "@moq/ui-core": "file:../../../../../../moq/js/ui-core/dist",
+    "@moq/msf": "file:../../../../../../moq/js/msf/dist"
+  }
+}

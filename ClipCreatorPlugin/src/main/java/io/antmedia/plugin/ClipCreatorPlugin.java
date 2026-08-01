@@ -268,19 +268,26 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	}
 
 	public ClipCreatorSettings getClipCreatorSettings(AppSettings appSettingsParameter) {
-		Object clipCreatorSettingsString = appSettingsParameter.getCustomSetting("plugin."+ClipCreatorPlugin.PLUGIN_KEY);
+		Object clipCreatorSettingsValue = appSettingsParameter.getCustomSetting("plugin."+ClipCreatorPlugin.PLUGIN_KEY);
 
 		ClipCreatorSettings clipCreatorSettingsLocal = null;
-		if (clipCreatorSettingsString == null) 
+		if (clipCreatorSettingsValue == null)
 		{
-			logger.error("Using default settings for Clip Creator because no Clip Creator settings in the AppSettings for app:{} ", appName);
+			logger.info("Using default settings for Clip Creator because no Clip Creator settings in the AppSettings for app:{} ", appName);
 			clipCreatorSettingsLocal = new ClipCreatorSettings();
-		} 
-		else 
+		}
+		else
 		{
 			try {
-				clipCreatorSettingsLocal = gson.fromJson(clipCreatorSettingsString.toString(), ClipCreatorSettings.class);
-				logger.error("Using Clip Creator settings for app:{} ", appName);
+				// Don't go through toString(): the stored value is a structured object whose runtime type
+				// depends on the persistence backend. In standalone it's a Map, but in cluster mode it's
+				// an org.bson.Document (Morphia/BSON), whose toString() is "Document{{...}}" — not valid JSON.
+				// Parsing that threw and we silently fell back to defaults (enabled=true), so the plugin kept
+				// creating clips even when disabled. Convert structurally instead so every backend works.
+				clipCreatorSettingsLocal = clipCreatorSettingsValue instanceof String
+						? gson.fromJson((String) clipCreatorSettingsValue, ClipCreatorSettings.class)
+						: gson.fromJson(gson.toJsonTree(clipCreatorSettingsValue), ClipCreatorSettings.class);
+				logger.info("Using Clip Creator settings for app:{} ", appName);
 			} catch (Exception e) {
 				logger.error("Invalid Clip Creator settings, using default settings for app:{}", appName);
 				clipCreatorSettingsLocal = new ClipCreatorSettings();
@@ -305,60 +312,112 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		return convertHlsToMp4(broadcast, updateLastMp4CreateTime, System.currentTimeMillis());
 	}
 
+	// `synchronized` here is a webapp-wide mutex shared with convertHlsToMp4Range —
+	// concurrent conversions across all streams serialize. Acceptable for v1; revisit
+	// with a per-stream lock if range-endpoint throughput becomes a problem under load.
 	public synchronized Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime, long endTime) {
 
-		Mp4CreationResponse response = new Mp4CreationResponse();
-		String streamId = broadcast.getStreamId();
-
-		long startTimeGetM3u8File = System.currentTimeMillis();
-		File m3u8File = getM3u8File(streamId);
-		if (m3u8File == null) {
-			long elapsedTimeMs = System.currentTimeMillis() - startTimeGetM3u8File;
-			logger.error("No m3u8 file found for stream {} and took {}ms", streamId, elapsedTimeMs);
-			response.setMessage("No m3u8 file found for stream " + streamId);
-			return response;
-		}
-		MediaPlaylist playList = readPlaylist(m3u8File);
-
-		if (playList == null) {
-			logger.error("No HLS playlist found for stream {} from the file:{}", streamId, m3u8File.getAbsolutePath());
-
-			response.setMessage("No HLS playlist found for stream " + streamId);
-			return response;
-		}
-
-		Long startTime = lastMp4CreateTimeMSForStream.get(streamId);
-
-
+		Long startTime = lastMp4CreateTimeMSForStream.get(broadcast.getStreamId());
 		if (startTime == null) {
 			startTime = endTime - (clipCreatorSettings.getMp4CreationIntervalSeconds() * 1000);
 		}
 
-		ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, startTime, endTime, m3u8File);
+		return doConvert(broadcast, startTime, endTime, updateLastMp4CreateTime);
+	}
+	public synchronized Mp4CreationResponse convertHlsToMp4Range(Broadcast broadcast, long startTimeMs, long endTimeMs) {
+		return doConvert(broadcast, startTimeMs, endTimeMs, false);
+	}
 
-		if (tsFilesToMerge.size() == 0) {
-			logger.info("No segment file found for stream {} between {} and {}", streamId,
-					dateFormat.format(new Date(startTime)), dateFormat.format(new Date(endTime)));
-			response.setMessage("No segment file found for stream " + streamId + " between "
-					+ dateFormat.format(new Date(startTime)) + " and " + dateFormat.format(new Date(endTime)));
-			return response;
+	public Mp4CreationResponse convertHlsToMp4RangeAsync(Broadcast broadcast, long startTimeMs, long endTimeMs) {
+		String streamId = broadcast.getStreamId();
+
+		ConversionInput input = prepareConversion(broadcast, startTimeMs, endTimeMs);
+		if (!input.isReady()) {
+			Mp4CreationResponse failure = new Mp4CreationResponse();
+			failure.setMessage(input.failureMessage);
+			return failure;
 		}
 
+		registerProcessingVod(broadcast, input.vodId, input.mp4FilePath, startTimeMs);
+
+		vertx.executeBlocking(() -> {
+			Mp4CreationResponse jobResult = runConversion(broadcast, input, startTimeMs, endTimeMs, false);
+
+			String status = jobResult.isSuccess() ? VoD.PROCESS_STATUS_FINISHED : VoD.PROCESS_STATUS_FAILED;
+			if (!dataStore.updateVoDProcessStatus(input.vodId, status)) {
+				logger.warn("Could not update VoD {} process status to {} for stream {}", input.vodId, status, streamId);
+			}
+			if (!jobResult.isSuccess()) {
+				logger.error("Async range MP4 creation failed for stream {} vodId {}: {}", streamId, input.vodId, jobResult.getMessage());
+			}
+			return null;
+		}, false);
+
+		Mp4CreationResponse response = new Mp4CreationResponse(null, input.vodId);
+		response.setSuccess(true);
+		response.setMessage("MP4 creation started for stream " + streamId);
+		return response;
+	}
+
+	private Mp4CreationResponse doConvert(Broadcast broadcast, long startTime, long endTime, boolean updateLastMp4CreateTime) {
+		ConversionInput input = prepareConversion(broadcast, startTime, endTime);
+		if (!input.isReady()) {
+			Mp4CreationResponse response = new Mp4CreationResponse();
+			response.setMessage(input.failureMessage);
+			return response;
+		}
+		return runConversion(broadcast, input, startTime, endTime, updateLastMp4CreateTime);
+	}
+
+	private ConversionInput prepareConversion(Broadcast broadcast, long startTime, long endTime) {
+		String streamId = broadcast.getStreamId();
+		ConversionInput input = new ConversionInput();
+
+		File m3u8File = getM3u8File(streamId);
+		if (m3u8File == null) {
+			logger.error("No m3u8 file found for stream {}", streamId);
+			input.failureMessage = "No m3u8 file found for stream " + streamId;
+			return input;
+		}
+
+		MediaPlaylist playList = readPlaylist(m3u8File);
+		if (playList == null) {
+			logger.error("No HLS playlist found for stream {} from the file:{}", streamId, m3u8File.getAbsolutePath());
+			input.failureMessage = "No HLS playlist found for stream " + streamId;
+			return input;
+		}
+
+		ArrayList<File> tsFilesToMerge = getSegmentFilesWithinTimeRange(playList, startTime, endTime, m3u8File);
+		if (tsFilesToMerge.isEmpty()) {
+			logger.info("No segment file found for stream {} between {} and {}", streamId,
+					dateFormat.format(new Date(startTime)), dateFormat.format(new Date(endTime)));
+			input.failureMessage = "No segment file found for stream " + streamId + " between "
+					+ dateFormat.format(new Date(startTime)) + " and " + dateFormat.format(new Date(endTime));
+			return input;
+		}
+
+		input.m3u8File = m3u8File;
+		input.tsFiles = tsFilesToMerge;
+		input.vodId = RandomStringUtils.randomAlphanumeric(24);
+		input.mp4FilePath = m3u8File.getParentFile().getAbsolutePath() + File.separator + input.vodId + ".mp4";
+		return input;
+	}
+	private synchronized Mp4CreationResponse runConversion(Broadcast broadcast, ConversionInput input,
+			long startTime, long endTime, boolean updateLastMp4CreateTime) {
+
+		Mp4CreationResponse response = new Mp4CreationResponse();
+		String streamId = broadcast.getStreamId();
+
 		try {
-			logger.info("number of ts files: {} for streamId:{} and startTime:{}", tsFilesToMerge.size(), streamId, dateFormat.format(new Date(startTime)));
-			File tsFileListTextFile = writeTsFilePathsToTxt(m3u8File, tsFilesToMerge);
+			logger.info("number of ts files: {} for streamId:{} and startTime:{}", input.tsFiles.size(), streamId, dateFormat.format(new Date(startTime)));
+			File tsFileListTextFile = writeTsFilePathsToTxt(input.m3u8File, input.tsFiles);
 
-			String vodId = RandomStringUtils.randomAlphanumeric(24);
-
-			String mp4FilePath = m3u8File.getParentFile().getAbsolutePath() + File.separator + vodId + ".mp4";
-
-			if (ClipCreatorConverter.createMp4(tsFileListTextFile, mp4FilePath, startTime, endTime)) 
+			if (ClipCreatorConverter.createMp4(tsFileListTextFile, input.mp4FilePath, startTime, endTime))
 			{
-
-				File mp4File = new File(mp4FilePath);
+				File mp4File = new File(input.mp4FilePath);
 
 				long durationMs = RecordMuxer.getDurationInMs(mp4File, streamId);
-				logger.info("New MP4 created from HLS playlist {} for stream {} for the time between {} and {} and duration:{}ms", mp4FilePath, streamId, dateFormat.format(new Date(startTime)), dateFormat.format(new Date(endTime)), durationMs);
+				logger.info("New MP4 created from HLS playlist {} for stream {} for the time between {} and {} and duration:{}ms", input.mp4FilePath, streamId, dateFormat.format(new Date(startTime)), dateFormat.format(new Date(endTime)), durationMs);
 
 				if (updateLastMp4CreateTime) {
 					lastMp4CreateTimeMSForStream.put(streamId, endTime);
@@ -370,17 +429,17 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 						mp4File,
 						startTime,
 						durationMs,
-						ClipCreatorConverter.getResolutionHeight(mp4FilePath),
+						ClipCreatorConverter.getResolutionHeight(input.mp4FilePath),
 						null,
-						vodId
+						input.vodId
 						);
 				createdMp4Count++;
 
 				if (clipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4()) {
-					deleteFiles(tsFilesToMerge);
+					deleteFiles(input.tsFiles);
 				}
 
-				response = new Mp4CreationResponse(mp4File, vodId);
+				response = new Mp4CreationResponse(mp4File, input.vodId);
 				response.setSuccess(true);
 			} else {
 				logger.info("Could not create MP4 from HLS for stream {}", streamId);
@@ -393,6 +452,33 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		}
 
 		return response;
+	}
+
+	private void registerProcessingVod(Broadcast broadcast, String vodId, String mp4FilePath, long startTime) {
+		String relativePath = AntMediaApplicationAdapter.getRelativePath(mp4FilePath);
+		String vodName = new File(mp4FilePath).getName();
+		String streamName = broadcast.getName() != null ? broadcast.getName() : broadcast.getStreamId();
+
+		VoD placeholder = new VoD(streamName, broadcast.getStreamId(), relativePath, vodName,
+				System.currentTimeMillis(), startTime, 0, 0, VoD.STREAM_VOD, vodId, null);
+		placeholder.setProcessStatus(VoD.PROCESS_STATUS_PROCESSING);
+
+		if (dataStore.addVod(placeholder) == null) {
+			logger.warn("Could not register placeholder VoD {} for stream {}", vodId, broadcast.getStreamId());
+		}
+	}
+
+	/** Prepared inputs for a conversion, computed synchronously before the ffmpeg step runs. */
+	private static class ConversionInput {
+		File m3u8File;
+		ArrayList<File> tsFiles;
+		String vodId;
+		String mp4FilePath;
+		String failureMessage;
+
+		boolean isReady() {
+			return failureMessage == null;
+		}
 	}
 
 	public int deleteFiles(@Nonnull List<File> fileList) 
@@ -660,6 +746,14 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 	public void setDataStore(DataStore dataStore) {
 		this.dataStore = dataStore;
+	}
+
+	public Vertx getVertx() {
+		return vertx;
+	}
+
+	public void setVertx(Vertx vertx) {
+		this.vertx = vertx;
 	}
 
 	public long getTimerId() {
