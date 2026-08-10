@@ -107,6 +107,17 @@
 			</plugin>
 			<plugin>
 				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifestEntries>
+							<AMS-Plugin-Name>Zixi Plugin</AMS-Plugin-Name>
+							<AMS-Plugin-Author>Ant Media Inc.</AMS-Plugin-Author>
+							<AMS-Plugin-Version>${project.version}</AMS-Plugin-Version>
+							<AMS-Plugin-Requires-Version>2.16.0</AMS-Plugin-Requires-Version>
+							<AMS-Plugin-Description>Zixi protocol adapter for AMS ingest/egress.</AMS-Plugin-Description>
+						</manifestEntries>
+					</archive>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.felix</groupId>
@@ -139,6 +150,15 @@
 					</descriptorRefs>
 					<finalName>${project.artifactId}-plugin</finalName>
 					<appendAssemblyId>false</appendAssemblyId>
+					<archive>
+						<manifestEntries>
+							<AMS-Plugin-Name>Zixi Plugin</AMS-Plugin-Name>
+							<AMS-Plugin-Author>Ant Media Inc.</AMS-Plugin-Author>
+							<AMS-Plugin-Version>${project.version}</AMS-Plugin-Version>
+							<AMS-Plugin-Requires-Version>2.16.0</AMS-Plugin-Requires-Version>
+							<AMS-Plugin-Description>Zixi protocol adapter for AMS ingest/egress.</AMS-Plugin-Description>
+						</manifestEntries>
+					</archive>
 				</configuration>
 
 				<executions>
