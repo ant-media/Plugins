@@ -368,6 +368,89 @@ public class ClipCreatorPluginTest {
 	}
 
 	@Test
+	public void testConvertHlsToMp4RangeAsync() throws Exception {
+		String streamId = "testStream";
+		ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
+		DataStore dataStore = new InMemoryDataStore("dbAsync");
+		plugin.setDataStore(dataStore);
+		plugin.setVertx(vertx);
+
+		AntMediaApplicationAdapter mockApplication = mock(AntMediaApplicationAdapter.class);
+		doReturn(mockApplication).when(plugin).getApplication();
+		doNothing().when(mockApplication).muxingFinished(any(), any(), any(), anyLong(), anyLong(), anyInt(), any(), anyString());
+
+		Broadcast broadcast = new Broadcast();
+		broadcast.setStreamId(streamId);
+		plugin.setStreamsFolder("target/resources_tmp_range_async");
+
+		File streamFolder = new File(plugin.getStreamsFolder());
+		streamFolder.mkdirs();
+
+		File file = new File("src/test/resources");
+		for (File tmpFile : file.listFiles()) {
+			Files.copy(tmpFile, new File(streamFolder, tmpFile.getName()));
+		}
+
+		plugin.setClipCreatorSettings(new ClipCreatorSettings());
+
+		long startMs = 1727644047000L;
+		long endMs = 1727644051862L;
+
+		Mp4CreationResponse response = plugin.convertHlsToMp4RangeAsync(broadcast, startMs, endMs);
+
+		// the vodId must come back immediately, before ffmpeg runs
+		assertTrue(response.isSuccess());
+		assertNotNull(response.getVodId());
+		assertNull(response.getFile());
+
+		String vodId = response.getVodId();
+
+		// a placeholder VoD is registered right away so the caller can poll it
+		VoD placeholder = dataStore.getVoD(vodId);
+		assertNotNull(placeholder);
+
+		// the background job eventually flips the process status to finished
+		Awaitility.await().atMost(30, TimeUnit.SECONDS)
+				.until(() -> VoD.PROCESS_STATUS_FINISHED.equals(dataStore.getVoD(vodId).getProcessStatus()));
+
+		verify(mockApplication, timeout(30000)).muxingFinished(any(), eq(streamId), any(), eq(startMs), anyLong(), anyInt(), any(), eq(vodId));
+
+		// range clipping must NOT touch the periodic recorder's bookkeeping
+		assertFalse(plugin.getLastMp4CreateTimeForStream().containsKey(streamId));
+
+		File producedMp4 = new File(streamFolder, vodId + ".mp4");
+		if (producedMp4.exists()) {
+			assertTrue(producedMp4.delete());
+		}
+		delete(streamFolder);
+	}
+
+	@Test
+	public void testConvertHlsToMp4RangeAsync_NoSegments() throws Exception {
+		String streamId = "testStream";
+		ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
+		DataStore dataStore = new InMemoryDataStore("dbAsyncEmpty");
+		plugin.setDataStore(dataStore);
+		plugin.setVertx(vertx);
+
+		Broadcast broadcast = new Broadcast();
+		broadcast.setStreamId(streamId);
+		plugin.setStreamsFolder("src/test/resources");
+		plugin.setClipCreatorSettings(new ClipCreatorSettings());
+
+		// a range with no segments: cheap validation fails, so no vodId and no placeholder VoD
+		long startMs = 100_000L;
+		long endMs = 200_000L;
+
+		Mp4CreationResponse response = plugin.convertHlsToMp4RangeAsync(broadcast, startMs, endMs);
+
+		assertFalse(response.isSuccess());
+		assertNull(response.getVodId());
+		assertNotNull(response.getMessage());
+		assertEquals(0, dataStore.getTotalVodNumber());
+	}
+
+	@Test
 	public void testGetSegmentFilesWithinTimeRange() throws IOException {
 		ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
 		MediaPlaylistParser parser = new MediaPlaylistParser();
