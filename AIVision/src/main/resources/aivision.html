@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>AI Vision</title>
+	<style>
+		:root {
+			color-scheme: dark;
+			font-family: Arial, Helvetica, sans-serif;
+			background: #111418;
+			color: #eef2f3;
+		}
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			background: #111418;
+		}
+
+		.app {
+			display: grid;
+			grid-template-columns: minmax(320px, 1fr) 380px;
+			gap: 18px;
+			box-sizing: border-box;
+			min-height: 100vh;
+			padding: 18px;
+		}
+
+		.player-area,
+		.controls {
+			background: #1b2026;
+			border: 1px solid #303842;
+			border-radius: 8px;
+		}
+
+		.player-area {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 420px;
+			overflow: hidden;
+		}
+
+		video {
+			width: 100%;
+			height: 100%;
+			min-height: 420px;
+			background: #050607;
+			object-fit: contain;
+		}
+
+		.controls {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+			padding: 16px;
+		}
+
+		h1 {
+			margin: 0 0 6px;
+			font-size: 22px;
+			font-weight: 700;
+		}
+
+		label {
+			display: grid;
+			gap: 6px;
+			font-size: 13px;
+			color: #c5ccd3;
+		}
+
+		input,
+		textarea {
+			box-sizing: border-box;
+			width: 100%;
+			border: 1px solid #3a434f;
+			border-radius: 6px;
+			background: #111418;
+			color: #eef2f3;
+			font: inherit;
+			padding: 10px;
+			outline: none;
+		}
+
+		textarea {
+			min-height: 120px;
+			resize: vertical;
+		}
+
+		button {
+			border: 0;
+			border-radius: 6px;
+			background: #22a06b;
+			color: #04120c;
+			cursor: pointer;
+			font-weight: 700;
+			padding: 11px 12px;
+		}
+
+		button.secondary {
+			background: #d3d8df;
+			color: #161a20;
+		}
+
+		button:disabled {
+			cursor: wait;
+			opacity: 0.65;
+		}
+
+		.actions {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 10px;
+		}
+
+		.status,
+		.result {
+			border: 1px solid #303842;
+			border-radius: 6px;
+			background: #12161b;
+			padding: 10px;
+			font-size: 13px;
+			line-height: 1.45;
+			white-space: pre-wrap;
+			overflow-wrap: anywhere;
+		}
+
+		.result img {
+			display: block;
+			width: 100%;
+			margin-top: 10px;
+			border-radius: 6px;
+			border: 1px solid #303842;
+		}
+
+		@media (max-width: 860px) {
+			.app {
+				grid-template-columns: 1fr;
+			}
+
+			.player-area,
+			video {
+				min-height: 260px;
+			}
+		}
+	</style>
+</head>
+<body>
+	<main class="app">
+		<section class="player-area">
+			<video id="remoteVideo" autoplay playsinline controls muted></video>
+		</section>
+
+		<aside class="controls">
+			<h1>AI Vision</h1>
+
+			<label>
+				Stream ID
+				<input id="streamId" value="stream1" autocomplete="off">
+			</label>
+
+			<div class="actions">
+				<button id="connectButton" type="button">Connect</button>
+				<button id="registerButton" class="secondary" type="button">Register</button>
+			</div>
+
+			<label>
+				Prompt
+				<textarea id="prompt">Describe what is visible in this live stream frame.</textarea>
+			</label>
+
+			<button id="analyzeButton" type="button">Analyze Latest I-frame</button>
+			<button id="blurPeopleButton" class="secondary" type="button">Blur People</button>
+
+			<label>
+				OpenAI-compatible Base URL
+				<input id="baseUrl" value="http://localhost:11434/v1" autocomplete="off">
+			</label>
+
+			<label>
+				Token
+				<input id="token" type="password" autocomplete="off">
+			</label>
+
+			<label>
+				Model
+				<input id="model" value="llava" autocomplete="off">
+			</label>
+
+			<button id="saveSettingsButton" class="secondary" type="button">Save AI Settings</button>
+
+			<div id="status" class="status">Idle</div>
+			<div id="result" class="result"></div>
+		</aside>
+	</main>
+
+	<script type="module">
+		import {WebRTCAdaptor} from "./js/webrtc_adaptor.js";
+
+		const appName = location.pathname.split("/").filter(Boolean)[0] || "LiveApp";
+		const restBase = `${location.origin}/${appName}/rest/v2/aivision`;
+		let webRTCAdaptor;
+
+		const elements = {
+			streamId: document.getElementById("streamId"),
+			prompt: document.getElementById("prompt"),
+			baseUrl: document.getElementById("baseUrl"),
+			token: document.getElementById("token"),
+			model: document.getElementById("model"),
+			status: document.getElementById("status"),
+			result: document.getElementById("result"),
+			remoteVideo: document.getElementById("remoteVideo"),
+			connectButton: document.getElementById("connectButton"),
+			registerButton: document.getElementById("registerButton"),
+			analyzeButton: document.getElementById("analyzeButton"),
+			blurPeopleButton: document.getElementById("blurPeopleButton"),
+			saveSettingsButton: document.getElementById("saveSettingsButton")
+		};
+
+		function setStatus(message) {
+			elements.status.textContent = message;
+		}
+
+		function streamId() {
+			return elements.streamId.value.trim();
+		}
+
+		async function request(path, options = {}) {
+			const response = await fetch(`${restBase}${path}`, {
+				headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+				...options
+			});
+			const text = await response.text();
+			const body = text ? JSON.parse(text) : {};
+			if (!response.ok) {
+				throw new Error(body.message || text || `HTTP ${response.status}`);
+			}
+			return body;
+		}
+
+		async function registerStream() {
+			if (!streamId()) {
+				throw new Error("Stream ID is required");
+			}
+			const result = await request(`/register/${encodeURIComponent(streamId())}`, { method: "POST" });
+			setStatus(result.message || "Stream registered");
+		}
+
+		function connectPlayer() {
+			if (!streamId()) {
+				setStatus("Stream ID is required");
+				return;
+			}
+
+			registerStream().catch((error) => setStatus(error.message));
+			if (webRTCAdaptor) {
+				webRTCAdaptor.stop(streamId());
+				webRTCAdaptor.closeWebSocket();
+			}
+
+			webRTCAdaptor = new WebRTCAdaptor({
+				websocket_url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/${appName}/websocket`,
+				remoteVideoId: "remoteVideo",
+				isPlayMode: true,
+				callback: (info) => {
+					if (info === "initialized") {
+						webRTCAdaptor.play(streamId());
+						setStatus("Connecting");
+					}
+					if (info === "play_started") {
+						setStatus("Playing and registered");
+					}
+					if (info === "play_finished") {
+						setStatus("Playback finished");
+					}
+				},
+				callbackError: (error) => setStatus(String(error))
+			});
+		}
+
+		async function analyze() {
+			elements.analyzeButton.disabled = true;
+			elements.result.textContent = "";
+			try {
+				const body = await request("/analyze", {
+					method: "POST",
+					body: JSON.stringify({ streamId: streamId(), prompt: elements.prompt.value })
+				});
+				if (!body.success) {
+					setStatus(body.message || "Analysis failed");
+					return;
+				}
+				elements.result.textContent = body.aiResponse || "";
+				if (body.imageUrl) {
+					const image = document.createElement("img");
+					image.src = body.imageUrl;
+					image.alt = "Latest analyzed frame";
+					elements.result.appendChild(image);
+				}
+				setStatus("Analysis completed");
+			}
+			catch (error) {
+				setStatus(error.message);
+			}
+			finally {
+				elements.analyzeButton.disabled = false;
+			}
+		}
+
+		async function blurPeople() {
+			elements.blurPeopleButton.disabled = true;
+			elements.result.textContent = "";
+			try {
+				const body = await request("/blur-people", {
+					method: "POST",
+					body: JSON.stringify({ streamId: streamId() })
+				});
+				if (!body.success) {
+					setStatus(body.message || "People blur failed");
+					return;
+				}
+				elements.result.textContent = body.aiResponse || "";
+				if (body.imageUrl) {
+					const image = document.createElement("img");
+					image.src = body.imageUrl;
+					image.alt = "Latest frame with people blurred";
+					elements.result.appendChild(image);
+				}
+				setStatus("People blur completed");
+			}
+			catch (error) {
+				setStatus(error.message);
+			}
+			finally {
+				elements.blurPeopleButton.disabled = false;
+			}
+		}
+
+		async function saveSettings() {
+			elements.saveSettingsButton.disabled = true;
+			try {
+				const body = await request("/settings", {
+					method: "POST",
+					body: JSON.stringify({
+						baseUrl: elements.baseUrl.value,
+						token: elements.token.value,
+						model: elements.model.value
+					})
+				});
+				setStatus(`AI settings saved: ${body.baseUrl} / ${body.model}`);
+			}
+			catch (error) {
+				setStatus(error.message);
+			}
+			finally {
+				elements.saveSettingsButton.disabled = false;
+			}
+		}
+
+		elements.connectButton.addEventListener("click", connectPlayer);
+		elements.registerButton.addEventListener("click", () => registerStream().catch((error) => setStatus(error.message)));
+		elements.analyzeButton.addEventListener("click", analyze);
+		elements.blurPeopleButton.addEventListener("click", blurPeople);
+		elements.saveSettingsButton.addEventListener("click", saveSettings);
+	</script>
+</body>
+</html>

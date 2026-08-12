@@ -1,0 +1,32 @@
+# Maven build output
+target/
+
+# IDE/project metadata
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# Java build artifacts
+*.class
+*.jar
+*.war
+*.ear
+
+# Logs and runtime dumps
+*.log
+hs_err_pid*
+replay_pid*
+
+# Local environment/config
+.env
+.env.*
+!.env.example
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
