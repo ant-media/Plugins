@@ -1,0 +1,52 @@
+name: AI Vision Release
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'AIVision/**'
+      - '.github/workflows/aivision-release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  release-aivision:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build AI Vision package
+        working-directory: AIVision
+        run: mvn clean package -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Dgpg.skip=true
+
+      - name: Verify package contents
+        run: unzip -l AIVision/target/aivision.zip
+
+      - name: Update aivision-latest tag
+        run: |
+          git tag -f aivision-latest "$GITHUB_SHA"
+          git push -f origin refs/tags/aivision-latest
+
+      - name: Create or update AI Vision latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view aivision-latest >/dev/null 2>&1; then
+            gh release create aivision-latest \
+              --title "AI Vision Latest" \
+              --notes "Latest AI Vision plugin package."
+          fi
+          gh release upload aivision-latest AIVision/target/aivision.zip --clobber
