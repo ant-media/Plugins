@@ -1,6 +1,5 @@
 package io.antmedia.plugin;
 
-import static org.bytedeco.ffmpeg.global.avcodec.AV_PKT_FLAG_KEY;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_ref;
 import static org.bytedeco.ffmpeg.global.avcodec.av_packet_unref;
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGR24;
@@ -19,7 +18,6 @@ import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.imageio.ImageIO;
@@ -45,8 +43,8 @@ public class AIVisionPacketListener implements IPacketListener {
 	private final File imageDirectory;
 	private final String imageUrlPrefix;
 	private final Vertx vertx;
-	private final AtomicReference<AIVisionImage> latestImage = new AtomicReference<>();
-	private final AtomicBoolean decodeInProgress = new AtomicBoolean(false);
+	private final AtomicReference<LatestFrame> latestFrame = new AtomicReference<>();
+	private final AtomicReference<AIVisionImage> latestSavedImage = new AtomicReference<>();
 	private volatile AIVisionVideoDecoder videoDecoder;
 	private volatile StreamParametersInfo videoStreamInfo;
 
@@ -59,7 +57,7 @@ public class AIVisionPacketListener implements IPacketListener {
 
 	@Override
 	public AVPacket onVideoPacket(String incomingStreamId, AVPacket packet) {
-		if (!isKeyFrame(packet) || videoDecoder == null || !decodeInProgress.compareAndSet(false, true)) {
+		if (packet == null || videoDecoder == null) {
 			return packet;
 		}
 
@@ -67,18 +65,17 @@ public class AIVisionPacketListener implements IPacketListener {
 		av_packet_ref(packetCopy, packet);
 		vertx.executeBlocking(() -> {
 			try {
-				decodeAndStore(packetCopy);
+				decodeAndKeep(packetCopy);
 			}
 			catch (Exception e) {
-				logger.warn("Could not decode latest keyframe for stream {}", streamId, e);
+				logger.warn("Could not decode latest frame for stream {}", streamId, e);
 			}
 			finally {
 				av_packet_unref(packetCopy);
 				packetCopy.close();
-				decodeInProgress.set(false);
 			}
 			return null;
-		}, false);
+		}, true);
 
 		return packet;
 	}
@@ -121,7 +118,29 @@ public class AIVisionPacketListener implements IPacketListener {
 	}
 
 	public AIVisionImage getLatestImage() {
-		return latestImage.get();
+		return latestSavedImage.get();
+	}
+
+	public long getLatestFrameTimestamp() {
+		LatestFrame frame = latestFrame.get();
+		return frame != null ? frame.getTimestamp() : 0;
+	}
+
+	public AIVisionImage saveLatestFrame(long lastFrameTimestamp) throws IOException {
+		LatestFrame frame = latestFrame.get();
+		if (frame == null || frame.getTimestamp() <= lastFrameTimestamp) {
+			return null;
+		}
+
+		imageDirectory.mkdirs();
+		long timestamp = frame.getTimestamp();
+		String fileName = streamId + "-" + timestamp + ".png";
+		File imageFile = new File(imageDirectory, fileName);
+		ImageIO.write(frame.getImage(), "png", imageFile);
+		AIVisionImage image = new AIVisionImage(imageFile, imageUrlPrefix + "/" + fileName, timestamp);
+		latestSavedImage.set(image);
+		logger.debug("Saved AI Vision analysis frame for stream {} at {}", streamId, imageFile.getAbsolutePath());
+		return image;
 	}
 
 	public void stop() {
@@ -132,11 +151,7 @@ public class AIVisionPacketListener implements IPacketListener {
 		}
 	}
 
-	private boolean isKeyFrame(AVPacket packet) {
-		return packet != null && (packet.flags() & AV_PKT_FLAG_KEY) == AV_PKT_FLAG_KEY;
-	}
-
-	private void decodeAndStore(AVPacket packet) throws IOException {
+	private void decodeAndKeep(AVPacket packet) {
 		AIVisionVideoDecoder decoder = videoDecoder;
 		StreamParametersInfo streamInfo = videoStreamInfo;
 		if (decoder == null || streamInfo == null) {
@@ -149,13 +164,7 @@ public class AIVisionPacketListener implements IPacketListener {
 		}
 
 		BufferedImage image = convertToBufferedImage(frame);
-		imageDirectory.mkdirs();
-		long timestamp = System.currentTimeMillis();
-		String fileName = streamId + "-" + timestamp + ".png";
-		File imageFile = new File(imageDirectory, fileName);
-		ImageIO.write(image, "png", imageFile);
-		latestImage.set(new AIVisionImage(imageFile, imageUrlPrefix + "/" + fileName));
-		logger.debug("Stored latest AI Vision keyframe for stream {} at {}", streamId, imageFile.getAbsolutePath());
+		latestFrame.set(new LatestFrame(image, System.currentTimeMillis()));
 	}
 
 	private BufferedImage convertToBufferedImage(AVFrame sourceFrame) {
@@ -199,6 +208,25 @@ public class AIVisionPacketListener implements IPacketListener {
 				av_free(buffer);
 				buffer.close();
 			}
+		}
+	}
+
+	private static class LatestFrame {
+
+		private final BufferedImage image;
+		private final long timestamp;
+
+		private LatestFrame(BufferedImage image, long timestamp) {
+			this.image = image;
+			this.timestamp = timestamp;
+		}
+
+		private BufferedImage getImage() {
+			return image;
+		}
+
+		private long getTimestamp() {
+			return timestamp;
 		}
 	}
 }

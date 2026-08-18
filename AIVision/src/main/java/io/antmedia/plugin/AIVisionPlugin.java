@@ -1,15 +1,10 @@
 package io.antmedia.plugin;
 
 import java.io.File;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import javax.imageio.ImageIO;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,6 +81,10 @@ public class AIVisionPlugin implements ApplicationContextAware {
 	}
 
 	public AIVisionAnalysisResponse analyze(String streamId, String prompt) {
+		return analyze(streamId, prompt, 0);
+	}
+
+	public AIVisionAnalysisResponse analyze(String streamId, String prompt, long lastFrameTimestamp) {
 		if (streamId == null || streamId.isBlank()) {
 			return new AIVisionAnalysisResponse(false, "streamId is required");
 		}
@@ -102,76 +101,30 @@ public class AIVisionPlugin implements ApplicationContextAware {
 			listener = listeners.get(streamId);
 		}
 
-		AIVisionImage latestImage = listener != null ? listener.getLatestImage() : null;
+		AIVisionImage latestImage = waitForFreshFrame(listener, lastFrameTimestamp);
 		if (latestImage == null) {
-			return new AIVisionAnalysisResponse(false, "No decoded I-frame is available yet for stream " + streamId);
+			return new AIVisionAnalysisResponse(false, "No newer decoded frame is available yet for stream " + streamId);
 		}
 
 		try {
-			String aiResponse = aiClient.analyze(settings, prompt, latestImage.getFile());
+			String enhancedPrompt = buildAnalysisPrompt(prompt);
+			String aiResponse = aiClient.analyze(settings, enhancedPrompt, latestImage.getFile());
 			AIVisionAnalysisResponse response = new AIVisionAnalysisResponse(true, "AI analysis completed");
 			response.setStreamId(streamId);
 			response.setPrompt(prompt);
 			response.setImagePath(latestImage.getFile().getAbsolutePath());
 			response.setImageUrl(latestImage.getUrl());
+			response.setFrameTimestamp(latestImage.getTimestamp());
 			response.setAiResponse(aiResponse);
+			List<String> alerts = findAlerts(prompt, aiResponse);
+			response.setAlerts(alerts);
+			response.setAlertTriggered(!alerts.isEmpty());
 			return response;
 		}
 		catch (Exception e) {
 			logger.warn("AI analysis failed for stream {}", streamId, e);
 			String errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
 			return new AIVisionAnalysisResponse(false, "AI analysis failed: " + errorMessage);
-		}
-	}
-
-	public AIVisionAnalysisResponse blurPeople(String streamId) {
-		if (streamId == null || streamId.isBlank()) {
-			return new AIVisionAnalysisResponse(false, "streamId is required");
-		}
-
-		AIVisionPacketListener listener = listeners.get(streamId);
-		if (listener == null) {
-			Result registerResult = register(streamId);
-			if (!registerResult.isSuccess()) {
-				return new AIVisionAnalysisResponse(false, registerResult.getMessage());
-			}
-			listener = listeners.get(streamId);
-		}
-
-		AIVisionImage latestImage = listener != null ? listener.getLatestImage() : null;
-		if (latestImage == null) {
-			return new AIVisionAnalysisResponse(false, "No decoded I-frame is available yet for stream " + streamId);
-		}
-
-		try {
-			List<AIVisionDetectionBox> people = aiClient.detectPeople(settings, latestImage.getFile());
-			BufferedImage image = ImageIO.read(latestImage.getFile());
-			if (image == null) {
-				return new AIVisionAnalysisResponse(false, "Could not read latest image for stream " + streamId);
-			}
-
-			for (AIVisionDetectionBox person : people) {
-				blurBox(image, person);
-			}
-
-			imageDirectory.mkdirs();
-			long timestamp = System.currentTimeMillis();
-			String fileName = streamId + "-" + timestamp + "-people-blurred.png";
-			File imageFile = new File(imageDirectory, fileName);
-			ImageIO.write(image, "png", imageFile);
-
-			AIVisionAnalysisResponse response = new AIVisionAnalysisResponse(true, "People blur completed");
-			response.setStreamId(streamId);
-			response.setPrompt("Detect visible people and blur full person bounding boxes");
-			response.setImagePath(imageFile.getAbsolutePath());
-			response.setImageUrl(imageUrlPrefix + "/" + fileName);
-			response.setAiResponse("Blurred people: " + people.size());
-			return response;
-		}
-		catch (Exception e) {
-			logger.warn("People blur failed for stream {}", streamId, e);
-			String errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-			return new AIVisionAnalysisResponse(false, "People blur failed: " + errorMessage);
 		}
 	}
 
@@ -201,55 +154,53 @@ public class AIVisionPlugin implements ApplicationContextAware {
 		return listener != null ? listener.getLatestImage() : null;
 	}
 
-	private void blurBox(BufferedImage image, AIVisionDetectionBox box) throws IOException {
-		int imageWidth = image.getWidth();
-		int imageHeight = image.getHeight();
-		int x = toPixels(box.getX(), imageWidth);
-		int y = toPixels(box.getY(), imageHeight);
-		int width = toPixels(box.getWidth(), imageWidth);
-		int height = toPixels(box.getHeight(), imageHeight);
-
-		if (width <= 0 || height <= 0) {
-			return;
+	private AIVisionImage waitForFreshFrame(AIVisionPacketListener listener, long lastFrameTimestamp) {
+		if (listener == null) {
+			return null;
 		}
 
-		x = clamp(x, 0, imageWidth - 1);
-		y = clamp(y, 0, imageHeight - 1);
-		width = clamp(width, 1, imageWidth - x);
-		height = clamp(height, 1, imageHeight - y);
+		long deadline = System.currentTimeMillis() + 2000;
+		while (listener.getLatestFrameTimestamp() <= lastFrameTimestamp && System.currentTimeMillis() < deadline) {
+			try {
+				Thread.sleep(100);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				break;
+			}
+		}
 
-		BufferedImage region = image.getSubimage(x, y, width, height);
-		int scaledWidth = Math.max(1, width / 18);
-		int scaledHeight = Math.max(1, height / 18);
-		BufferedImage small = new BufferedImage(scaledWidth, scaledHeight, BufferedImage.TYPE_INT_RGB);
-		Graphics2D smallGraphics = small.createGraphics();
 		try {
-			smallGraphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-			smallGraphics.drawImage(region, 0, 0, scaledWidth, scaledHeight, null);
+			return listener.saveLatestFrame(lastFrameTimestamp);
 		}
-		finally {
-			smallGraphics.dispose();
-		}
-
-		Graphics2D imageGraphics = image.createGraphics();
-		try {
-			imageGraphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-			imageGraphics.drawImage(small, x, y, width, height, null);
-		}
-		finally {
-			imageGraphics.dispose();
+		catch (Exception e) {
+			logger.warn("Could not save latest analysis frame", e);
+			return null;
 		}
 	}
 
-	private int toPixels(double value, int size) {
-		if (value > 0 && value <= 1) {
-			return (int) Math.round(value * size);
-		}
-		return (int) Math.round(value);
+	private String buildAnalysisPrompt(String prompt) {
+		return prompt + "\n\n"
+				+ "If this prompt is a yes/no question and the answer is yes, include exactly one line in this format: "
+				+ "ALERT:{explanation}. If the answer is no, do not include ALERT. Keep the rest of the answer concise.";
 	}
 
-	private int clamp(int value, int min, int max) {
-		return Math.max(min, Math.min(max, value));
+	private List<String> findAlerts(String prompt, String aiResponse) {
+		List<String> alerts = new ArrayList<>();
+		if (aiResponse == null || aiResponse.isBlank()) {
+			return alerts;
+		}
+
+		for (String line : aiResponse.split("\\R")) {
+			int alertIndex = line.toUpperCase().indexOf("ALERT:");
+			if (alertIndex < 0) {
+				continue;
+			}
+			String explanation = line.substring(alertIndex + "ALERT:".length()).trim();
+			explanation = explanation.replaceAll("^\\{", "").replaceAll("\\}$", "").trim();
+			alerts.add(explanation.isBlank() ? "Alert triggered" : explanation);
+		}
+		return alerts;
 	}
 
 	private IAntMediaStreamHandler getApplication() {

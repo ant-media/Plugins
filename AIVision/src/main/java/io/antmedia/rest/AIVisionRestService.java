@@ -49,16 +49,7 @@ public class AIVisionRestService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response analyze(AIVisionAnalysisRequest request) {
-		AIVisionAnalysisResponse response = getPluginApp().analyze(request.getStreamId(), request.getPrompt());
-		return Response.ok(response).build();
-	}
-
-	@POST
-	@Path("/blur-people")
-	@Consumes(MediaType.APPLICATION_JSON)
-	@Produces(MediaType.APPLICATION_JSON)
-	public Response blurPeople(AIVisionAnalysisRequest request) {
-		AIVisionAnalysisResponse response = getPluginApp().blurPeople(request.getStreamId());
+		AIVisionAnalysisResponse response = getPluginApp().analyze(request.getStreamId(), request.getPrompt(), request.getLastFrameTimestamp());
 		return Response.ok(response).build();
 	}
 
@@ -89,6 +80,7 @@ public class AIVisionRestService {
 		response.setStreamId(streamId);
 		response.setImagePath(image.getFile().getAbsolutePath());
 		response.setImageUrl(image.getUrl());
+		response.setFrameTimestamp(image.getTimestamp());
 		return Response.ok(response).build();
 	}
 

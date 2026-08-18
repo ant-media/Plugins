@@ -4,6 +4,8 @@ public class AIVisionAnalysisRequest {
 
 	private String streamId;
 	private String prompt;
+	private String lastImageUrl;
+	private long lastFrameTimestamp;
 
 	public String getStreamId() {
 		return streamId;
@@ -19,5 +21,21 @@ public class AIVisionAnalysisRequest {
 
 	public void setPrompt(String prompt) {
 		this.prompt = prompt;
+	}
+
+	public String getLastImageUrl() {
+		return lastImageUrl;
+	}
+
+	public void setLastImageUrl(String lastImageUrl) {
+		this.lastImageUrl = lastImageUrl;
+	}
+
+	public long getLastFrameTimestamp() {
+		return lastFrameTimestamp;
+	}
+
+	public void setLastFrameTimestamp(long lastFrameTimestamp) {
+		this.lastFrameTimestamp = lastFrameTimestamp;
 	}
 }

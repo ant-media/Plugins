@@ -8,14 +8,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Base64;
-import java.util.Collections;
-import java.util.List;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 public class OpenAICompatibleVisionClient {
@@ -45,15 +41,6 @@ public class OpenAICompatibleVisionClient {
 		}
 
 		return parseAssistantText(response.body());
-	}
-
-	public List<AIVisionDetectionBox> detectPeople(AIVisionSettings settings, File imageFile) throws IOException, InterruptedException {
-		String prompt = "Detect every visible person in this image. Return only valid JSON in this exact format: "
-				+ "{\"people\":[{\"x\":0,\"y\":0,\"width\":0,\"height\":0}]}. "
-				+ "Coordinates must be pixel coordinates for the full visible body bounding box. "
-				+ "If no person is visible, return {\"people\":[]}. Do not include face-only boxes.";
-		String responseText = analyze(settings, prompt, imageFile);
-		return parseDetectionBoxes(responseText);
 	}
 
 	private JsonObject createRequestBody(String model, String prompt, String imageDataUrl) {
@@ -107,42 +94,5 @@ public class OpenAICompatibleVisionClient {
 		}
 
 		return message.get("content").getAsString();
-	}
-
-	private List<AIVisionDetectionBox> parseDetectionBoxes(String responseText) throws IOException {
-		String json = extractJsonObject(responseText);
-		JsonObject root = gson.fromJson(json, JsonObject.class);
-		JsonArray people = root != null ? root.getAsJsonArray("people") : null;
-		if (people == null || people.isEmpty()) {
-			return Collections.emptyList();
-		}
-
-		AIVisionDetectionBox[] boxes = gson.fromJson(people, AIVisionDetectionBox[].class);
-		return boxes != null ? Arrays.asList(boxes) : Collections.emptyList();
-	}
-
-	private String extractJsonObject(String responseText) throws IOException {
-		if (responseText == null) {
-			throw new IOException("AI service response is empty");
-		}
-		String text = responseText.trim();
-		if (text.startsWith("```")) {
-			int firstLineEnd = text.indexOf('\n');
-			int fenceEnd = text.lastIndexOf("```");
-			if (firstLineEnd >= 0 && fenceEnd > firstLineEnd) {
-				text = text.substring(firstLineEnd + 1, fenceEnd).trim();
-			}
-		}
-		int start = text.indexOf('{');
-		int end = text.lastIndexOf('}');
-		if (start < 0 || end <= start) {
-			throw new IOException("AI service response does not contain detection JSON");
-		}
-		String json = text.substring(start, end + 1);
-		JsonElement parsed = gson.fromJson(json, JsonElement.class);
-		if (parsed == null || !parsed.isJsonObject()) {
-			throw new IOException("AI service response detection JSON is invalid");
-		}
-		return json;
 	}
 }
