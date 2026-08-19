@@ -1,0 +1,7 @@
+/target/
+/.classpath
+/.project
+/.settings/
+
+# 55MB upstream binary, fetched by ./fetch-mediamtx.sh
+/src/main/native/linux-x86_64/mediamtx
