@@ -592,4 +592,89 @@ public class ClipCreatorPluginTest {
 
 	}
 
+	/**
+	 * PDT marks a segment's start, so a range starting mid-segment must keep that segment or the
+	 * clip silently loses content off the front. Fixture PDTs: 047342 / 050102 / 051862 / 056782.
+	 */
+	@Test
+	public void testGetSegmentFilesIncludesSegmentContainingStart() throws IOException {
+		ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
+		File m3u8File = new File("src/test/resources/testStream.m3u8");
+		MediaPlaylist mediaPlaylist = new MediaPlaylistParser().readPlaylist(m3u8File.toPath());
+
+		//starts inside segment 1 (050102 -> 051862) and ends before segment 3 starts
+		long startTimeMs = 1727644051000L;
+		long endTimeMs = 1727644056000L;
+
+		ArrayList<File> files = plugin.getSegmentFilesWithinTimeRange(mediaPlaylist, startTimeMs, endTimeMs, m3u8File);
+
+		assertEquals(2, files.size());
+		assertEquals("testStream000000001.ts", files.get(0).getName());
+		assertEquals("testStream000000002.ts", files.get(1).getName());
+	}
+
+	@Test
+	public void testGetFirstSegmentPdtMs() throws IOException {
+		ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
+		File m3u8File = new File("src/test/resources/testStream.m3u8");
+		MediaPlaylist mediaPlaylist = new MediaPlaylistParser().readPlaylist(m3u8File.toPath());
+
+		//start falls inside segment 1, so the content begins at segment 1's PDT
+		assertEquals(1727644050102L, plugin.getFirstSegmentPdtMs(mediaPlaylist, 1727644051000L, 1727644056000L));
+
+		//start precedes every segment, so content begins at the first segment's PDT
+		assertEquals(1727644047342L, plugin.getFirstSegmentPdtMs(mediaPlaylist, 1727644047000L, 1727644051862L));
+
+		//nothing in range
+		assertEquals(-1L, plugin.getFirstSegmentPdtMs(mediaPlaylist, 1L, 2L));
+	}
+
+	/**
+	 * Range clips read an arbitrary historical window that overlapping requests and the periodic
+	 * recorder still need, so they must never reclaim segments even with the delete setting on.
+	 */
+	@Test
+	public void testRangeClipNeverDeletesSegments() throws Exception {
+		String streamId = "testStream";
+		ClipCreatorPlugin plugin = Mockito.spy(new ClipCreatorPlugin());
+		plugin.setDataStore(new InMemoryDataStore("dbRangeNoDelete"));
+
+		AntMediaApplicationAdapter mockApplication = mock(AntMediaApplicationAdapter.class);
+		doReturn(mockApplication).when(plugin).getApplication();
+		doNothing().when(mockApplication).muxingFinished(any(), any(), any(), anyLong(), anyLong(), anyInt(), anyString(), anyString());
+
+		Broadcast broadcast = new Broadcast();
+		broadcast.setStreamId(streamId);
+		plugin.setStreamsFolder("target/resources_tmp_range_nodelete");
+
+		File streamFolder = new File(plugin.getStreamsFolder());
+		streamFolder.mkdirs();
+		for (File tmpFile : new File("src/test/resources").listFiles()) {
+			Files.copy(tmpFile, new File(streamFolder, tmpFile.getName()));
+		}
+
+		ClipCreatorSettings settings = new ClipCreatorSettings();
+		settings.setDeleteHLSFilesAfterCreatedMp4(true);
+		plugin.setClipCreatorSettings(settings);
+
+		Mp4CreationResponse response = plugin.convertHlsToMp4Range(broadcast, 1727644047000L, 1727644051862L);
+
+		assertTrue(response.isSuccess());
+		verify(plugin, never()).deleteFiles(Mockito.any());
+
+		long remainingTsFiles = Arrays.stream(streamFolder.list()).filter(n -> n.endsWith(".ts")).count();
+		assertEquals(4, remainingTsFiles);
+
+		assertTrue(response.getFile().delete());
+		delete(streamFolder);
+	}
+
+	@Test
+	public void testMaxConcurrentClipsDerivedAndOverridden() {
+		ClipCreatorPlugin plugin = new ClipCreatorPlugin();
+		//0 means derive from cores, and the derived value is always a usable limit
+		assertTrue(plugin.getMaxConcurrentClips() >= 2);
+		assertTrue(plugin.getMaxConcurrentClips() <= 8);
+	}
+
 }

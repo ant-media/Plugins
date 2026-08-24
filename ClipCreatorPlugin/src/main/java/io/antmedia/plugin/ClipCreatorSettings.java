@@ -48,6 +48,21 @@ public class ClipCreatorSettings {
 		this.deleteHLSFilesAfterCreatedMp4 = deleteHLSFilesAfterCreatedMp4;
 	}
 
+	/**
+	 * Max conversions running at once across the app. 0 means derive it from the core count.
+	 * Conversions are CPU bound on segment remux and share the machine with transcoding,
+	 * so this stays well below the number of cores.
+	 */
+	private int maxConcurrentClips = 0;
+
+	public int getMaxConcurrentClips() {
+		return maxConcurrentClips;
+	}
+
+	public void setMaxConcurrentClips(int maxConcurrentClips) {
+		this.maxConcurrentClips = maxConcurrentClips;
+	}
+
 	public int getMaxClipDurationSeconds() {
 		return maxClipDurationSeconds;
 	}
