@@ -39,6 +39,21 @@ public class RtspMuxerTest {
 		assertFalse(muxer.isWritable());
 	}
 
+	/** Shutdown hooks have no ordering, so AMS can still be pumping packets at a dead MediaMTX. */
+	@Test
+	public void testNothingIsWrittenAfterTheTrailer() {
+		RtspMuxer muxer = new RtspMuxer(URL, null);
+
+		muxer.writeTrailer();
+		muxer.writeTrailer();
+
+		// a null packet would be a native crash if either of these reached av_write_frame
+		muxer.writeVideoFrame(null, null);
+		muxer.writeAudioFrame(null, null, null, null, 0);
+
+		assertFalse(muxer.isWritable());
+	}
+
 	@Test
 	public void testSupportedCodecs() {
 		RtspMuxer muxer = new RtspMuxer(URL, null);
@@ -49,7 +64,7 @@ public class RtspMuxerTest {
 		assertTrue(muxer.isCodecSupported(AV_CODEC_ID_AAC));
 		assertTrue(muxer.isCodecSupported(AV_CODEC_ID_OPUS));
 
-		// all three were measured as broken, see HANDOFF.md
+		// all three were measured as broken, see the codec table in README.md
 		assertFalse(muxer.isCodecSupported(AV_CODEC_ID_VP9));
 		assertFalse(muxer.isCodecSupported(AV_CODEC_ID_AV1));
 		assertFalse(muxer.isCodecSupported(AV_CODEC_ID_AC3));

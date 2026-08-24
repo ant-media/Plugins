@@ -263,6 +263,58 @@ public class PlaybackAuthorizerTest {
 		assertEquals("only the session just admitted survives", 1, seen.size());
 	}
 
+	/** README sells `rtsp://<subscriberId>:<token>@host`, so the RTSP user is the subscriber id. */
+	@Test
+	public void testSubscriberIdArrivesAsTheRtspUser() {
+		when(appSettings.isPlayTokenControlEnabled()).thenReturn(true);
+		when(tokenService.checkToken("good", STREAM_ID, "10.0.0.9|" + STREAM_ID + "|good|sub1|", Token.PLAY_TOKEN))
+				.thenReturn(true);
+
+		RtspAuthRequest request = request("read", "10.0.0.9", null);
+		request.setUser("sub1");
+		request.setPassword("good");
+
+		assertTrue(authorizer.authorize(request).isSuccess());
+	}
+
+	@Test
+	public void testKnownSubscriberThatIsNotBlockedPlays() {
+		when(dataStore.getSubscriber(STREAM_ID, "sub1")).thenReturn(new Subscriber());
+
+		assertTrue(authorizer.authorize(request("read", "10.0.0.9", "subscriberId=sub1")).isSuccess());
+	}
+
+	/** A player is free to hang a bare flag on the url, and it must not cost the viewer their token. */
+	@Test
+	public void testValuelessQueryPairsAreSkipped() {
+		when(appSettings.isPlayTokenControlEnabled()).thenReturn(true);
+		when(tokenService.checkToken(eq("good"), any(), any(), any())).thenReturn(true);
+
+		assertTrue(authorizer.authorize(request("read", "10.0.0.9", "novalue&token=good")).isSuccess());
+	}
+
+	/** The other half of the sweep. Evicting a live session closes the window a token replays in. */
+	@SuppressWarnings("unchecked")
+	@Test
+	public void testTheSweepLeavesFreshSessionsAlone() throws Exception {
+		Map<String, String> authenticated = new HashMap<>();
+		when(tokenService.getAuthenticatedMap()).thenReturn(authenticated);
+		when(tokenService.getSubscriberAuthenticatedMap()).thenReturn(new HashMap<>());
+		when(appSettings.isPlayTokenControlEnabled()).thenReturn(true);
+		when(tokenService.checkToken(eq("good"), any(), any(), any())).thenReturn(true);
+
+		assertTrue(authorizer.authorize(request("read", "10.0.0.9", "token=good")).isSuccess());
+		Map<String, Long> seen = (Map<String, Long>) field("sessionsSeen");
+		authenticated.put(seen.keySet().iterator().next(), "cached by the token service");
+
+		// the sweep is due, the session it would look at is not
+		set("lastSweepMs", System.currentTimeMillis() - 120_000);
+		authorizer.authorize(request("read", "10.0.0.9", "token=good"));
+
+		assertEquals(1, seen.size());
+		assertFalse("a viewer still inside its window lost its token service entry", authenticated.isEmpty());
+	}
+
 	private Object field(String name) throws Exception {
 		Field field = PlaybackAuthorizer.class.getDeclaredField(name);
 		field.setAccessible(true);

@@ -15,19 +15,24 @@
             <fileMode>0644</fileMode>
         </file>
         <file>
-            <source>src/main/native/linux-x86_64/mediamtx</source>
-            <destName>mediamtx</destName>
+            <source>src/main/native/linux-x86_64/antmedia-mediamtx</source>
+            <destName>antmedia-mediamtx</destName>
             <fileMode>0755</fileMode>
         </file>
         <file>
             <source>src/main/native/linux-x86_64/LICENSE</source>
-            <destName>mediamtx-LICENSE</destName>
+            <destName>antmedia-mediamtx-LICENSE</destName>
             <fileMode>0644</fileMode>
         </file>
         <file>
             <source>src/main/script/install-rtsp-out-plugin.sh</source>
             <destName>install-rtsp-out-plugin.sh</destName>
             <fileMode>0755</fileMode>
+        </file>
+        <file>
+            <source>README.md</source>
+            <destName>README.md</destName>
+            <fileMode>0644</fileMode>
         </file>
     </files>
 </assembly>

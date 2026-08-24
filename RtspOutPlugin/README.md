@@ -3,25 +3,14 @@
 Makes any stream published to Ant Media Server playable over RTSP:
 
 ```
-rtsp://<server>:8554/<app>/<streamId>
-rtsp://<server>:8554/<app>/<streamId>_480p     one per transcoded rendition
+rtsp://<server>:8554/<app>/<streamId>          the source, exactly as ingested
+rtsp://<server>:8554/<app>/<streamId>_480p     one path per transcoded rendition
 ```
 
-Works with VLC, ffplay, GStreamer `rtspsrc` and VMS software, over both TCP interleaved and UDP.
+Works with VLC, ffplay, GStreamer `rtspsrc` and VMS software, over TCP interleaved and UDP. RTSP has no
+adaptive bitrate, so every rendition is its own URL, named the way recordings are.
 
-## How it works
-
-RTSP carries no media of its own. It is a text signalling protocol, and the media rides on plain RTP, one independent stream per track, synced by RTCP Sender Reports.
-
-The plugin registers an `RtspMuxer` (`format = "rtsp"`) with the stream's `MuxAdaptor`. That muxer uses the FFmpeg already bundled with AMS to publish the stream into a local MediaMTX over RTSP `ANNOUNCE`, and MediaMTX serves the players.
-
-```
-ingest -> MuxAdaptor -> RtspMuxer -> MediaMTX :8554 -> RTSP clients
-```
-
-One MediaMTX process per JVM, supervised by the plugin, with everything except RTSP disabled in its config.
-Every app on the server shares that one process, and paths are namespaced by app name so they cannot
-collide. Its generated config goes into a private temp directory, not the server's `conf` directory.
+Linux x86_64 only, the bundled binary is `linux_amd64`.
 
 ## Install
 
@@ -32,11 +21,12 @@ unzip RtspOutPlugin-release.zip
 sudo ./RTSP-Out-Plugin/install-rtsp-out-plugin.sh
 ```
 
-It puts `RtspOutPlugin.jar`, the `mediamtx` binary and its licence in `/usr/local/antmedia/plugins`, then
-restarts the server. Nothing is written outside that directory. The server only classloads `.jar` files, so
-the binary sitting next to the jar is invisible to it, and the plugin looks for it there first.
+It stops the server, puts `RtspOutPlugin.jar`, the `antmedia-mediamtx` binary and its licence in
+`/usr/local/antmedia/plugins`, and starts the server again. Nothing is written outside that directory.
+The server only loads `.jar` and `.zip` from there, so the extensionless binary next to the jar is ignored
+by everything but the plugin.
 
-Set `AMS_DIR` if the server is somewhere else, and `SERVICE_NAME` if the service is not called `antmedia`:
+Set `AMS_DIR` if the server is somewhere else, `SERVICE_NAME` if the service is not called `antmedia`:
 
 ```sh
 sudo AMS_DIR=/opt/antmedia ./RTSP-Out-Plugin/install-rtsp-out-plugin.sh
@@ -44,68 +34,87 @@ sudo AMS_DIR=/opt/antmedia ./RTSP-Out-Plugin/install-rtsp-out-plugin.sh
 
 Uninstall is `rm` on those three files plus a restart.
 
-## Build
+## Ports
+
+Following ports are required for playback:
+
+
+| port   | protocol | what for                                                           |
+| ------ | -------- | ------------------------------------------------------------------ |
+| `8554` | TCP      | RTSP signalling, and the media when a client picks TCP interleaved |
+| `8000` | UDP      | RTP, the media for clients that pick UDP                           |
+| `8001` | UDP      | RTCP for those clients                                             |
+
+
+They are the standard RTSP ports. TCP playback needs 8554 open, UDP playback needs all
+three, and a client that cannot reach 8000 and 8001 looks like a stream that connects and plays nothing. If
+any of the three is aready in use on machine, plugin will not start.
+
+## Playing
 
 ```sh
-./fetch-mediamtx.sh          # once, downloads the pinned MediaMTX
-mvn clean package            # jar plus target/RtspOutPlugin-release.zip
+ffplay -rtsp_transport tcp rtsp://<server>:8554/<app>/<streamId>     # TCP, needs only 8554
+ffplay -rtsp_transport udp rtsp://<server>:8554/<app>/<streamId>     # UDP, needs 8000 and 8001 too
 ```
 
-For a dev box, `./redeploy.sh` builds and copies straight into a local server, then restart it:
+FFmpeg based players buffer everything they read while they wait for the first keyframe, then play from the
+front of that buffer, so the wait turns into permanent lag. For low latency playback, add these flags:
 
 ```sh
-./redeploy.sh
-sudo service antmedia restart
+ffplay -fflags nobuffer -flags low_delay -analyzeduration 300000 -probesize 200000 -framedrop -rtsp_transport tcp rtsp://<server>:8554/<app>/<streamId>
 ```
 
-Unit tests need `-DskipTests=false`, the Ant Media parent pom skips tests by default:
+Measured on a live server, that is the difference between roughly 2s and roughly 0.2s of lag.
 
-```sh
-mvn test -DskipTests=false
+## How it works
+
+The plugin registers an `RtspMuxer` with the stream's `MuxAdaptor`. It uses the FFmpeg already bundled with
+AMS to publish into a local MediaMTX over RTSP `ANNOUNCE`, which serves the players.
+
 ```
+ingest -> MuxAdaptor -> RtspMuxer -> MediaMTX :8554 -> RTSP clients
+```
+
+One instance per server, supervised by the plugin, with everything except RTSP switched off. Its config is
+generated into a private temp directory, never the server's `conf`. Every app shares the process and paths
+are `<app>/<streamId>`, so two apps can use the same stream id. Undeploying an app closes only its own
+endpoints, the process stops when the server does.
+
+Each rendition costs one FFmpeg RTSP context and one path, watched or not, so keep the ladder to
+what you need. Readers are cheap, roughly 0.3% of a core and 200 KB each, measured with 20 of them.
 
 ## Settings
 
 Under `plugin.rtsp-out` in the app's custom settings:
 
-| key | default | meaning |
-| --- | --- | --- |
-| `enabled` | `true` | master switch for this app |
-| `enabledByDefault` | `true` | default for streams with no REST override |
-| `rtspPort` | `8554` | port MediaMTX serves on, server wide |
 
-Turning `enabled` on takes effect on the next published stream, no server restart needed. Turning it off
-stops new streams getting endpoints; streams already running keep theirs until they stop.
+| key                | default | meaning                                                                     |
+| ------------------ | ------- | --------------------------------------------------------------------------- |
+| `enabled`          | `true`  | master switch for this app                                                  |
+| `enabledByDefault` | `true`  | default for streams with no REST override                                   |
+| `udauthEnabled`    | `true`  | run the app's play security on every RTSP reader. See [Security](#security) |
 
-`rtspPort` is not really per app. There is one MediaMTX for the whole server, so the first app to load
-picks the port and the rest follow it. See [Multiple apps](#multiple-apps).
 
-The `mediamtx` binary is looked up next to the plugin jar first, which is where `redeploy.sh` puts it, then
-in `/usr/local/bin`, then on `PATH`.
+`enabled` applies to the next published stream, no restart needed, and streams already running keep their
+endpoints. `authEnabled` needs a server restart, it changes the config the process starts with.
 
-MediaMTX gets a generated config with everything except RTSP switched off. It is written to a private
-directory under the system temp dir, not to the server's `conf` directory, and rewritten every time the
-process starts. There is nothing in it to edit: change the settings above instead.
-
-MediaMTX itself runs at `warn`, so only real problems reach `ant-media-server.log`. At `info` it writes a
-few lines per connection and per path, which on a busy server is noise. The plugin logs its own stream
-events at `info` either way.
+The `antmedia-mediamtx` binary is looked up next to the plugin jar first, where the installer puts it, then
+`/usr/local/bin`, then `PATH`. It is the stock binary under our own name, recognisable in `ps`.
 
 ## REST
 
 Base path is `/<app>/rest/rtsp-out`.
 
-| method | path | purpose |
-| --- | --- | --- |
-| `GET` | `/status` | plugin and MediaMTX state, including the port actually in use and whether the supervisor gave up |
+
+| method | path                  | purpose                             |
+| ------ | --------------------- | ----------------------------------- |
+| `GET`  | `/status`             | plugin and RTSP process state       |
 | `POST` | `/disable/{streamId}` | turn RTSP output off for one stream |
-| `POST` | `/enable/{streamId}` | turn it on for one stream |
+| `POST` | `/enable/{streamId}`  | turn it on for one stream           |
 
-`enable` and `disable` set a per stream override that wins over `enabledByDefault` in both directions, so
-`enable` also works on a server that has `enabledByDefault` set to false. The override survives the stream
-stopping and restarting. Both return the usual `{"success":..., "message":...}` JSON.
 
-`GET /status` answers with this app's view of the plugin plus the shared MediaMTX:
+`enable` and `disable` write a per stream override that beats `enabledByDefault` in both directions and
+survives the stream restarting. Both return the usual `{"success":..., "message":...}` JSON.
 
 ```json
 {
@@ -113,10 +122,9 @@ stopping and restarting. Both return the usual `{"success":..., "message":...}` 
   "enabled": true,
   "enabledByDefault": true,
   "rtspPort": 8554,
-  "configuredRtspPort": 8554,
   "streamOverrides": { "test_2": false },
   "activeStreams": { "test_1": ["test_1", "test_1_360p"] },
-  "mediamtxBinary": "/usr/local/antmedia/plugins/mediamtx",
+  "mediamtxBinary": "/usr/local/antmedia/plugins/antmedia-mediamtx",
   "mediamtxRunning": true,
   "mediamtxListening": true,
   "mediamtxGeneration": 1,
@@ -124,113 +132,102 @@ stopping and restarting. Both return the usual `{"success":..., "message":...}` 
 }
 ```
 
-| field | meaning |
-| --- | --- |
-| `rtspPort` | the port MediaMTX is really on, which is what the URLs use |
-| `configuredRtspPort` | what this app asked for. Different from `rtspPort` means another app got there first |
-| `streamOverrides` | the per stream `enable` and `disable` calls that are in effect |
-| `activeStreams` | stream id to the MediaMTX paths it currently has. A stream with fewer paths than you expect is still being retried, or gave up on a rung |
-| `mediamtxRunning` | the process is alive |
-| `mediamtxListening` | it answers on the port. This lags `mediamtxRunning` by a few hundred ms at startup |
-| `mediamtxGeneration` | how many times the process has been started. Goes up by one on every crash and restart |
-| `mediamtxGaveUp` | the supervisor stopped restarting it. Nothing gets RTSP until the server restarts. See [Recovering from errors](#recovering-from-errors) |
+`activeStreams` maps a stream id to the paths it has, fewer than expected means one is still being retried
+or was given up on. `mediamtxGeneration` counts process starts, so it goes up on every crash and restart,
+and `mediamtxGaveUp` means the supervisor stopped restarting it.
 
-## Recovering from errors
+## Security
 
-An endpoint that cannot be opened is not lost. Each app runs a reconciler that checks its published
-streams every 2 seconds and fixes what is not right:
-
-- MediaMTX was not up yet, or was down, when the stream started. The stream keeps waiting and gets its
-  endpoints as soon as MediaMTX answers. Nothing is given up on while MediaMTX is down.
-- MediaMTX crashed and the supervisor restarted it. Every live stream on every app is republished into
-  the new process. Without this the process would come back and every stream would stay dead.
-- One endpoint's publish connection broke while the stream stayed up. It gets rebuilt.
-
-An endpoint that keeps failing while MediaMTX is up and answering gets 10 tries before the plugin gives
-up on that one path and says so in the log. That is the case of a rendition the transcoder never
-produced, or a codec MediaMTX rejects. The rest of the stream's endpoints are unaffected, and a MediaMTX
-restart clears the count.
-
-If MediaMTX itself dies immediately 5 times in a row, usually a port conflict, the supervisor stops
-restarting it and logs why once. `GET /status` reports that as `mediamtxGaveUp`.
-
-## Multiple apps
-
-One Ant Media Server means one MediaMTX process, shared by every app that loads this plugin. Only the
-plugin bean and its stream bookkeeping are per app.
-
-- Paths are `<app>/<streamId>`, so two apps publishing the same stream id do not collide.
-- The first app to load wins `rtspPort`. Any other app publishes to, and advertises, the running port
-  rather than its own setting, so nothing silently publishes into a port that is not there. `GET /status`
-  shows both numbers, so a mismatch is visible.
-- Undeploying one app closes that app's endpoints and leaves MediaMTX and every other app alone. The
-  process is only stopped when the server shuts down.
-
-## Playing with low latency
-
-A client joining mid-GOP has to wait for a keyframe. FFmpeg based players buffer everything they read while they wait, then start playing from the beginning of that buffer, so the wait turns into permanent lag. Give them low latency flags:
+RTSP readers go through the app's play checks, the same ones HLS uses: play token, hash, JWT, TOTP
+subscriber and blocked subscribers. A token that plays over HLS plays over RTSP, no second set of keys.
+Credentials ride the URL query under the same names, so it is the same command with a longer URL. Quote it,
+`&` and `?` are shell characters:
 
 ```sh
-ffplay -fflags nobuffer -flags low_delay -analyzeduration 300000 -probesize 200000 \
-       -framedrop -rtsp_transport tcp rtsp://<server>:8554/<app>/<streamId>
+'rtsp://<server>:8554/<app>/<streamId>?token=<token>'
+'rtsp://<server>:8554/<app>/<streamId>?subscriberId=<id>&subscriberCode=<totp>'
 ```
 
-Measured on a live server, this is the difference between roughly 2s and roughly 0.2s of lag on a WebRTC ingested stream. Nothing on the server side moves this number, so tune the client first.
+Players that will not pass a query string can send the token as the RTSP password and the subscriber id as
+the user. FFmpeg based clients truncate `user:pass` at 127 characters, so a play token or a hash fits and a
+JWT does not:
+
+```sh
+'rtsp://<subscriberId>:<token>@<server>:8554/<app>/<streamId>'
+```
+
+Where it differs from HLS:
+
+- A one time play token is single use plus a 60 second window for the same client address. RTSP authorizes
+  a reader twice, on DESCRIBE and on SETUP, and only the credential ties the two together.
+- `hlsViewerLimit` is not enforced and there is no IP filtering.
+- One token covers a stream and all of its renditions.
+- `authEnabled: false` opens playback to anyone who can reach 8554. Publishing stays restricted to the
+  server itself either way.
 
 ## Codecs
 
-Whatever Ant Media Server ingests and MediaMTX can serve over RTSP:
+Whatever Ant Media Server ingests and RTP can carry:
 
-| | |
-| --- | --- |
-| video | H264, H265, VP8, MPEG-4 part 2, MPEG-2, MPEG-1, M-JPEG |
+
+|       |                                                            |
+| ----- | ---------------------------------------------------------- |
+| video | H264, H265, VP8, MPEG-4 part 2, MPEG-2, MPEG-1, M-JPEG     |
 | audio | AAC, Opus, MP3, Vorbis, G711 µ-law, G711 A-law, G722, G726 |
 
-VP9 and AV1 are not supported: FFmpeg will not packetize either into RTP outside of experimental mode. AC-3 is not supported: MediaMTX rejects it. A stream in one of those codecs simply gets no RTSP endpoint, everything else about it keeps working.
 
-## Resolutions and adaptive bitrate
+VP9 and AV1 are out, FFmpeg will not packetize either into RTP outside experimental mode. AC-3 is out,
+MediaMTX rejects it. A stream in one of those gets no RTSP endpoint and keeps working otherwise.
 
-**RTSP has no adaptive bitrate.** There is nothing in the protocol for it. RFC 2326 has no quality switching and no manifest, so there is no equivalent of an HLS or DASH playlist for a player to choose from. An SDP can list several video tracks, but that is track selection, not adaptation: a player takes the first video track or tries to render all of them at once. RTSP 2.0 (RFC 7826) has more machinery and essentially nothing implements it.
+## Recovering from errors
 
-The way everyone solves this is one URL per rendition. It is what an IP camera's main and sub streams are, and what ONVIF profiles are. You pick the quality by picking the URL, and the client stays on it.
+Each app rechecks its published streams every 2 seconds and rebuilds what is missing, so an endpoint that
+could not be opened is not lost. Streams wait while MediaMTX is down, are republished when it restarts, and
+a publish connection that breaks under a running stream is rebuilt.
 
-So this plugin publishes one endpoint per rendition. The bare stream id is always the source, and every entry in the app's (or the broadcast's) encoder settings gets its own path, using the same `_<height>p` naming that recordings already use:
+An endpoint that keeps failing while it is up gets 10 tries, then that one path is given up on and logged,
+usually a rendition the transcoder never produced or a codec it rejects. The rest of the stream is
+unaffected and a restart clears the count. If the process itself dies immediately 5 times in a row, usually
+a port conflict, the supervisor stops and `GET /status` reports `mediamtxGaveUp`.
 
+## Troubleshooting
+
+Start with `GET /<app>/rest/rtsp-out/status`, it answers most of these.
+
+
+| symptom                                 | usual cause                                                                            |
+| --------------------------------------- | -------------------------------------------------------------------------------------- |
+| nothing plays, `mediamtxGaveUp` is true | one of the three [ports](#ports) is taken. Free it and restart the server              |
+| one stream has no endpoint              | it is disabled, check `enabled`, `enabledByDefault` and `streamOverrides`              |
+| a rendition is missing                  | the transcoder never produced that rung, the log says `Giving up on RTSP endpoint ...` |
+| connects, then plays nothing            | UDP 8000 and 8001 are blocked. Add `-rtsp_transport tcp` to confirm                    |
+| audio plays, video does not             | the log warns `bound audio only`. That is a bug, open an issue                         |
+| every reader is refused                 | play security is on, see [Security](#security)                                         |
+| plays everywhere but here               | its codec is not in the [codec](#codecs) list                                          |
+| about 2s of lag                         | client side buffering, see [Playing](#playing)                                         |
+
+
+## Build
+
+```sh
+./release.sh     # runs the tests, writes target/RtspOutPlugin-release.zip
 ```
-rtsp://<server>:8554/<app>/<streamId>            the source, exactly as ingested
-rtsp://<server>:8554/<app>/<streamId>_480p       transcoded rendition
-rtsp://<server>:8554/<app>/<streamId>_360p       transcoded rendition
-```
 
-The height in the path is the `height` from the encoder settings, so a ladder of `360` and `480` gives you `_360p` and `_480p`. No bitrate in the name, unlike the HLS playlists.
+The zip is one `RTSP-Out-Plugin/` directory holding the jar, the binary, its licence, this README
+and the installer. The binary lives in the repo under `src/main/native/linux-x86_64/`, nothing to download
+first, and the script stops before Maven if it is missing.
 
-A rendition endpoint only appears if the transcoder actually produced that rung. A missing rung is retried
-for a while first, in case the encoder was just not ready yet, and then the log says which one gave up and why:
+`./redeploy.sh` builds and copies into a local dev server instead. Running Maven by hand needs
+`-DskipTests=false` for the tests, the Ant Media parent pom skips them by default.
 
-```
-Giving up on RTSP endpoint test_2_720p after 10 attempts, MuxAdaptor had nothing to bind at height 720
-```
+## Limits
 
-This costs one FFmpeg RTSP context and one MediaMTX path per rendition per stream, whether or not anyone is watching, so keep the ladder to what you need.
+- **No cluster support.** Every node runs its own instance and only the origin holds the stream, so an RTSP
+  URL has to point at the origin.
+- **No viewer limits or stats.** The auth callback sees a reader connect but never leave, so a count kept
+  from it would only grow.
 
-## What it costs
+## Third party
 
-Measured on one stream with 20 concurrent readers, 10 on each of two renditions, 10 over TCP and 10 over UDP:
-
-| | idle | 20 readers |
-| --- | --- | --- |
-| MediaMTX CPU | 1.4% | 5.4% |
-| MediaMTX RSS | 41.6 MB | 45.7 MB |
-
-Roughly 0.3% of one core and 200 KB per reader, and memory stops growing once everyone is connected. Ant
-Media Server itself does not move at all: publishing into MediaMTX costs the same whether nobody or twenty
-people are watching. Every reader holds one TCP control connection, UDP ones included.
-
-What does scale is the publish side, one FFmpeg RTSP context and one MediaMTX path per rendition per
-stream, watched or not. See [Resolutions and adaptive bitrate](#resolutions-and-adaptive-bitrate).
-
-## Notes
-
-RTSP output is non-muxed. Audio and video are separate RTP streams, which is how RTSP works and not a limitation of this plugin.
-
-Playback is currently unauthenticated. Bind or firewall port 8554 accordingly.
+Ships [MediaMTX](https://github.com/bluenviron/mediamtx) v1.20.1, MIT licensed, see
+[LICENSE](src/main/native/linux-x86_64/LICENSE).

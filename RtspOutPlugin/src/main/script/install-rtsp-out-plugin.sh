@@ -10,7 +10,7 @@ if [ ! -d "$AMS_DIR/plugins" ]; then
 	exit 1
 fi
 
-for FILE in RtspOutPlugin.jar mediamtx mediamtx-LICENSE; do
+for FILE in RtspOutPlugin.jar antmedia-mediamtx antmedia-mediamtx-LICENSE; do
 	if [ ! -f "$SRC_DIR/$FILE" ]; then
 		echo "$FILE is missing next to this script" >&2
 		exit 1
@@ -23,11 +23,13 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 # unlink rather than overwrite, copying onto a running binary gives "Text file busy"
-rm -f "$AMS_DIR/plugins/RtspOutPlugin.jar" "$AMS_DIR/plugins/mediamtx" "$AMS_DIR/plugins/mediamtx-LICENSE"
+# the last two are the pre-rename names, so upgrading does not strand a 55MB orphan
+rm -f "$AMS_DIR/plugins/RtspOutPlugin.jar" "$AMS_DIR/plugins/antmedia-mediamtx" "$AMS_DIR/plugins/antmedia-mediamtx-LICENSE" \
+      "$AMS_DIR/plugins/mediamtx" "$AMS_DIR/plugins/mediamtx-LICENSE"
 
 install -m 0644 "$SRC_DIR/RtspOutPlugin.jar" "$AMS_DIR/plugins/RtspOutPlugin.jar"
-install -m 0755 "$SRC_DIR/mediamtx" "$AMS_DIR/plugins/mediamtx"
-install -m 0644 "$SRC_DIR/mediamtx-LICENSE" "$AMS_DIR/plugins/mediamtx-LICENSE"
+install -m 0755 "$SRC_DIR/antmedia-mediamtx" "$AMS_DIR/plugins/antmedia-mediamtx"
+install -m 0644 "$SRC_DIR/antmedia-mediamtx-LICENSE" "$AMS_DIR/plugins/antmedia-mediamtx-LICENSE"
 
 echo "RTSP out plugin installed to $AMS_DIR/plugins"
 

@@ -10,7 +10,7 @@
 	<artifactId>rtsp-out-plugin</artifactId>
 	<packaging>jar</packaging>
 	<name>RTSP Out Plugin</name>
-	<url>http://maven.apache.org</url>
+	<url>https://antmedia.io</url>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<sonar.projectKey>ant-media_plugins</sonar.projectKey>

@@ -8,8 +8,8 @@ public class RtspOutSettings {
 	/** Default for streams with no REST override. */
 	private boolean enabledByDefault = true;
 
-	/** Port MediaMTX serves RTSP on, and the port we publish to on loopback. */
-	private int rtspPort = 8554;
+	/** Run the app's play security on every RTSP reader. Off leaves the RTSP port wide open. */
+	private boolean authEnabled = true;
 
 	public boolean isEnabled() { return enabled; }
 	public void setEnabled(boolean v) { this.enabled = v; }
@@ -17,6 +17,6 @@ public class RtspOutSettings {
 	public boolean isEnabledByDefault() { return enabledByDefault; }
 	public void setEnabledByDefault(boolean v) { this.enabledByDefault = v; }
 
-	public int getRtspPort() { return rtspPort; }
-	public void setRtspPort(int v) { this.rtspPort = v; }
+	public boolean isAuthEnabled() { return authEnabled; }
+	public void setAuthEnabled(boolean v) { this.authEnabled = v; }
 }

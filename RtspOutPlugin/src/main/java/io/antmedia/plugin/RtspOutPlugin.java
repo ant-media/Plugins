@@ -8,7 +8,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,11 +26,15 @@ import com.google.gson.Gson;
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.AppSettings;
 import io.antmedia.EncoderSettings;
+import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MuxAdaptor;
 import io.antmedia.muxer.RtspMuxer;
 import io.antmedia.plugin.api.IStreamListener;
+import io.antmedia.rest.RestServiceBase;
+import io.antmedia.rest.model.Result;
+import io.antmedia.security.ITokenService;
 import io.antmedia.settings.ServerSettings;
 import io.vertx.core.Vertx;
 import jakarta.annotation.PreDestroy;
@@ -47,14 +55,23 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 	/** Attach attempts per endpoint per MediaMTX generation. Only attempts that reached a live MediaMTX count. */
 	private static final int MAX_ATTACH_ATTEMPTS = 10;
 
+	/** MediaMTX has one auth url for the whole server, so the endpoint it hits routes by app name. */
+	private static final Map<String, RtspOutPlugin> APPS = new ConcurrentHashMap<>();
+
+	private static final Pattern RENDITION_SUFFIX = Pattern.compile("^(.*)_\\d+p$");
+
 	private IAntMediaStreamHandler app;
 	private AppSettings appSettings;
 	private ServerSettings serverSettings;
+	private ApplicationContext appCtx;
+	private ITokenService tokenService;
 	private Vertx vertx;
 	private String appName;
 	private long reconcileTimerId = -1;
 
-	/** per stream REST override of enabledByDefault */
+	private final PlaybackAuthorizer authorizer = new PlaybackAuthorizer(this);
+
+	/** Per stream REST override of enabledByDefault. */
 	private final Map<String, Boolean> overrides = new ConcurrentHashMap<>();
 
 	private final Map<String, StreamSession> sessions = new ConcurrentHashMap<>();
@@ -69,7 +86,7 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		final Map<String, RtspMuxer> attached = new LinkedHashMap<>();
 		final Map<String, Integer> attempts = new HashMap<>();
 
-		/** The MediaMTX the attached muxers publish into. < 0 means they are stale. */
+		/** The MediaMTX generation the attached muxers belong to. Anything else means they are stale. */
 		int generation = -1;
 
 		/** Every wanted endpoint is attached or out of attempts. */
@@ -91,6 +108,7 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 
 	@Override
 	public void setApplicationContext(ApplicationContext ctx) throws BeansException {
+		appCtx = ctx;
 		vertx = (Vertx) ctx.getBean(IAntMediaStreamHandler.VERTX_BEAN_NAME);
 		serverSettings = (ServerSettings) ctx.getBean(ServerSettings.BEAN_NAME);
 		app = (IAntMediaStreamHandler) ctx.getBean(AntMediaApplicationAdapter.BEAN_NAME);
@@ -98,14 +116,13 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		appName = app.getScope().getName();
 
 		app.addStreamListener(this);
+		APPS.put(appName, this);
 
 		RtspOutSettings settings = loadSettings();
 		logger.info("RTSP out plugin initialized for app {}. enabled={} enabledByDefault={} port={}",
-				appName, settings.isEnabled(), settings.isEnabledByDefault(), settings.getRtspPort());
+				appName, settings.isEnabled(), settings.isEnabledByDefault(), MediaMtxProcess.RTSP_PORT);
 
-		if (settings.isEnabled()) {
-			MediaMtxProcess.start(settings);
-		}
+		startMediaMtx(settings, MediaMtxProcess::start);
 		reconcileTimerId = vertx.setPeriodic(RECONCILE_INTERVAL_MS, id -> reconcileLater());
 	}
 
@@ -119,6 +136,10 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 
 		if (app != null) {
 			app.removeStreamListener(this);
+		}
+
+		if (appName != null) {
+			APPS.remove(appName, this);
 		}
 
 		new ArrayList<>(sessions.keySet()).forEach(this::closeSession);
@@ -151,19 +172,75 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		return settings.isEnabled() && overrides.getOrDefault(streamId, settings.isEnabledByDefault());
 	}
 
-	/** The port MediaMTX is really on. The first app to load wins, the rest publish and advertise that one. */
-	private int rtspPort() {
-		int running = MediaMtxProcess.getPort();
-		return running != 0 ? running : loadSettings().getRtspPort();
+	/** The auth endpoint opens only after the master switch, so a disabled app leaves no socket behind. */
+	private void startMediaMtx(RtspOutSettings settings, Consumer<String> starter) {
+		if (!settings.isEnabled()) {
+			return;
+		}
+
+		String authUrl = null;
+		if (settings.isAuthEnabled()) {
+			int authPort = AuthHttpServer.start();
+			if (authPort == 0) {
+				logger.error("RTSP out is not starting for app {}: the auth endpoint could not be opened and "
+						+ "serving port {} without it would leave every stream unauthenticated",
+						appName, MediaMtxProcess.RTSP_PORT);
+				return;
+			}
+			authUrl = "http://" + LOOPBACK + ":" + authPort + AuthHttpServer.PATH;
+		}
+
+		starter.accept(authUrl);
+	}
+
+	/** The MediaMTX callback. One url serves the whole server, so the app in the path picks the bean. */
+	public static Result authorize(RtspAuthRequest request) {
+		String path = StringUtils.defaultString(request.getPath());
+		int separator = path.indexOf('/');
+		RtspOutPlugin target = separator > 0 ? APPS.get(path.substring(0, separator)) : null;
+
+		if (target == null) {
+			logger.warn("No RTSP out plugin serves the path {}", path.replaceAll(RestServiceBase.REPLACE_CHARS, "_"));
+			return new Result(false, "no application serves this path");
+		}
+		return target.authorizer.authorize(request);
+	}
+
+	AppSettings getAppSettings() {
+		return appSettings;
+	}
+
+	DataStore getDataStore() {
+		return app.getDataStore();
+	}
+
+	/** Enterprise only bean, and it may not be up yet when the first request lands. */
+	ITokenService getTokenService() {
+		String beanName = ITokenService.BeanName.TOKEN_SERVICE.toString();
+		if (tokenService == null && appCtx.containsBean(beanName)) {
+			tokenService = (ITokenService) appCtx.getBean(beanName);
+		}
+		return tokenService;
+	}
+
+	/** Drops the app prefix and, when we published one, the _<height>p rendition suffix. */
+	String streamIdOf(String path) {
+		String streamId = path.substring(path.indexOf('/') + 1);
+		if (sessions.containsKey(streamId)) {
+			return streamId;
+		}
+
+		Matcher rendition = RENDITION_SUFFIX.matcher(streamId);
+		return rendition.matches() && sessions.containsKey(rendition.group(1)) ? rendition.group(1) : streamId;
 	}
 
 	/** Playback URL as a client outside the server would use it. */
 	public String getRtspUrl(String path) {
-		return rtspUrl(serverSettings.getHostAddress(), rtspPort(), path);
+		return rtspUrl(serverSettings.getHostAddress(), path);
 	}
 
-	private String rtspUrl(String host, int port, String path) {
-		return "rtsp://" + host + ":" + port + "/" + appName + "/" + path;
+	private String rtspUrl(String host, String path) {
+		return "rtsp://" + host + ":" + MediaMtxProcess.RTSP_PORT + "/" + appName + "/" + path;
 	}
 
 	/** Same _<height>p suffix recordings use. */
@@ -173,7 +250,6 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 
 	public Map<String, Object> getStatus() {
 		RtspOutSettings settings = loadSettings();
-		int port = rtspPort();
 
 		Map<String, Object> endpoints = new LinkedHashMap<>();
 		sessions.forEach((streamId, session) -> {
@@ -186,13 +262,12 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		status.put("app", appName);
 		status.put("enabled", settings.isEnabled());
 		status.put("enabledByDefault", settings.isEnabledByDefault());
-		status.put("rtspPort", port);
-		status.put("configuredRtspPort", settings.getRtspPort());
+		status.put("rtspPort", MediaMtxProcess.RTSP_PORT);
 		status.put("streamOverrides", Map.copyOf(overrides));
 		status.put("activeStreams", endpoints);
 		status.put("mediamtxBinary", MediaMtxProcess.getBinaryPath());
 		status.put("mediamtxRunning", MediaMtxProcess.isRunning());
-		status.put("mediamtxListening", port != 0 && MediaMtxProcess.isListening(port));
+		status.put("mediamtxListening", MediaMtxProcess.isListening());
 		status.put("mediamtxGeneration", MediaMtxProcess.getGeneration());
 		status.put("mediamtxGaveUp", MediaMtxProcess.isGivenUp());
 		return status;
@@ -264,9 +339,7 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		}
 	}
 
-	/** In case stream drops or somehting,
-	 * Brings streams back to the endpoints they should have.
-	 * Blocking.. */
+	/** Brings streams back to the endpoints they should have. Blocking. */
 	private void reconcile(Collection<String> streamIds) {
 		int generation = MediaMtxProcess.getGeneration();
 		if (MediaMtxProcess.isGivenUp()) {
@@ -283,21 +356,13 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 			return;
 		}
 
-		RtspOutSettings settings = loadSettings();
-		if (settings.isEnabled()) {
-			// covers a boot start that never happened, so the master switch works without a server restart
-			MediaMtxProcess.ensureStarted(settings);
-		}
+		// covers a boot start that never happened, so the master switch works without a server restart
+		startMediaMtx(loadSettings(), MediaMtxProcess::ensureStarted);
 
 		// no attempts are spent while MediaMTX is down, the streams just wait for the next pass
-		int port = MediaMtxProcess.getPort();
-		if (port == 0) {
-			logger.debug("MediaMTX never started, {} stream(s) in app {} are waiting for RTSP", due.size(), appName);
-			return;
-		}
-		if (!MediaMtxProcess.isListening(port)) {
-			logger.debug("MediaMTX is not listening on port {} yet, {} stream(s) in app {} are waiting for RTSP",
-					port, due.size(), appName);
+		if (!MediaMtxProcess.isListening()) {
+			logger.debug("MediaMTX is not answering on port {} yet, {} stream(s) in app {} are waiting for RTSP",
+					MediaMtxProcess.RTSP_PORT, due.size(), appName);
 			return;
 		}
 
@@ -307,15 +372,14 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 				continue;
 			}
 			try {
-				apply(streamId, session, generation, port);
+				apply(streamId, session, generation);
 			} catch (Exception e) {
-				// one stream must not take the rest of the pass down with it
 				logger.error("RTSP out could not be reconciled for stream {}", streamId, e);
 			}
 		}
 	}
 
-	private void apply(String streamId, StreamSession session, int generation, int port) {
+	private void apply(String streamId, StreamSession session, int generation) {
 		synchronized (session) {
 			if (session.closed) {
 				return;
@@ -346,7 +410,7 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 				}
 				session.attempts.put(path, attempt);
 
-				RtspMuxer muxer = attach(muxAdaptor, port, path, wanted.getValue());
+				RtspMuxer muxer = attach(muxAdaptor, path, wanted.getValue());
 				if (muxer != null) {
 					session.attached.put(path, muxer);
 				} else if (attempt == MAX_ATTACH_ATTEMPTS) {
@@ -360,7 +424,7 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		}
 	}
 
-	/** Replaces endpoints that died while the stream stayed up. A muxer cannot be revived, only replaced. */
+	/** A dead muxer cannot be revived, only replaced. */
 	private void rebuildDeadEndpoints(StreamSession session, MuxAdaptor muxAdaptor) {
 		session.attached.entrySet().removeIf(endpoint -> {
 			if (endpoint.getValue().isWritable()) {
@@ -372,7 +436,7 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		});
 	}
 
-	/** The source under the bare stream id, plus one path per rendition. Skips attached, bindHeight() has side effects. */
+	/** Source under the bare stream id, one path per rendition. Skips what is attached, bindHeight() has side effects. */
 	private Map<String, Integer> missingEndpoints(String streamId, StreamSession session, MuxAdaptor muxAdaptor) {
 		Map<String, Integer> missing = new LinkedHashMap<>();
 		if (!session.attached.containsKey(streamId)) {
@@ -392,9 +456,10 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		return missing;
 	}
 
-	/** Binds one muxer to one MediaMTX path. Returns null when the adaptor had nothing to bind. */
-	private RtspMuxer attach(MuxAdaptor muxAdaptor, int port, String path, int height) {
-		RtspMuxer muxer = new RtspMuxer(rtspUrl(LOOPBACK, port, path), vertx);
+	/** Null when the adaptor had nothing to bind. Always a new muxer, a failed prepareIO() frees the
+	 * packets for good and reusing one segfaults on the next write. */
+	private RtspMuxer attach(MuxAdaptor muxAdaptor, String path, int height) {
+		RtspMuxer muxer = new RtspMuxer(rtspUrl(LOOPBACK, path), vertx);
 
 		if (!muxAdaptor.addMuxer(muxer, height)) {
 			// EncoderAdaptor attaches to the encoders before prepareIO and never detaches when it fails.
@@ -407,7 +472,7 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 			logger.warn("RTSP endpoint {} bound audio only, nothing matched height {}", path, height);
 		}
 		logger.info("RTSP out is serving {} at {}, bound at height {}",
-				path, rtspUrl(serverSettings.getHostAddress(), port, path), height);
+				path, rtspUrl(serverSettings.getHostAddress(), path), height);
 		return muxer;
 	}
 
@@ -428,10 +493,8 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		session.attached.clear();
 	}
 
-	/**
-	 * Direct muxing reads 0 as any resolution, WebRTC ingest would bind audio only at 0.
-	 * Keep getVideoCodecParameters(), getHeight() is still 0 here and this call is what sets it.
-	 */
+	/** Direct muxing reads 0 as any resolution, WebRTC would bind audio only at 0. Keep
+	 * getVideoCodecParameters(), getHeight() is still 0 here and this call is what sets it. */
 	private int bindHeight(MuxAdaptor muxAdaptor) {
 		if (muxAdaptor.directMuxingSupported()) {
 			return 0;

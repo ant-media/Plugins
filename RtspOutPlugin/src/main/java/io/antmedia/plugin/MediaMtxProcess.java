@@ -20,42 +20,56 @@ final class MediaMtxProcess {
 
 	private static final Logger logger = LoggerFactory.getLogger(MediaMtxProcess.class);
 
-	private static final String BINARY_NAME = "mediamtx";
+	private static final String BINARY_NAME = "antmedia-mediamtx";
 	private static final String CONFIG_NAME = "mediamtx-antmedia.yml";
+
+	/** The standard RTSP ports. Not settings: one server means one MediaMTX, and clients expect these. */
+	static final int RTSP_PORT = 8554;
+	private static final int RTP_PORT = 8000;
+	private static final int RTCP_PORT = RTP_PORT + 1;
+
+	/** Auth is off, but publishing stays ours: MediaMTX binds every interface and would let anyone push in. */
+	private static final String NO_CALLBACK_AUTH = """
+			authMethod: internal
+			authInternalUsers:
+			  - user: any
+			    ips: ["127.0.0.1", "::1"]
+			    permissions:
+			      - action: publish
+			  - user: any
+			    ips: []
+			    permissions:
+			      - action: read""";
 
 	private static final long RESTART_GRACE_MS = 5000;
 	private static final int MAX_RAPID_RESTARTS = 5;
 	private static final int PROBE_TIMEOUT_MS = 350;
 
-	private static Process process;
 	private static File configFile;
 	private static String configYaml;
-	private static String binary;
 	private static long lastStartMs;
 	private static int rapidRestarts;
 	private static boolean stopping;
 	private static boolean shutdownHookRegistered;
 
-	/** Off the class monitor on purpose: spawn() holds it while it blocks and a reconcile pass must not wait. */
-	private static volatile int port;
+	/** Written under the monitor, read without it. spawn() holds it while blocking, readers must not wait. */
+	private static volatile Process process;
+	private static volatile String binary;
 	private static volatile int generation;
 	private static volatile boolean givenUp;
 
 	private MediaMtxProcess() {
 	}
 
-	static synchronized void start(RtspOutSettings settings) {
-		if (isRunning()) {
-			if (settings.getRtspPort() != port) {
-				logger.warn("MediaMTX is already running on port {}, ignoring requested port {}",
-						port, settings.getRtspPort());
-			}
+	static synchronized void start(String authUrl) {
+		// every app calls this at boot, and the restart budget is for the server, not for each of them
+		if (isRunning() || givenUp) {
 			return;
 		}
 
 		String resolvedBinary = resolveBinary();
 		if (resolvedBinary == null) {
-			logger.error("mediamtx binary not found in plugins dir or installed in /usr/local/bin");
+			logger.error("{} not found in the plugins dir, /usr/local/bin or on PATH", BINARY_NAME);
 			givenUp = true;
 			return;
 		}
@@ -68,19 +82,17 @@ final class MediaMtxProcess {
 
 		binary = resolvedBinary;
 		configFile = file;
-		configYaml = renderConfig(settings);
-		port = settings.getRtspPort();
+		configYaml = renderConfig(authUrl);
 		stopping = false;
-		givenUp = false;
 		rapidRestarts = 0;
 		registerShutdownHook();
 		spawn();
 	}
 
-	static synchronized void ensureStarted(RtspOutSettings settings) {
-		// Starts MediaMTX only if it never started at all.
-		if (generation == 0 && !givenUp) {
-			start(settings);
+	/** Starts MediaMTX only if it never started at all. start() turns down the rest. */
+	static synchronized void ensureStarted(String authUrl) {
+		if (generation == 0) {
+			start(authUrl);
 		}
 	}
 
@@ -92,36 +104,31 @@ final class MediaMtxProcess {
 		}
 	}
 
-	static synchronized boolean isRunning() {
-		return process != null && process.isAlive();
+	static boolean isRunning() {
+		Process running = process;
+		return running != null && running.isAlive();
 	}
 
 	/** True once MediaMTX accepts connections, which lags process start by a few hundred ms. */
-	static boolean isListening(int rtspPort) {
+	static boolean isListening() {
 		try (Socket socket = new Socket()) {
-			socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), rtspPort), PROBE_TIMEOUT_MS);
+			socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), RTSP_PORT), PROBE_TIMEOUT_MS);
 			return true;
 		} catch (IOException e) {
 			return false;
 		}
 	}
 
-	static synchronized String getBinaryPath() {
+	static String getBinaryPath() {
 		return binary;
 	}
 
-	static int getPort() {
-		return port;
-	}
-
-	/** Bumped on every spawn, so muxers left over from a restarted MediaMTX can be spotted.
-	 * 0 before the first start. */
+	/** Bumped on every spawn, so stale muxers can be spotted. 0 before the first start. */
 	static int getGeneration() {
 		return generation;
 	}
 
-	/** True once the supervisor stopped restarting.
-	 *  Nothing will publish again before a server restart. */
+	/** True once the supervisor stopped restarting. Nothing publishes again before a server restart. */
 	static boolean isGivenUp() {
 		return givenUp;
 	}
@@ -140,7 +147,7 @@ final class MediaMtxProcess {
 			generation++;
 			lastStartMs = System.currentTimeMillis();
 			logger.info("MediaMTX started from {} on RTSP port {} with config {}, generation {}",
-					binary, port, configFile.getAbsolutePath(), generation);
+					binary, RTSP_PORT, configFile.getAbsolutePath(), generation);
 
 			drainLogs(started);
 			// last, because a process that dies at once completes this inline and handleExit respawns
@@ -160,8 +167,8 @@ final class MediaMtxProcess {
 		rapidRestarts = System.currentTimeMillis() - lastStartMs < RESTART_GRACE_MS ? rapidRestarts + 1 : 0;
 		if (rapidRestarts >= MAX_RAPID_RESTARTS) {
 			logger.error("MediaMTX died {} times in a row right after starting, giving up. There is no RTSP output "
-					+ "until the server restarts. Check that port {} is free and review {}",
-					MAX_RAPID_RESTARTS, port, configFile.getAbsolutePath());
+					+ "until the server restarts. Check that tcp {} and udp {} and {} are free and review {}",
+					MAX_RAPID_RESTARTS, RTSP_PORT, RTP_PORT, RTCP_PORT, configFile.getAbsolutePath());
 			process = null;
 			givenUp = true;
 			return;
@@ -208,12 +215,16 @@ final class MediaMtxProcess {
 		}
 	}
 
-	static String renderConfig(RtspOutSettings settings) {
+	static String renderConfig(String authUrl) {
+		String auth = authUrl != null ? "authMethod: http\nauthHTTPAddress: " + authUrl : NO_CALLBACK_AUTH;
+
 		return """
 				# Generated by the Ant Media RTSP output plugin. Overwritten on every server start.
 				# warn on purpose, info writes a few lines per connection into the server log.
 				logLevel: warn
 				logDestinations: [stdout]
+
+				%s
 
 				api: false
 				metrics: false
@@ -223,6 +234,8 @@ final class MediaMtxProcess {
 				rtsp: true
 				rtspTransports: [tcp, udp]
 				rtspAddress: :%d
+				rtpAddress: :%d
+				rtcpAddress: :%d
 
 				rtmp: false
 				hls: false
@@ -232,10 +245,9 @@ final class MediaMtxProcess {
 
 				paths:
 				  all_others:
-				""".formatted(settings.getRtspPort());
+				""".formatted(auth, RTSP_PORT, RTP_PORT, RTCP_PORT);
 	}
 
-	/** Next to the plugin jar first, then the usual install locations. */
 	private static String resolveBinary() {
 		List<String> candidates = new ArrayList<>();
 
@@ -261,7 +273,6 @@ final class MediaMtxProcess {
 		return file.isFile() && file.canExecute();
 	}
 
-	/** Directory plugin's jar was loaded from */
 	private static File pluginDirectory() {
 		try {
 			return new File(MediaMtxProcess.class.getProtectionDomain().getCodeSource().getLocation().toURI())

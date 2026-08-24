@@ -26,14 +26,11 @@ import org.bytedeco.ffmpeg.avutil.AVRational;
 
 import io.vertx.core.Vertx;
 
-/**
- * Publishes a stream into the local MediaMTX with RTSP ANNOUNCE. FFmpeg's rtsp muxer is AVFMT_NOFILE and
- * opens its own connection in writeHeader, so openIO() does nothing and the destination goes on the context.
- */
+/** Publishes into the local MediaMTX with RTSP ANNOUNCE. The rtsp muxer is AVFMT_NOFILE, so openIO() does
+ * nothing and the destination has to go on the context itself. */
 public class RtspMuxer extends Muxer {
 
-	/** Measured against the pinned MediaMTX.
-	 * VP9 and AV1 need -strict experimental, AC-3 gets a 400. */
+	/** Measured against the bundled MediaMTX. VP9 and AV1 need -strict experimental, AC-3 gets a 400. */
 	private static final Set<Integer> SUPPORTED_CODECS = Set.of(
 			AV_CODEC_ID_H264, AV_CODEC_ID_H265, AV_CODEC_ID_VP8,
 			AV_CODEC_ID_MPEG4, AV_CODEC_ID_MPEG2VIDEO, AV_CODEC_ID_MPEG1VIDEO, AV_CODEC_ID_MJPEG,
@@ -42,6 +39,7 @@ public class RtspMuxer extends Muxer {
 
 	private final String url;
 	private volatile boolean writable = true;
+	private boolean trailerWritten;
 
 	public RtspMuxer(String url, Vertx vertx) {
 		super(vertx);
@@ -82,13 +80,17 @@ public class RtspMuxer extends Muxer {
 		write(pkt, context);
 	}
 
+	/** AMS tears a muxer down through several paths and they all reach this one. Only the first counts. */
 	@Override
 	public synchronized void writeTrailer() {
 		writable = false;
-		super.writeTrailer();
+		if (!trailerWritten) {
+			trailerWritten = true;
+			super.writeTrailer();
+		}
 	}
 
-	/** No filter loop, RTSP registers no bitstream filters. Gives up on the first failed write. */
+	/** No filter loop, RTSP registers no bitstream filters. */
 	private void write(AVPacket pkt, AVFormatContext context) {
 		if (!writable) {
 			return;
