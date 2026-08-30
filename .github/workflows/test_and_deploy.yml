@@ -62,6 +62,12 @@ jobs:
              mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dgpg.skip=true --quiet
              cd ..
         
+        - name: Test RTSP Out Plugin
+          run: |
+            cd RtspOutPlugin
+            mvn clean test
+            cd ..
+
         - name: Get latest snapshot
           run: | 
             wget -O maven-metadata.xml https://central.sonatype.com/repository/maven-snapshots/io/antmedia/ant-media-server/maven-metadata.xml
