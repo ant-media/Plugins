@@ -10,8 +10,8 @@ public class MoQSettingsTest {
     public void testDefaults() {
         MoQSettings s = new MoQSettings();
         assertTrue(s.isUseEmbeddedRelay());
-        assertTrue(s.isIngestEnabled());
         assertEquals("https://localhost:4443/moq", s.getExternalRelayUrl());
+        assertEquals("", s.getMoqCdnUrl());
         assertEquals(2000, s.getIngestPollIntervalMs());
     }
 
@@ -21,12 +21,12 @@ public class MoQSettingsTest {
 
         s.setUseEmbeddedRelay(false);
         s.setExternalRelayUrl("https://relay.example.com/moq");
-        s.setIngestEnabled(false);
+        s.setMoqCdnUrl("https://cdn.example.com/token");
         s.setIngestPollIntervalMs(5000);
 
         assertFalse(s.isUseEmbeddedRelay());
         assertEquals("https://relay.example.com/moq", s.getExternalRelayUrl());
-        assertFalse(s.isIngestEnabled());
+        assertEquals("https://cdn.example.com/token", s.getMoqCdnUrl());
         assertEquals(5000, s.getIngestPollIntervalMs());
     }
 

@@ -199,6 +199,17 @@ public class MoQStreamFetcherTest {
     }
 
     @Test
+    public void testBuildMoqCliCommand_bindsIpv4() throws Exception {
+        MoQStreamFetcher fetcher = newFetcher("s3");
+        java.util.List<String> cmd = fetcher.buildMoqCliCommand();
+
+        assertTrue("--client-bind present", cmd.contains("--client-bind"));
+        assertEquals(MoqBinaries.CLIENT_BIND, cmd.get(cmd.indexOf("--client-bind") + 1));
+
+        ((ServerSocket) getField(fetcher, "serverSocket")).close();
+    }
+
+    @Test
     public void testBuildMoqCliCommand_omitsTlsDisableVerifyWhenUnset() throws Exception {
         MoQStreamFetcher fetcher = new MoQStreamFetcher("s2", "live", "https://relay.example.com/moq", scope, vertx, false);
         java.util.List<String> cmd = fetcher.buildMoqCliCommand();

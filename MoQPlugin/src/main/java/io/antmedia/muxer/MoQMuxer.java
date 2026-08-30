@@ -402,18 +402,25 @@ public class MoQMuxer extends Muxer {
     }
 
     protected Process spawnMoqCli() throws IOException {
+        return new ProcessBuilder(buildMoqCliCommand())
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .start();
+    }
+
+    /** Builds the moq-cli publish command; {@code --tls-disable-verify} is added only for the self-signed embedded relay. */
+    List<String> buildMoqCliCommand() {
         List<String> cmd = new ArrayList<>();
         cmd.add(MoqBinaries.resolve("moq-cli"));
         cmd.add("publish");
         cmd.add("--url");
         cmd.add(relayUrl);
+        cmd.add("--client-bind");
+        cmd.add(MoqBinaries.CLIENT_BIND);
         if (tlsDisableVerify) cmd.add("--tls-disable-verify");
         cmd.add("--name");
         cmd.add(streamName);
         cmd.add("fmp4");
-        return new ProcessBuilder(cmd)
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                .start();
+        return cmd;
     }
 
     protected void startDrainThread(OutputStream moqStdin) {

@@ -76,12 +76,11 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         }
 
         String relayUrl = getRelayUrl(settings);
-        if (settings.isIngestEnabled()) {
-            announcePoller = new MoQAnnouncePoller(relayUrl, app.getScope().getName(), this, settings.isUseEmbeddedRelay());
-            announcePoller.start(vertx);
-        }
+        announcePoller = new MoQAnnouncePoller(relayUrl, app.getScope().getName(), this, settings.isUseEmbeddedRelay());
+        announcePoller.start(vertx);
 
-        logger.info("MoQ plugin initialized for app: {}, relay: {}", app.getScope().getName(), relayUrl);
+        logger.info("MoQ plugin initialized for app: {}, relay: {}, cdn: {}",
+                app.getScope().getName(), relayUrl, settings.getMoqCdnUrl());
     }
 
     private static synchronized void startRelay() {
@@ -267,11 +266,24 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
             return;
         }
 
-        String appName = getApplication().getScope().getName();
         MoQSettings settings = loadSettings();
-        String relayUrl = getRelayUrl(settings);
-        boolean tlsDisableVerify = settings.isUseEmbeddedRelay();
         Set<MoQMuxer> muxers = ConcurrentHashMap.newKeySet();
+
+        addMuxers(muxAdaptor, streamId, getRelayUrl(settings), settings.isUseEmbeddedRelay(), muxers);
+
+        String cdnUrl = settings.getMoqCdnUrl();
+        if (!cdnUrl.isBlank()) {
+            // A CDN is an extra destination, not a replacement, and it has a real certificate.
+            addMuxers(muxAdaptor, streamId, cdnUrl, false, muxers);
+        }
+
+        muxersByStream.put(streamId, muxers);
+        logger.info("MoQ: {} muxer(s) publishing for stream {}, with CDN: {}", muxers.size(), streamId, !cdnUrl.isBlank());
+    }
+
+    /** Attaches one muxer per quality (source plus ABR ladder) publishing to the given URL. */
+    private void addMuxers(MuxAdaptor muxAdaptor, String streamId, String url, boolean tlsDisableVerify, Set<MoQMuxer> muxers) {
+        String appName = getApplication().getScope().getName();
 
         // For direct-muxing (RTMP/SRT), height=0 means "match any resolution".
         // For WebRTC (directMuxingSupported=false), the EncoderAdaptor fallback in addMuxer()
@@ -281,22 +293,19 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         if (!muxAdaptor.directMuxingSupported() && muxAdaptor.getVideoCodecParameters() != null) {
             sourceAddHeight = muxAdaptor.getVideoCodecParameters().height();
         }
-        MoQMuxer sourceMuxer = new MoQMuxer(vertx, streamId, 0, appName, relayUrl, tlsDisableVerify);
+        MoQMuxer sourceMuxer = new MoQMuxer(vertx, streamId, 0, appName, url, tlsDisableVerify);
         if (muxAdaptor.addMuxer(sourceMuxer, sourceAddHeight)) {
             muxers.add(sourceMuxer);
         }
 
         if (muxAdaptor.getEncoderSettingsList() != null) {
             for (var encoderSettings : muxAdaptor.getEncoderSettingsList()) {
-                MoQMuxer muxer = new MoQMuxer(vertx, streamId, encoderSettings.getHeight(), appName, relayUrl, tlsDisableVerify);
+                MoQMuxer muxer = new MoQMuxer(vertx, streamId, encoderSettings.getHeight(), appName, url, tlsDisableVerify);
                 if (muxAdaptor.addMuxer(muxer, encoderSettings.getHeight())){
                     muxers.add(muxer);
                 }
             }
         }
-
-        muxersByStream.put(streamId, muxers);
-        logger.info("MoQ: {} quality muxer(s) publishing for stream {}", muxers.size(), streamId);
     }
 
     @Override

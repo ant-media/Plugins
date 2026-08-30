@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 import static org.bytedeco.ffmpeg.global.avcodec.*;
 import static org.bytedeco.ffmpeg.global.avutil.*;
 
+import io.antmedia.plugin.MoqBinaries;
 import io.vertx.core.Vertx;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
@@ -374,6 +375,17 @@ public class MoQMuxerTest {
         assertTrue(muxer.openIO());
         assertNotNull(getField(muxer, "avioContext"));
         assertNotNull(getField(muxer, "opaque"));
+    }
+
+    @Test
+    public void testBuildMoqCliCommand() {
+        java.util.List<String> cmd = newMuxer(0).buildMoqCliCommand();
+
+        assertEquals("publish", cmd.get(1));
+        assertEquals("http://localhost:4443/moq", cmd.get(cmd.indexOf("--url") + 1));
+        assertEquals(MoqBinaries.CLIENT_BIND, cmd.get(cmd.indexOf("--client-bind") + 1));
+        assertEquals("live/stream1/source", cmd.get(cmd.indexOf("--name") + 1));
+        assertEquals("fmp4", cmd.get(cmd.size() - 1));
     }
 
     @Test

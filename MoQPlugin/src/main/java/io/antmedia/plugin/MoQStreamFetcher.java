@@ -132,6 +132,8 @@ public class MoQStreamFetcher extends StreamFetcher {
         cmd.add("subscribe");
         cmd.add("--url");
         cmd.add(relayUrl);
+        cmd.add("--client-bind");
+        cmd.add(MoqBinaries.CLIENT_BIND);
         if (tlsDisableVerify) cmd.add("--tls-disable-verify");
         cmd.add("--name");
         cmd.add(broadcastName);

@@ -26,6 +26,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -62,10 +63,9 @@ public class MoQPluginTest {
         when(vertx.setPeriodic(anyLong(), any())).thenReturn(1L);
         when(appSettings.getCustomSetting(any())).thenReturn(null);
 
-        // Disable embedded relay and ingest poller to keep init side effects out of tests
+        // Disable the embedded relay to keep init side effects out of tests
         MoQSettings safe = new MoQSettings();
         safe.setUseEmbeddedRelay(false);
-        safe.setIngestEnabled(false);
         doReturn(safe).when(plugin).loadSettings();
 
         // Real fetcher creation would NPE on a mock IScope, so stub it
@@ -77,7 +77,8 @@ public class MoQPluginTest {
     @Test
     public void testSetApplicationContext_wiresUp() {
         verify(streamHandler).addStreamListener(plugin);
-        verify(vertx).setPeriodic(anyLong(), any());
+        // One periodic for log polling, one for the announce poller
+        verify(vertx, times(2)).setPeriodic(anyLong(), any());
     }
 
     @Test
@@ -90,21 +91,44 @@ public class MoQPluginTest {
         when(as.getCustomSetting("plugin.moq")).thenReturn(null);
         MoQSettings def = p.loadSettings();
         assertTrue(def.isUseEmbeddedRelay());
-        assertTrue(def.isIngestEnabled());
+        assertEquals("", def.getMoqCdnUrl());
         assertEquals(2000, def.getIngestPollIntervalMs());
 
         // Valid JSON: parsed
         when(as.getCustomSetting("plugin.moq"))
-                .thenReturn("{\"useEmbeddedRelay\":false,\"ingestEnabled\":false}");
+                .thenReturn("{\"useEmbeddedRelay\":false,\"moqCdnUrl\":\"https://cdn.example.com/token\"}");
         MoQSettings parsed = p.loadSettings();
         assertFalse(parsed.isUseEmbeddedRelay());
-        assertFalse(parsed.isIngestEnabled());
+        assertEquals("https://cdn.example.com/token", parsed.getMoqCdnUrl());
 
         // Garbage JSON: defaults
         when(as.getCustomSetting("plugin.moq")).thenReturn("not valid json {{{");
         MoQSettings fallback = p.loadSettings();
         assertTrue(fallback.isUseEmbeddedRelay());
-        assertTrue(fallback.isIngestEnabled());
+        assertEquals("", fallback.getMoqCdnUrl());
+    }
+
+    @Test
+    public void testStreamStarted_withCdn_publishesToRelayAndCdn() throws Exception {
+        MoQSettings withCdn = new MoQSettings();
+        withCdn.setUseEmbeddedRelay(false);
+        withCdn.setExternalRelayUrl("https://relay.example.com/moq");
+        withCdn.setMoqCdnUrl("https://cdn.example.com/token");
+        doReturn(withCdn).when(plugin).loadSettings();
+
+        MuxAdaptor adaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
+        when(adaptor.directMuxingSupported()).thenReturn(true);
+        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+
+        plugin.streamStarted(broadcast("s1"));
+
+        ConcurrentMap<String, Set<MoQMuxer>> map = getField(plugin, "muxersByStream");
+        Set<String> targets = new HashSet<>();
+        for (MoQMuxer muxer : map.get("s1")) {
+            targets.add(getField(muxer, "relayUrl"));
+        }
+        assertEquals(new HashSet<>(Arrays.asList("https://relay.example.com/moq", "https://cdn.example.com/token")), targets);
     }
 
     @Test
@@ -290,7 +314,7 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testSetApplicationContext_ingestEnabled_startsAnnouncePoller() throws Exception {
+    public void testSetApplicationContext_startsAnnouncePoller() throws Exception {
         // Fresh vertx + fresh context so we count only this plugin's interactions
         Vertx freshVertx = mock(Vertx.class);
         when(freshVertx.setPeriodic(anyLong(), any())).thenReturn(7L);
@@ -302,7 +326,6 @@ public class MoQPluginTest {
         doReturn(fakeFetcher).when(p).createFetcher(any(), any(), any(), any());
         MoQSettings ingest = new MoQSettings();
         ingest.setUseEmbeddedRelay(false);
-        ingest.setIngestEnabled(true);
         doReturn(ingest).when(p).loadSettings();
 
         p.setApplicationContext(freshCtx);
