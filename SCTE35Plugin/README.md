@@ -10,6 +10,23 @@ The SCTE-35 Plugin automatically detects SCTE-35 messages embedded in SRT stream
 
 - **Automatic SCTE-35 Detection**: Monitors SRT streams for SCTE-35 data packets
 - **Real-time Processing**: Modifies M3U8 manifests in real-time as cue points are detected
+- **Adaptive Bitrate**: Every rendition is marked at the same instant, so ABR streams work
+
+## Requirements
+
+Ad breaks are placed by wall clock, read back from the `EXT-X-PROGRAM-DATE-TIME` that the
+HLS muxer writes next to every segment. That is what keeps all ABR renditions marking the
+same instant, since renditions number their segments independently and can use different
+segment durations.
+
+`program_date_time` is part of the default `hlsflags`, so nothing needs changing unless
+you have overridden it. If you have, put it back:
+
+```
+settings.hlsflags=delete_segments+program_date_time
+```
+
+The plugin logs an error at stream start when the flag is missing.
 
 ## Installation
 
@@ -148,6 +165,13 @@ When a SCTE-35 cue-out event is detected in your SRT stream:
 4. After the ad break duration expires (cue-in), content resumes
 
 ## Changelog
+
+### Version 1.1.0
+- Ad break markers now work with adaptive bitrate streams
+- Breaks are anchored to `EXT-X-PROGRAM-DATE-TIME` instead of segment numbers
+- `Elapsed` can no longer run past the announced `Duration`
+- A break closes at its announced duration when no CUE-IN arrives
+- Removed the parallel HLS muxer the plugin used to run alongside the server's own
 
 ### Version 1.0.0
 - Initial release
