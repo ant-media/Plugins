@@ -131,6 +131,9 @@ public class RtspMuxerTest {
 		for (int i = 0; i < config.length; i++) {
 			config[i] = added.extradata().get(i);
 		}
+
+		// extradata without the filter would leave the ADTS headers inside the payload, the two go together
+		assertEquals(config.length > 0, !muxer.bsfAudioFilterContextMap.isEmpty());
 		return config;
 	}
 }

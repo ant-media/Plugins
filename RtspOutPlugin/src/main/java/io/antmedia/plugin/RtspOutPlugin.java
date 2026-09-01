@@ -469,10 +469,7 @@ public class RtspOutPlugin implements ApplicationContextAware, IStreamListener {
 		}
 
 		if (muxAdaptor.isEnableVideo() && muxer.getVideoHeight() == 0) {
-			// MediaMTX would happily serve the path with the video silently missing
-			muxAdaptor.removeMuxer(muxer);
 			logger.warn("RTSP endpoint {} bound audio only, nothing matched height {}", path, height);
-			return null;
 		}
 		logger.info("RTSP out is serving {} at {}, bound at height {}",
 				path, rtspUrl(serverSettings.getHostAddress(), path), height);
