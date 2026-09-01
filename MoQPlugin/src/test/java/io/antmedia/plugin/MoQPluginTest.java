@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -651,8 +652,41 @@ public class MoQPluginTest {
         }
     }
 
+    private static ProcessHandle handle(long pid, String command, Long parentPid) {
+        ProcessHandle.Info info = mock(ProcessHandle.Info.class);
+        when(info.command()).thenReturn(Optional.ofNullable(command));
+        ProcessHandle h = mock(ProcessHandle.class);
+        when(h.pid()).thenReturn(pid);
+        when(h.info()).thenReturn(info);
+        if (parentPid == null) {
+            when(h.parent()).thenReturn(Optional.empty());
+        } else {
+            ProcessHandle parent = mock(ProcessHandle.class);
+            when(parent.pid()).thenReturn(parentPid);
+            when(h.parent()).thenReturn(Optional.of(parent));
+        }
+        return h;
+    }
+
     @Test
-    public void testReapOrphanedProcesses_leavesUnrelatedProcessesAlone() throws Exception {
+    public void testIsOrphanedMoq_reapsOnlyOurStrandedBinaries() {
+        Set<String> ours = Set.of("/usr/local/bin/moq", "/usr/local/bin/moq-relay");
+
+        assertTrue("a stranded moq-relay must be reaped",
+                MoQPlugin.isOrphanedMoq(handle(100, "/usr/local/bin/moq-relay", 1L), ours));
+
+        assertFalse("an unrelated binary must never be reaped",
+                MoQPlugin.isOrphanedMoq(handle(101, "/usr/bin/ffmpeg", 1L), ours));
+
+        assertFalse("a relay owned by a live parent must never be reaped",
+                MoQPlugin.isOrphanedMoq(handle(102, "/usr/local/bin/moq-relay", 4242L), ours));
+
+        assertFalse("a process we cannot inspect must never be reaped",
+                MoQPlugin.isOrphanedMoq(handle(103, null, 1L), ours));
+    }
+
+    @Test
+    public void testReapOrphanedProcesses_realScanSparesBystanders() throws Exception {
         Process child = new ProcessBuilder("/bin/sh", "-c", "sleep 30").start();
         try {
             MoQPlugin.reapOrphanedProcesses();

@@ -28,7 +28,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 @Component(value = "moqPlugin")
 public class MoQPlugin implements ApplicationContextAware, IStreamListener {
@@ -131,21 +130,15 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         }
     }
 
-    /**
-     * Kills moq processes left over from a previous JVM. A hard kill runs no shutdown hook, so the
-     * next start is the only chance to clean up, and a stale relay still holds port
-     * {@value #EMBEDDED_RELAY_PORT}. Only our own binaries that have been reparented to init are
-     * touched, so a relay started by hand or owned by a live JVM survives.
-     */
+    /** Kills moq processes left running by a previous session. */
     static int reapOrphanedProcesses() {
-        Set<String> ours = Set.of(MoqBinaries.resolve("moq"), MoqBinaries.resolve(MOQ_RELAY_BIN));
-        // In a container AMS is pid 1, so its own children look reparented. Never touch our own.
-        Set<Long> mine = ProcessHandle.current().descendants().map(ProcessHandle::pid).collect(Collectors.toSet());
+        if (ProcessHandle.current().pid() == 1) {
+            return 0;
+        }
 
+        Set<String> ours = Set.of(MoqBinaries.resolve("moq"), MoqBinaries.resolve(MOQ_RELAY_BIN));
         List<ProcessHandle> orphans = ProcessHandle.allProcesses()
-                .filter(h -> h.info().command().map(ours::contains).orElse(false))
-                .filter(h -> !mine.contains(h.pid()))
-                .filter(h -> h.parent().map(parent -> parent.pid() == 1).orElse(true))
+                .filter(h -> isOrphanedMoq(h, ours))
                 .toList();
 
         if (orphans.isEmpty()) {
@@ -159,6 +152,11 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         orphans.forEach(ProcessHandle::destroyForcibly);
         orphans.forEach(MoQPlugin::awaitOrphanExit);
         return orphans.size();
+    }
+
+    static boolean isOrphanedMoq(ProcessHandle h, Set<String> ours) {
+        return h.info().command().map(ours::contains).orElse(false)
+                && h.parent().map(parent -> parent.pid() == 1).orElse(true);
     }
 
     private static void awaitOrphanExit(ProcessHandle h) {
