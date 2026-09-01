@@ -36,10 +36,11 @@ Ingest works by polling. The plugin asks the relay `GET <relay>/announced/moq/<a
 ## Build and install
 
 ```bash
-mvn package -Dmaven.test.skip=true -Dgpg.skip=true -s mvn-settings.xml
+./build.sh                 # player + plugin
+./build.sh --skip-player   # plugin only, reuses the committed player build
 ```
 
-This produces `target/MoQPlugin-<version>-release.zip`. Extract it on the server and run:
+This produces `target/MoQPlugin-release.zip`. Extract it on the server and run:
 
 ```bash
 sudo ./install-moq-plugin.sh
@@ -145,18 +146,16 @@ WebCodecs is required. A browser without it gets an error, there is no fallback 
 
 The publisher pins H.264, because browsers that can hardware encode AV1 or VP9 pick those first and `import fmp4` rejects them.
 
-Build it:
+`./build.sh` builds it as part of the release. To work on it on its own:
 
 ```bash
 cd src/main/js/player
-nix-shell            # on nixos, for node and bun. skip it if npm is already on PATH
+nix-shell shell.nix   # on nixos, for node. skip it if npm is already on PATH
 npm install
-npm run build
-rm -rf ../../resources/moq-ams-player-build   # asset names are hashed, stale ones linger
-cp -r dist ../../resources/moq-ams-player-build
+npm run dev
 ```
 
-The build output is committed under `src/main/resources/moq-ams-player-build/` and `release.xml` packages it into the release zip. To deploy it straight onto a server, replace the directory rather than copying over it, for the same hashed-asset reason:
+The build output is committed under `src/main/resources/moq-ams-player-build/` and `release.xml` packages it into the release zip. To deploy it straight onto a server, replace the directory rather than copying over it, because asset names are hashed and stale ones linger:
 
 ```bash
 sudo rm -rf /usr/local/antmedia/webapps/live/moq
