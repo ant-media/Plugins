@@ -6,12 +6,14 @@ import static org.bytedeco.ffmpeg.global.avcodec.*;
 import static org.bytedeco.ffmpeg.global.avutil.*;
 
 import io.antmedia.plugin.MoqBinaries;
+import io.antmedia.plugin.MoqTestBinary;
 import io.vertx.core.Vertx;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avformat.AVFormatContext;
 import org.bytedeco.ffmpeg.avformat.AVStream;
 import org.bytedeco.ffmpeg.avformat.Write_packet_Pointer_BytePointer_int;
+import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.javacpp.BytePointer;
 import org.junit.Test;
@@ -25,9 +27,13 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 public class MoQMuxerTest {
 
@@ -89,6 +95,13 @@ public class MoQMuxerTest {
         // Other NAL types (here SEI, type=6) interleaved before SPS/PPS are ignored
         byte[] sei = { 0x00, 0x00, 0x00, 0x01, 0x06, 0x05, 0x10, 0x20 };
         assertArrayEquals(expected, (byte[]) m.invoke(muxer, (Object) concat(sei, sps4, pps4)));
+
+        // A buffer that ends on a bare start code: the scan must stop, not read past the end
+        assertEquals(0, ((byte[]) m.invoke(muxer, (Object) new byte[] { 0x00, 0x00, 0x00, 0x01 })).length);
+
+        // A truncated SPS (< 4 bytes of payload) is rejected, so no half-parsed extradata escapes
+        byte[] shortSps = { 0x00, 0x00, 0x00, 0x01, 0x67, 0x42 };
+        assertEquals(0, ((byte[]) m.invoke(muxer, (Object) concat(shortSps, pps4))).length);
 
         // Negative cases all return an empty array, not null
         assertEquals(0, ((byte[]) m.invoke(muxer, (Object) new byte[0])).length);
@@ -354,7 +367,7 @@ public class MoQMuxerTest {
     }
 
     @Test
-    public void testPrepareIO() {
+    public void testPrepareIO() throws Exception {
         // Success: openIO returns true -> running flags set
         MoQMuxer ok = spy(newMuxer(0));
         doNothing().when(ok).startMoqCli();
@@ -363,16 +376,21 @@ public class MoQMuxerTest {
         assertTrue(ok.prepareIO());
         verify(ok).startMoqCli();
         verify(ok).openIO();
-        try {
-            assertTrue(getBoolean(ok, "running"));
-        } catch (Exception e) { throw new RuntimeException(e); }
+        assertTrue(getBoolean(ok, "running"));
         assertTrue(ok.isRunning.get());
 
-        // Failure: openIO returns false -> prepareIO returns false
+        // Failure: openIO returns false -> prepareIO returns false and nothing is left running.
+        // MuxAdaptor drops a muxer whose prepareIO fails without calling writeTrailer, so a moq
+        // process or drain thread started here would never be reaped.
         MoQMuxer bad = spy(newMuxer(0));
-        doNothing().when(bad).startMoqCli();
         doReturn(false).when(bad).openIO();
+
         assertFalse(bad.prepareIO());
+        verify(bad, never()).startMoqCli();
+        assertNull("no moq process may survive a failed prepareIO", getField(bad, "moqCliProcess"));
+        assertNull("no drain thread may survive a failed prepareIO", getField(bad, "drainThread"));
+        assertFalse(getBoolean(bad, "running"));
+        assertFalse(bad.isRunning.get());
     }
 
     @Test
@@ -408,13 +426,28 @@ public class MoQMuxerTest {
 
     @Test
     public void testBuildMoqCliCommand() {
+        // newMuxer passes tlsDisableVerify=true, as the embedded self-signed relay needs
         java.util.List<String> cmd = newMuxer(0).buildMoqCliCommand();
 
-        assertEquals("publish", cmd.get(1));
-        assertEquals("http://localhost:4443/moq", cmd.get(cmd.indexOf("--url") + 1));
+        assertEquals("http://localhost:4443/moq", cmd.get(cmd.indexOf("--client-connect") + 1));
         assertEquals(MoqBinaries.CLIENT_BIND, cmd.get(cmd.indexOf("--client-bind") + 1));
-        assertEquals("live/stream1/source", cmd.get(cmd.indexOf("--name") + 1));
+        assertEquals("live/stream1/source", cmd.get(cmd.indexOf("--broadcast") + 1));
+        assertTrue("--client-tls-disable-verify added for the embedded relay",
+                cmd.contains("--client-tls-disable-verify"));
+        assertEquals("import is the verb", "import", cmd.get(cmd.size() - 2));
         assertEquals("fmp4", cmd.get(cmd.size() - 1));
+    }
+
+    @Test
+    public void testBuildMoqCliCommand_externalTarget_omitsTlsDisableVerify() {
+        MoQMuxer muxer = new MoQMuxer(mock(Vertx.class), "stream1", 720, "live",
+                "https://cdn.example.com/token", false);
+        java.util.List<String> cmd = muxer.buildMoqCliCommand();
+
+        assertFalse("a real certificate must still be verified",
+                cmd.contains("--client-tls-disable-verify"));
+        assertEquals("https://cdn.example.com/token", cmd.get(cmd.indexOf("--client-connect") + 1));
+        assertEquals("live/stream1/720p", cmd.get(cmd.indexOf("--broadcast") + 1));
     }
 
     @Test
@@ -454,23 +487,26 @@ public class MoQMuxerTest {
         Map<BytePointer, MoQMuxer> instances = (Map<BytePointer, MoQMuxer>) instancesField.get(null);
 
         BytePointer opaque = new BytePointer("test-opaque");
-
-        // Unknown opaque -> returns size, no queue side effect
         BytePointer buf = new BytePointer("hello".getBytes());
-        assertEquals(5, callback.call(opaque, buf, 5));
+        ArrayBlockingQueue<byte[]> queue = getField(muxer, "queue");
+        try {
+            // Unknown opaque -> returns size, no queue side effect
+            assertEquals(5, callback.call(opaque, buf, 5));
+            assertTrue("an unregistered opaque must not reach any queue", queue.isEmpty());
 
-        // Registered opaque -> bytes copied to queue, returns size
-        instances.put(opaque, muxer);
-        assertEquals(5, callback.call(opaque, buf, 5));
-        @SuppressWarnings("unchecked")
-        ArrayBlockingQueue<byte[]> queue = (ArrayBlockingQueue<byte[]>) getField(muxer, "queue");
-        assertArrayEquals("hello".getBytes(), queue.poll());
+            // Registered opaque -> bytes copied to queue, returns size
+            instances.put(opaque, muxer);
+            assertEquals(5, callback.call(opaque, buf, 5));
+            assertArrayEquals("hello".getBytes(), queue.poll());
 
-        // Queue full -> still returns size, drops chunk silently
-        for (int i = 0; i < 64; i++) queue.offer(new byte[1]); // QUEUE_CAPACITY
-        assertEquals(5, callback.call(opaque, buf, 5));
-
-        instances.remove(opaque);
+            // Queue full -> the chunk is dropped, but FFmpeg is still told every byte was taken,
+            // otherwise movenc aborts the whole muxer on a transient backlog.
+            for (int i = 0; i < 64; i++) queue.offer(new byte[1]); // QUEUE_CAPACITY
+            assertEquals(5, callback.call(opaque, buf, 5));
+            assertEquals("the chunk must be dropped, not queued past capacity", 64, queue.size());
+        } finally {
+            instances.remove(opaque);
+        }
     }
 
     @Test
@@ -497,8 +533,8 @@ public class MoQMuxerTest {
         setInt(muxer, "videoOutStreamIdx", 0);
         setBoolean(muxer, "headerWritten", false);
 
-        // Frame contains no SPS/PPS, so extractAnnexBSPSPPS returns null and the second
-        // extradata-size check still sees 0 -> early return before avformat_write_header
+        // Frame contains no SPS/PPS, so extractAnnexBSPSPPS returns an empty array and the
+        // second extradata-size check still sees 0 -> early return before avformat_write_header
         AVPacket pkt = new AVPacket();
         BytePointer data = new BytePointer("garbage-not-a-nal".getBytes());
         pkt.data(data);
@@ -510,6 +546,281 @@ public class MoQMuxerTest {
 
         verify(muxer, never()).callSuperWriteVideoFrame(any(), any());
         pkt.close();
+    }
+
+    /** A real baseline SPS/PPS pair: movenc parses these, so avformat_write_header actually succeeds. */
+    private static final byte[] SPS_PPS_ANNEXB = {
+            0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x0A, (byte) 0xF8, 0x41, (byte) 0xA2,
+            0x00, 0x00, 0x00, 0x01, 0x68, (byte) 0xCE, 0x38, (byte) 0x80
+    };
+
+    private static AVStream addH264OutStream(MoQMuxer muxer, int codecId) {
+        AVStream out = avformat_new_stream(muxer.getOutputFormatContext(), null);
+        out.codecpar().codec_type(AVMEDIA_TYPE_VIDEO);
+        out.codecpar().codec_id(codecId);
+        out.codecpar().width(176);
+        out.codecpar().height(144);
+        out.time_base().num(1);
+        out.time_base().den(90000);
+        return out;
+    }
+
+    private static void invokeWriteVideoFrame(MoQMuxer muxer, AVPacket pkt, AVFormatContext ctx) throws Exception {
+        Method m = MoQMuxer.class.getDeclaredMethod("writeVideoFrame", AVPacket.class, AVFormatContext.class);
+        m.setAccessible(true);
+        m.invoke(muxer, pkt, ctx);
+    }
+
+    private static AVPacket keyframe(byte[] payload) {
+        AVPacket pkt = new AVPacket();
+        pkt.data(new BytePointer(payload));
+        pkt.size(payload.length);
+        pkt.flags(AV_PKT_FLAG_KEY);
+        return pkt;
+    }
+
+    @Test
+    public void testAddStreams_againstTheRealMuxer() throws Exception {
+        // No stubbing of the callSuper* seams: this is the wiring the plugin actually runs.
+        MoQMuxer muxer = newMuxer(0);
+        AVRational tb = new AVRational(); tb.num(1).den(90000);
+
+        // Video with extradata already on codecpar (the RTMP/SRT path)
+        byte[] avcc = { 1, 0x42, 0, 0x0A, (byte) 0xFF };
+        AVCodecParameters videoPar = new AVCodecParameters();
+        BytePointer ed = new BytePointer(avcc);
+        videoPar.extradata(ed);
+        videoPar.extradata_size(avcc.length);
+        assertTrue(muxer.addVideoStream(176, 144, tb, AV_CODEC_ID_H264, 0, true, videoPar));
+        assertEquals("the real Muxer must have registered the output index",
+                0, getInt(muxer, "videoOutStreamIdx"));
+        assertArrayEquals("extradata must be copied onto the output stream",
+                avcc, extradataOf(muxer.getOutputFormatContext().streams(0)));
+
+        // Video whose codecpar carries no extradata (the WebRTC path): accepted, extraction deferred
+        MoQMuxer webrtc = newMuxer(0);
+        AVCodecParameters emptyPar = new AVCodecParameters();
+        assertTrue(webrtc.addVideoStream(176, 144, tb, AV_CODEC_ID_H264, 0, true, emptyPar));
+        assertEquals(0, webrtc.getOutputFormatContext().streams(0).codecpar().extradata_size());
+
+        // Opus audio with a real channel layout: OpusHead is synthesised from it
+        AVChannelLayout stereo = new AVChannelLayout();
+        av_channel_layout_default(stereo, 2);
+        assertTrue(muxer.addAudioStream(48000, stereo, AV_CODEC_ID_OPUS, 1));
+        byte[] opusHead = extradataOf(muxer.getOutputFormatContext().streams(1));
+        assertArrayEquals(MoQMuxer.buildOpusHead(2, 48000), opusHead);
+
+        // Direct-muxing addStream for AAC: registers the ADTS-to-ASC filter and copies the params
+        MoQMuxer direct = newMuxer(0);
+        AVCodecParameters aacPar = new AVCodecParameters();
+        aacPar.codec_type(AVMEDIA_TYPE_AUDIO);
+        aacPar.codec_id(AV_CODEC_ID_AAC);
+        aacPar.sample_rate(48000);
+        av_channel_layout_default(aacPar.ch_layout(), 2);
+        assertTrue(direct.addStream(aacPar, tb, 0));
+        assertTrue(direct.getBsfAudioNames().contains("aac_adtstoasc"));
+
+        // An unsupported codec is refused by the real Muxer, so no muxer is wired up for it
+        MoQMuxer vp8 = newMuxer(0);
+        assertFalse(vp8.addVideoStream(176, 144, tb, AV_CODEC_ID_VP8, 0, true, null));
+
+        tb.close(); videoPar.close(); emptyPar.close(); ed.close(); stereo.close(); aacPar.close();
+    }
+
+    private static byte[] extradataOf(AVStream stream) {
+        byte[] out = new byte[stream.codecpar().extradata_size()];
+        stream.codecpar().extradata().get(out, 0, out.length);
+        return out;
+    }
+
+    @Test
+    public void testWriteVideoFrame_extradataAlreadySet_skipsKeyframeExtraction() throws Exception {
+        // RTMP/SRT path: addStream copied AVCC extradata, so the keyframe carries no SPS/PPS
+        // and must not need to. The header still has to be written on that first keyframe.
+        MoQMuxer muxer = spy(newMuxer(0));
+        doNothing().when(muxer).startMoqCli();
+        doNothing().when(muxer).callSuperWriteVideoFrame(any(), any());
+
+        AVFormatContext ctx = muxer.getOutputFormatContext();
+        AVStream out = addH264OutStream(muxer, AV_CODEC_ID_H264);
+        Method setExtradata = MoQMuxer.class.getDeclaredMethod("setExtradata", AVStream.class, byte[].class);
+        setExtradata.setAccessible(true);
+        setExtradata.invoke(muxer, out, new byte[] { 1, 0x42, 0x00, 0x0A, (byte) 0xFF, (byte) 0xE1,
+                0x00, 0x07, 0x67, 0x42, 0x00, 0x0A, (byte) 0xF8, 0x41, (byte) 0xA2,
+                0x01, 0x00, 0x04, 0x68, (byte) 0xCE, 0x38, (byte) 0x80 });
+        setInt(muxer, "videoOutStreamIdx", out.index());
+        assertTrue(muxer.prepareIO());
+
+        AVPacket pkt = keyframe(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x65, 0x11, 0x22, 0x33 }); // IDR slice only
+        invokeWriteVideoFrame(muxer, pkt, ctx);
+
+        assertTrue(getBoolean(muxer, "headerWritten"));
+        verify(muxer).callSuperWriteVideoFrame(eq(pkt), eq(ctx));
+        pkt.close();
+    }
+
+    @Test
+    public void testDrainLoop_keepsPumpingWhileRunning() throws Exception {
+        MoQMuxer muxer = newMuxer(0);
+        setBoolean(muxer, "running", true);
+
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        muxer.startDrainThread(sink);
+        Thread t = getField(muxer, "drainThread");
+
+        // Empty queue: the loop must idle on poll(), not exit while still running
+        Thread.sleep(300);
+        assertTrue("the drain thread must stay up while running", t.isAlive());
+
+        ArrayBlockingQueue<byte[]> queue = getField(muxer, "queue");
+        queue.put(new byte[] { 9, 8 });
+        setBoolean(muxer, "running", false);
+
+        t.join(3000);
+        assertFalse(t.isAlive());
+        assertArrayEquals("chunks queued before shutdown must still be flushed",
+                new byte[] { 9, 8 }, sink.toByteArray());
+    }
+
+    @Test
+    public void testWriteTrailer_cliExitsOnItsOwn_isNotDestroyed() throws Exception {
+        MoQMuxer muxer = spy(newMuxer(0));
+        doNothing().when(muxer).callSuperClearResource();
+
+        Process moq = mock(Process.class);
+        when(moq.waitFor(anyLong(), any())).thenReturn(true); // closing stdin was enough
+        setField(muxer, "moqCliProcess", moq);
+
+        muxer.writeTrailer();
+
+        verify(moq, never()).destroy();
+        assertNull(getField(muxer, "moqCliProcess"));
+    }
+
+    @Test
+    public void testWriteVideoFrame_firstKeyframeSetsExtradataAndWritesHeader() throws Exception {
+        MoQMuxer muxer = spy(newMuxer(0));
+        doNothing().when(muxer).startMoqCli();
+        doNothing().when(muxer).callSuperWriteVideoFrame(any(), any());
+
+        AVFormatContext ctx = muxer.getOutputFormatContext();
+        AVStream out = addH264OutStream(muxer, AV_CODEC_ID_H264);
+        setInt(muxer, "videoOutStreamIdx", out.index());
+
+        // prepareIO installs the CMAF movflags and wires the custom AVIO to the queue
+        assertTrue(muxer.prepareIO());
+        assertFalse("header must be deferred, not written by prepareIO", getBoolean(muxer, "headerWritten"));
+
+        AVPacket pkt = keyframe(SPS_PPS_ANNEXB);
+        invokeWriteVideoFrame(muxer, pkt, ctx);
+
+        assertTrue("first keyframe must trigger the deferred header", getBoolean(muxer, "headerWritten"));
+        assertTrue("SPS/PPS must be lifted off the keyframe onto the output stream",
+                out.codecpar().extradata_size() > 0);
+        assertEquals("extradata must stay Annex B (leading 0x00) so movenc converts the mdat",
+                0, out.codecpar().extradata().get(0));
+        verify(muxer).callSuperWriteVideoFrame(eq(pkt), eq(ctx));
+
+        // delay_moov is what makes this safe: the header call itself emits nothing, so the
+        // moov still picks up tracks (e.g. a late audio stream) added after the first keyframe.
+        ArrayBlockingQueue<byte[]> queue = getField(muxer, "queue");
+        assertTrue("delay_moov must hold the init segment back at header time", queue.isEmpty());
+
+        // A second keyframe skips the whole lazy-header block and goes straight to super
+        AVPacket second = keyframe(SPS_PPS_ANNEXB);
+        invokeWriteVideoFrame(muxer, second, ctx);
+        verify(muxer).callSuperWriteVideoFrame(eq(second), eq(ctx));
+
+        pkt.close(); second.close();
+    }
+
+    @Test
+    public void testWriteVideoFrame_headerFails_setsHeaderFailedAndStopsRetrying() throws Exception {
+        MoQMuxer muxer = spy(newMuxer(0));
+        doNothing().when(muxer).startMoqCli();
+        doNothing().when(muxer).callSuperWriteVideoFrame(any(), any());
+
+        AVFormatContext ctx = muxer.getOutputFormatContext();
+        // codec_id NONE: extradata is present so writeFormatHeader is reached, but mp4 has no tag for it
+        AVStream out = addH264OutStream(muxer, AV_CODEC_ID_NONE);
+        setInt(muxer, "videoOutStreamIdx", out.index());
+        assertTrue(muxer.prepareIO());
+
+        AVPacket pkt = keyframe(SPS_PPS_ANNEXB);
+        invokeWriteVideoFrame(muxer, pkt, ctx);
+
+        assertFalse(getBoolean(muxer, "headerWritten"));
+        assertTrue("a failed header must latch, not be retried on every keyframe",
+                getBoolean(muxer, "headerFailed"));
+        verify(muxer, never()).callSuperWriteVideoFrame(any(), any());
+
+        // Latched: the next keyframe returns on the headerFailed guard without touching FFmpeg again
+        AVPacket second = keyframe(SPS_PPS_ANNEXB);
+        invokeWriteVideoFrame(muxer, second, ctx);
+        verify(muxer, never()).callSuperWriteVideoFrame(any(), any());
+
+        pkt.close(); second.close();
+    }
+
+    @Test
+    public void testWriteTrailer_afterOpenIO_freesAvioAndDeregisters() throws Exception {
+        MoQMuxer muxer = spy(newMuxer(0));
+        doNothing().when(muxer).callSuperWriteTrailer();
+        doNothing().when(muxer).callSuperClearResource();
+
+        assertTrue(muxer.openIO());
+        BytePointer opaque = getField(muxer, "opaque");
+
+        Field instancesField = MoQMuxer.class.getDeclaredField("instances");
+        instancesField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<BytePointer, MoQMuxer> instances = (Map<BytePointer, MoQMuxer>) instancesField.get(null);
+        assertSame("openIO must register the muxer under its opaque key", muxer, instances.get(opaque));
+
+        muxer.writeTrailer();
+
+        assertNull("avioContext must be freed", getField(muxer, "avioContext"));
+        assertNull("opaque must be released", getField(muxer, "opaque"));
+        assertFalse("a closed muxer must not leak into the static instances map",
+                instances.containsKey(opaque));
+    }
+
+    @Test
+    public void testDrainLoop_writeFailure_isSwallowedAndThreadExits() throws Exception {
+        MoQMuxer muxer = newMuxer(0);
+        ArrayBlockingQueue<byte[]> queue = getField(muxer, "queue");
+        queue.put(new byte[] { 1, 2, 3 });
+
+        OutputStream broken = new OutputStream() {
+            @Override public void write(int b) throws IOException { throw new IOException("pipe closed"); }
+            @Override public void write(byte[] b) throws IOException { throw new IOException("pipe closed"); }
+        };
+
+        muxer.startDrainThread(broken);
+
+        Thread t = getField(muxer, "drainThread");
+        t.join(2000);
+        assertFalse("a dead moq stdin must end the drain thread, not spin or escape", t.isAlive());
+    }
+
+    @Test
+    public void testSpawnMoqCli_execsTheBuiltCommand() throws Exception {
+        Path dir = Files.createTempDirectory("moq-spawn");
+        Path argv = dir.resolve("argv.txt");
+        Path bin = MoqTestBinary.write(dir, argv);
+
+        MoQMuxer muxer = newMuxer(0);
+        Process p = MoqTestBinary.withResolvedMoq(bin, muxer::spawnMoqCli);
+        try {
+            assertTrue("spawnMoqCli must hand back a started process", p.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, p.exitValue());
+
+            // What actually reached exec() has to be what buildMoqCliCommand produced
+            List<String> cmd = muxer.buildMoqCliCommand();
+            assertEquals(cmd.subList(1, cmd.size()), Files.readAllLines(argv));
+        } finally {
+            p.destroyForcibly();
+        }
     }
 
     @Test

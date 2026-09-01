@@ -3,14 +3,21 @@ package io.antmedia.plugin;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
+import com.sun.net.httpserver.HttpServer;
+import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.BufferedReader;
 import java.io.StringReader;
 import java.lang.reflect.Field;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.Callable;
 
 public class MoQAnnouncePollerTest {
 
@@ -119,6 +126,88 @@ public class MoQAnnouncePollerTest {
 
         Set<String> empty = MoQAnnouncePoller.parseAnnouncements(new BufferedReader(new StringReader("")));
         assertTrue(empty.isEmpty());
+    }
+
+    /** Serves {@code body} with {@code status} on /announced/moq/live and returns the poller pointed at it. */
+    private static HttpServer startStubRelay(int status, String body) throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/announced/moq/live", exchange -> {
+            byte[] out = body.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(status, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        return server;
+    }
+
+    @Test
+    public void testFetchAnnounced_okResponse_parsesStreamIds() throws Exception {
+        HttpServer server = startStubRelay(200, "s1/publish\ns2/publish\nnot-a-broadcast\n");
+        try {
+            MoQAnnouncePoller poller = newPoller(
+                    "http://127.0.0.1:" + server.getAddress().getPort() + "/moq", "live", mock(MoQPlugin.class));
+
+            assertEquals(setOf("s1", "s2"), poller.fetchAnnounced());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    public void testFetchAnnounced_nonOkResponse_returnsEmpty() throws Exception {
+        HttpServer server = startStubRelay(404, "nope");
+        try {
+            MoQAnnouncePoller poller = newPoller(
+                    "http://127.0.0.1:" + server.getAddress().getPort() + "/moq", "live", mock(MoQPlugin.class));
+
+            assertTrue("a relay that does not know the app must not look like an empty announce list to reconcile()",
+                    poller.fetchAnnounced().isEmpty());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    public void testFetchAnnounced_relayDown_returnsEmptyInsteadOfThrowing() throws Exception {
+        // Grab a port and release it, so nothing is listening and connect() is refused
+        int deadPort;
+        try (ServerSocket probe = new ServerSocket(0)) {
+            deadPort = probe.getLocalPort();
+        }
+
+        // trustSelfSignedCerts=true + https so the self-signed TLS setup runs before the failed dial
+        MoQAnnouncePoller poller = new MoQAnnouncePoller(
+                "https://127.0.0.1:" + deadPort + "/moq", "live", mock(MoQPlugin.class), true);
+
+        assertTrue("a dead relay must poll to an empty set, not blow up the timer",
+                poller.fetchAnnounced().isEmpty());
+    }
+
+    @Test
+    public void testStart_periodicTickRunsReconcileOffTheEventLoop() {
+        MoQPlugin owner = mock(MoQPlugin.class);
+        when(owner.loadSettings()).thenReturn(new MoQSettings());
+        when(owner.getActiveIngestStreamIds()).thenReturn(setOf("gone"));
+
+        Vertx vertx = mock(Vertx.class);
+        ArgumentCaptor<Handler<Long>> tick = ArgumentCaptor.forClass(Handler.class);
+        when(vertx.setPeriodic(anyLong(), tick.capture())).thenReturn(42L);
+        // Run the blocking body inline, and assert it was queued as un-ordered (false)
+        when(vertx.executeBlocking(any(Callable.class), eq(false))).thenAnswer(inv -> {
+            ((Callable<?>) inv.getArgument(0)).call();
+            return null;
+        });
+
+        MoQAnnouncePoller poller = spy(newPoller("http://localhost:4443/moq", "live", owner));
+        doReturn(setOf()).when(poller).fetchAnnounced();
+        poller.start(vertx);
+
+        tick.getValue().handle(1L);
+
+        // The tick reached reconcile(), which saw "gone" active but not announced
+        verify(poller).reconcile();
+        verify(owner).stopIngest("gone");
     }
 
     private static Set<String> setOf(String... items) {

@@ -208,12 +208,16 @@ public class MoQMuxer extends Muxer {
         options.put("movflags", "cmaf+separate_moof+delay_moov+skip_trailer");
         options.put("fflags", "+flush_packets");
         options.put("frag_duration", "5000"); // write every 5ms (max 200 fps technically)
-        running = true;
-        startMoqCli();
+
+        // Open IO before spawning moq. MuxAdaptor drops a muxer whose prepareIO returns false
+        // without ever calling writeTrailer, so a process started above this point is never reaped.
         if (!openIO()) {
             return false;
         }
-        
+
+        running = true;
+        startMoqCli();
+
         // allow upstream to feed packets; header written on first keyframe
         isRunning.set(true); 
         return true;

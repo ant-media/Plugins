@@ -11,6 +11,8 @@ import org.red5.server.api.IContext;
 import org.red5.server.api.scope.IScope;
 import org.springframework.context.ApplicationContext;
 
+import io.antmedia.streamsource.StreamFetcher;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -18,6 +20,9 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -233,6 +238,70 @@ public class MoQStreamFetcherTest {
         ((ServerSocket) getField(fetcher, "serverSocket")).close();
     }
 
+    @Test
+    public void testIsAlive_tracksWorkerThread() throws Exception {
+        MoQStreamFetcher fetcher = newFetcher("s1");
+        assertFalse("no worker thread yet", fetcher.isAlive());
+
+        // The announce poller restarts an ingest the moment this flips to false, so both
+        // states of a present-but-finished thread have to be distinguishable.
+        CountDownLatch release = new CountDownLatch(1);
+        StreamFetcher.WorkerThread worker = spy(fetcher.new WorkerThread());
+        doAnswer(inv -> { release.await(); return null; }).when(worker).run(); // no real FFmpeg work
+        fetcher.setThread(worker);
+        worker.start();
+
+        assertTrue("a running worker thread means the ingest is alive", fetcher.isAlive());
+
+        release.countDown();
+        worker.join(5000);
+        assertFalse("a finished worker thread must report dead so the poller restarts it", fetcher.isAlive());
+
+        ((ServerSocket) getField(fetcher, "serverSocket")).close();
+    }
+
+    @Test
+    public void testSpawnMoqCli_execsTheBuiltCommand() throws Exception {
+        Path dir = Files.createTempDirectory("moq-spawn");
+        Path argv = dir.resolve("argv.txt");
+        Path bin = MoqTestBinary.write(dir, argv);
+
+        MoQStreamFetcher fetcher = newFetcher("s1");
+        Process p = MoqTestBinary.withResolvedMoq(bin, fetcher::spawnMoqCli);
+        try {
+            assertTrue("spawnMoqCli must hand back a started process", p.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, p.exitValue());
+
+            // What actually reached exec() has to be what buildMoqCliCommand produced
+            List<String> cmd = fetcher.buildMoqCliCommand();
+            assertEquals(cmd.subList(1, cmd.size()), Files.readAllLines(argv));
+        } finally {
+            p.destroyForcibly();
+            ((ServerSocket) getField(fetcher, "serverSocket")).close();
+        }
+    }
+
+    @Test
+    public void testStopStream_oneFailingCloseDoesNotStrandTheOthers() throws Exception {
+        MoQStreamFetcher fetcher = newFetcher("s1");
+        ServerSocket ss = getField(fetcher, "serverSocket");
+
+        Process moq = mock(Process.class);
+        setMoqProcess(fetcher, moq);
+
+        // The relay socket refuses to close (already reset by the peer, say). The server socket
+        // is closed after it, so a leaked exception here would strand the listening port.
+        Socket stuck = mock(Socket.class);
+        doThrow(new IOException("connection reset")).when(stuck).close();
+        setRelaySocket(fetcher, stuck);
+
+        fetcher.stopStream();
+
+        verify(moq).destroy();
+        verify(stuck).close();
+        assertTrue("the listening port must still be released", ss.isClosed());
+    }
+
     @SuppressWarnings("unchecked")
     private static Process getMoqProcess(MoQStreamFetcher f) throws Exception {
         return ((java.util.concurrent.atomic.AtomicReference<Process>) getField(f, "moqProcess")).get();
@@ -244,6 +313,10 @@ public class MoQStreamFetcherTest {
     @SuppressWarnings("unchecked")
     private static java.net.Socket getRelaySocket(MoQStreamFetcher f) throws Exception {
         return ((java.util.concurrent.atomic.AtomicReference<java.net.Socket>) getField(f, "relaySocket")).get();
+    }
+    @SuppressWarnings("unchecked")
+    private static void setRelaySocket(MoQStreamFetcher f, Socket s) throws Exception {
+        ((java.util.concurrent.atomic.AtomicReference<Socket>) getField(f, "relaySocket")).set(s);
     }
 
     @SuppressWarnings("unchecked")

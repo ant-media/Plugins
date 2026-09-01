@@ -11,10 +11,13 @@ import io.antmedia.datastore.db.types.Broadcast;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.muxer.MoQMuxer;
 import io.antmedia.muxer.MuxAdaptor;
+import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.red5.server.api.IContext;
 import org.red5.server.api.scope.IScope;
 import org.springframework.context.ApplicationContext;
 
@@ -31,6 +34,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MoQPluginTest {
 
@@ -146,11 +150,12 @@ public class MoQPluginTest {
         when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
         when(adaptor.directMuxingSupported()).thenReturn(true);
         when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+        when(adaptor.getEncoderSettingsList()).thenReturn(null); // no ABR ladder configured
 
         plugin.streamStarted(broadcast("s1"));
         verify(adaptor, atLeastOnce()).addMuxer(any(MoQMuxer.class), eq(0));
         assertTrue(map.containsKey("s1"));
-        assertFalse(map.get("s1").isEmpty());
+        assertEquals("without an ABR ladder only the source muxer is attached", 1, map.get("s1").size());
     }
 
     @Test
@@ -312,6 +317,14 @@ public class MoQPluginTest {
         verify(fakeFetcher).stopStream();
         verify(f2).stopStream();
         assertTrue(ingests.isEmpty());
+
+        // The first pass cancels both timers: the log poller and the announce poller
+        verify(vertx, times(2)).cancelTimer(anyLong());
+
+        // Spring can call @PreDestroy again on a failed shutdown; the second pass must be inert
+        plugin.destroy();
+        verify(vertx, times(2)).cancelTimer(anyLong());
+        verify(fakeFetcher, times(1)).stopStream();
     }
 
     @Test
@@ -756,6 +769,235 @@ public class MoQPluginTest {
         }
     }
 
+    @Test
+    public void testGetRelayUrl_embeddedTracksCertFilesOnDisk() throws Exception {
+        String savedRoot = System.getProperty("red5.root");
+        try {
+            MoQSettings embedded = new MoQSettings(); // useEmbeddedRelay defaults to true
+            doReturn(embedded).when(plugin).loadSettings();
+
+            // No certs on disk: relay runs with --tls-generate, so we must dial it over http
+            System.setProperty("red5.root", "/tmp/__moq_no_such_dir__" + System.nanoTime());
+            assertFalse(MoQPlugin.embeddedRelayHasTls());
+            assertEquals("http://localhost:4443/moq", plugin.getRelayUrl(embedded));
+            assertEquals("the no-arg overload must agree with the explicit one",
+                    "http://localhost:4443/moq", plugin.getRelayUrl());
+            assertTrue("embedded relay means a self-signed cert, so callers must skip verification",
+                    plugin.isLocalRelay());
+
+            // Half a cert pair is not a cert pair: the relay would fall back to --tls-generate,
+            // so the URL must stay http or every client would fail the handshake.
+            Path root = Files.createTempDirectory("moqHalfCert");
+            Files.createDirectories(root.resolve("conf"));
+            Files.writeString(root.resolve("conf").resolve("fullchain.pem"), "cert");
+            System.setProperty("red5.root", root.toString());
+            assertFalse("cert without key must not count as TLS", MoQPlugin.embeddedRelayHasTls());
+            assertEquals("http://localhost:4443/moq", plugin.getRelayUrl(embedded));
+
+            // Full pair: relay serves HTTPS/WSS, so the URL flips to https
+            Files.writeString(root.resolve("conf").resolve("privkey.pem"), "key");
+            assertTrue(MoQPlugin.embeddedRelayHasTls());
+            assertEquals("https://localhost:4443/moq", plugin.getRelayUrl(embedded));
+
+            // External relay is passed through verbatim, certs on disk or not
+            MoQSettings external = new MoQSettings();
+            external.setUseEmbeddedRelay(false);
+            external.setExternalRelayUrl("https://relay.example.com/moq");
+            assertEquals("https://relay.example.com/moq", plugin.getRelayUrl(external));
+            doReturn(external).when(plugin).loadSettings();
+            assertFalse(plugin.isLocalRelay());
+        } finally {
+            if (savedRoot != null) System.setProperty("red5.root", savedRoot);
+            else System.clearProperty("red5.root");
+        }
+    }
+
+    @Test
+    public void testSetApplicationContext_embeddedRelay_startsIt() throws Exception {
+        Process savedSlot = relaySlot().get();
+        boolean savedHook = (boolean) staticField("shutdownHookRegistered");
+        relaySlot().set(null);
+        try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+            mocked.when(MoQPlugin::buildRelayProcessBuilder)
+                  .thenReturn(new ProcessBuilder("/bin/sh", "-c", "exit 0"));
+
+            MoQPlugin p = spy(new MoQPlugin());
+            doReturn(fakeFetcher).when(p).createFetcher(any(), any(), any(), any());
+            doReturn(new MoQSettings()).when(p).loadSettings(); // useEmbeddedRelay = true
+
+            p.setApplicationContext(context);
+
+            assertNotNull("useEmbeddedRelay must actually spawn the relay on init", relaySlot().get());
+        } finally {
+            Process leftover = relaySlot().get();
+            if (leftover != null) leftover.destroyForcibly();
+            relaySlot().set(savedSlot);
+            setStaticField("shutdownHookRegistered", savedHook);
+        }
+    }
+
+    @Test
+    public void testLogPollTimer_tickDrivesPollCliLogs() throws Exception {
+        Vertx freshVertx = mock(Vertx.class);
+        ArgumentCaptor<Handler<Long>> handlers = ArgumentCaptor.forClass(Handler.class);
+        when(freshVertx.setPeriodic(anyLong(), handlers.capture())).thenReturn(1L, 2L);
+        when(context.getBean(IAntMediaStreamHandler.VERTX_BEAN_NAME)).thenReturn(freshVertx);
+
+        MoQPlugin p = spy(new MoQPlugin());
+        doReturn(fakeFetcher).when(p).createFetcher(any(), any(), any(), any());
+        MoQSettings noRelay = new MoQSettings();
+        noRelay.setUseEmbeddedRelay(false);
+        doReturn(noRelay).when(p).loadSettings();
+        p.setApplicationContext(context);
+
+        MoQStreamFetcher tracked = mock(MoQStreamFetcher.class);
+        when(tracked.getLogStream()).thenReturn(new ByteArrayInputStream("moq says hi\n".getBytes()));
+        ConcurrentMap<String, MoQStreamFetcher> ingests = getField(p, "activeIngests");
+        ingests.put("s1", tracked);
+
+        // Fire the log-poll timer body that setApplicationContext registered
+        handlers.getAllValues().get(0).handle(1L);
+
+        verify(tracked).getLogStream();
+    }
+
+    @Test
+    public void testAddMuxers_addMuxerRejected_muxerIsNotTracked() throws Exception {
+        MuxAdaptor adaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
+        when(adaptor.directMuxingSupported()).thenReturn(true);
+        when(adaptor.getEncoderSettingsList()).thenReturn(Arrays.asList(
+                new EncoderSettings(360, 500_000, 64_000, false)));
+        // MuxAdaptor refuses both muxers (e.g. codec unsupported)
+        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(false);
+
+        plugin.streamStarted(broadcast("s1"));
+
+        ConcurrentMap<String, Set<MoQMuxer>> map = getField(plugin, "muxersByStream");
+        assertTrue("a rejected muxer must not be tracked, or writeTrailer would never run on it",
+                map.get("s1").isEmpty());
+    }
+
+    @Test
+    public void testAddMuxers_webRtcWithoutCodecParameters_fallsBackToSourceHeight() {
+        // !directMuxingSupported but codec parameters not negotiated yet -> height stays 0
+        MuxAdaptor adaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
+        when(adaptor.directMuxingSupported()).thenReturn(false);
+        when(adaptor.getVideoCodecParameters()).thenReturn(null);
+        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+
+        plugin.streamStarted(broadcast("s1"));
+
+        verify(adaptor).addMuxer(any(MoQMuxer.class), eq(0));
+    }
+
+    @Test
+    public void testCreateFetcher_buildsFetcherPointedAtTheRelay() throws Exception {
+        // StreamFetcher's constructor resolves AppSettings through the red5 scope
+        ApplicationContext appCtx = mock(ApplicationContext.class);
+        when(appCtx.getBean(AppSettings.BEAN_NAME)).thenReturn(appSettings);
+        IContext red5Ctx = mock(IContext.class);
+        when(red5Ctx.getApplicationContext()).thenReturn(appCtx);
+        IScope realScope = mock(IScope.class);
+        when(realScope.getContext()).thenReturn(red5Ctx);
+
+        MoQPlugin p = spy(new MoQPlugin());
+        MoQSettings external = new MoQSettings();
+        external.setUseEmbeddedRelay(false);
+        external.setExternalRelayUrl("https://relay.example.com/moq");
+        doReturn(external).when(p).loadSettings();
+        setField(p, "vertx", vertx);
+
+        MoQStreamFetcher fetcher = p.createFetcher("s1", "live", "https://relay.example.com/moq", realScope);
+        try {
+            assertEquals("live/s1/publish", getField(fetcher, "broadcastName"));
+            assertEquals("https://relay.example.com/moq", getField(fetcher, "relayUrl"));
+            assertFalse("external relay must keep certificate verification on",
+                    (boolean) getField(fetcher, "tlsDisableVerify"));
+            assertFalse("the poller owns restart, so the fetcher must not restart itself",
+                    fetcher.isRestartStream());
+        } finally {
+            ((java.net.ServerSocket) getField(fetcher, "serverSocket")).close();
+        }
+    }
+
+    @Test
+    public void testDestroy_beforeInit_isANoOp() {
+        // @PreDestroy can fire on a plugin whose setApplicationContext never completed
+        new MoQPlugin().destroy();
+    }
+
+    @Test
+    public void testReadAvailable_streamThatNeverYieldsBytes_doesNotSpin() throws Exception {
+        Method readAvailable = MoQPlugin.class.getDeclaredMethod(
+                "readAvailable", InputStream.class, String.class);
+        readAvailable.setAccessible(true);
+
+        // Claims data is waiting but read() and skip() return nothing: the skip loop must
+        // break instead of looping forever on the vert.x timer thread.
+        AtomicInteger skips = new AtomicInteger();
+        InputStream liar = new InputStream() {
+            @Override public int available() { return 4096; }
+            @Override public int read() { return -1; }
+            @Override public int read(byte[] b, int off, int len) { return 0; }
+            @Override public long skip(long n) { skips.incrementAndGet(); return 0; }
+        };
+
+        readAvailable.invoke(plugin, liar, "liar");
+
+        assertEquals("a stream that never yields must be abandoned after one skip attempt",
+                1, skips.get());
+    }
+
+    @Test
+    public void testDestroyRelayOnShutdown_interruptedWait_killsAndRestoresFlag() throws Exception {
+        Process savedSlot = relaySlot().get();
+        try {
+            Process p = mock(Process.class);
+            when(p.waitFor(anyLong(), any())).thenThrow(new InterruptedException("shutdown"));
+            relaySlot().set(p);
+
+            MoQPlugin.destroyRelayOnShutdown();
+
+            verify(p).destroy();
+            verify(p).destroyForcibly();
+            assertTrue("the interrupt must be re-raised, not swallowed", Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted(); // clear the flag so later tests are unaffected
+            relaySlot().set(savedSlot);
+            setStaticField("relayStopping", false);
+        }
+    }
+
+    @Test
+    public void testAwaitOrphanExit() throws Exception {
+        Method await = MoQPlugin.class.getDeclaredMethod("awaitOrphanExit", ProcessHandle.class);
+        await.setAccessible(true);
+
+        // Already dead: returns without burning the grace window
+        Process finished = new ProcessBuilder("/bin/sh", "-c", "exit 0").start();
+        finished.waitFor();
+        long quick = System.currentTimeMillis();
+        await.invoke(null, finished.toHandle());
+        assertTrue("an already-dead orphan must not be waited on at all",
+                System.currentTimeMillis() - quick < 1000);
+
+        // Still alive past the grace window: logs and gives up rather than blocking startup
+        Process stubborn = new ProcessBuilder("/bin/sh", "-c", "sleep 30").start();
+        try {
+            long start = System.currentTimeMillis();
+            await.invoke(null, stubborn.toHandle());
+            long waited = System.currentTimeMillis() - start;
+            assertTrue("must actually wait out the grace window, got " + waited + "ms", waited >= 1500);
+            assertTrue("must give up on a surviving orphan, not wait on it forever", waited < 15_000);
+            assertTrue(stubborn.isAlive());
+        } finally {
+            stubborn.destroyForcibly();
+            stubborn.waitFor();
+        }
+    }
+
     private static Broadcast broadcast(String streamId) {
         Broadcast b = mock(Broadcast.class);
         when(b.getStreamId()).thenReturn(streamId);
@@ -764,9 +1006,17 @@ public class MoQPluginTest {
 
     @SuppressWarnings("unchecked")
     private static <T> T getField(Object target, String name) throws Exception {
-        Field f = target.getClass().getDeclaredField(name);
-        f.setAccessible(true);
-        return (T) f.get(target);
+        Class<?> c = target.getClass();
+        while (c != null) {
+            try {
+                Field f = c.getDeclaredField(name);
+                f.setAccessible(true);
+                return (T) f.get(target);
+            } catch (NoSuchFieldException e) {
+                c = c.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(name);
     }
 
     private static void setField(Object target, String name, Object value) throws Exception {
