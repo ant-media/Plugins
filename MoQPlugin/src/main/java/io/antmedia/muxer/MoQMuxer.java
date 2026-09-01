@@ -193,8 +193,11 @@ public class MoQMuxer extends Muxer {
             logger.error("Failed to allocate AVIOContext for {}", streamName);
             return false;
         }
-        instances.put(opaque, this);
         AVFormatContext ctx = getOutputFormatContext();
+        if (ctx == null) {
+            return false;
+        }
+        instances.put(opaque, this);
         ctx.pb(avioContext);
         ctx.flags(ctx.flags() | AVFormatContext.AVFMT_FLAG_CUSTOM_IO);
         return true;

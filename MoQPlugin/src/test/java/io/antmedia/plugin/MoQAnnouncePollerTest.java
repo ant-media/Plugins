@@ -101,13 +101,17 @@ public class MoQAnnouncePollerTest {
 
     @Test
     public void testParseAnnouncements() {
-        String body = "stream1/publish\n"
-                + "stream2/publish\n"
-                + "  stream3/publish  \n"   // trimmed
-                + "noSuffix\n"
-                + "\n"
-                + "other/something\n"
-                + "stream1/publish\n";       // duplicate -> Set dedupes
+        // stream3 is padded (the \s escapes keep the spaces a text block would strip) to prove
+        // trimming, noSuffix and other/something are dropped, and stream1 repeats to prove dedupe.
+        String body = """
+                stream1/publish
+                stream2/publish
+                \s stream3/publish \s
+                noSuffix
+
+                other/something
+                stream1/publish
+                """;
 
         Set<String> result = MoQAnnouncePoller.parseAnnouncements(new BufferedReader(new StringReader(body)));
 

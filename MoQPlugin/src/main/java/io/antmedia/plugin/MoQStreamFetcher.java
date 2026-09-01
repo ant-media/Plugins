@@ -181,7 +181,9 @@ public class MoQStreamFetcher extends StreamFetcher {
             stopStream();
         } catch (IOException e) {
             // Normal on shutdown: moqProcess destroyed or socket closed by stopStream().
-            logger.debug("MoQ: relay IO ended for stream {}: {}", streamId, e.getMessage());
+            if (logger.isDebugEnabled()) {
+                logger.debug("MoQ: relay IO ended for stream {}: {}", streamId, e.getMessage());
+            }
         }
     }
 

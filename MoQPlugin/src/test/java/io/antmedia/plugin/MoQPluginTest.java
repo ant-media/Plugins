@@ -182,15 +182,15 @@ public class MoQPluginTest {
         when(adaptor.directMuxingSupported()).thenReturn(false);
         when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
 
-        AVCodecParameters codecpar = new AVCodecParameters();
-        codecpar.height(720);
-        when(adaptor.getVideoCodecParameters()).thenReturn(codecpar);
+        try (AVCodecParameters codecpar = new AVCodecParameters()) {
+            codecpar.height(720);
+            when(adaptor.getVideoCodecParameters()).thenReturn(codecpar);
 
-        plugin.streamStarted(broadcast("s1"));
+            plugin.streamStarted(broadcast("s1"));
 
-        // Source muxer added with the actual source height (720), not 0
-        verify(adaptor).addMuxer(any(MoQMuxer.class), eq(720));
-        codecpar.close();
+            // Source muxer added with the actual source height (720), not 0
+            verify(adaptor).addMuxer(any(MoQMuxer.class), eq(720));
+        }
     }
 
     @Test
@@ -317,7 +317,8 @@ public class MoQPluginTest {
     public void testSetApplicationContext_startsAnnouncePoller() throws Exception {
         // Fresh vertx + fresh context so we count only this plugin's interactions
         Vertx freshVertx = mock(Vertx.class);
-        when(freshVertx.setPeriodic(anyLong(), any())).thenReturn(7L);
+        // Distinct ids, as real Vert.x hands out: 7 to the log poller, 8 to the announce poller.
+        when(freshVertx.setPeriodic(anyLong(), any())).thenReturn(7L, 8L);
         ApplicationContext freshCtx = mock(ApplicationContext.class);
         when(freshCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(streamHandler);
         when(freshCtx.getBean(IAntMediaStreamHandler.VERTX_BEAN_NAME)).thenReturn(freshVertx);
@@ -334,9 +335,10 @@ public class MoQPluginTest {
         verify(freshVertx, times(2)).setPeriodic(anyLong(), any());
         assertNotNull(getField(p, "announcePoller"));
 
-        // destroy() routes through announcePoller.stop() which cancels timer id=7
+        // destroy() must cancel both: the log poller directly, the announce poller via stop()
         p.destroy();
         verify(freshVertx).cancelTimer(7L);
+        verify(freshVertx).cancelTimer(8L);
     }
 
     @Test
@@ -463,7 +465,7 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testMaybeRestartRelay_aliveProcess_doesNothing() throws Exception {
+    public void testMaybeRestartRelay_aliveProcess_doesNothing() {
         Process alive = mock(Process.class);
         when(alive.isAlive()).thenReturn(true);
 
@@ -485,7 +487,7 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testMaybeRestartRelay_deadProcess_clearsSlotAndAttemptsRespawn() throws Exception {
+    public void testMaybeRestartRelay_deadProcess_clearsSlotAndAttemptsRespawn() {
         Process savedSlot = relaySlot().get();
         long savedAttempt = (long) staticField("lastRelayRestartAttempt");
         try {
@@ -516,7 +518,7 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testMaybeRestartRelay_withinGracePeriod_skipsRestart() throws Exception {
+    public void testMaybeRestartRelay_withinGracePeriod_skipsRestart() {
         Process savedSlot = relaySlot().get();
         long savedAttempt = (long) staticField("lastRelayRestartAttempt");
         try {

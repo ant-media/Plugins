@@ -392,6 +392,21 @@ public class MoQMuxerTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    public void testOpenIO_nullFormatContext_failsWithoutNpeOrRegistering() throws Exception {
+        MoQMuxer muxer = spy(newMuxer(0));
+        doReturn(null).when(muxer).getOutputFormatContext();
+
+        assertFalse("a null format context must fail cleanly, not NPE", muxer.openIO());
+
+        Field f = MoQMuxer.class.getDeclaredField("instances");
+        f.setAccessible(true);
+        Map<BytePointer, MoQMuxer> instances = (Map<BytePointer, MoQMuxer>) f.get(null);
+        assertFalse("a muxer that failed to open must not stay in the static map",
+                instances.containsValue(muxer));
+    }
+
+    @Test
     public void testBuildMoqCliCommand() {
         java.util.List<String> cmd = newMuxer(0).buildMoqCliCommand();
 
