@@ -22,10 +22,13 @@ import javax.annotation.PreDestroy;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 @Component(value = "moqPlugin")
 public class MoQPlugin implements ApplicationContextAware, IStreamListener {
@@ -33,6 +36,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     private static final Logger logger = LoggerFactory.getLogger(MoQPlugin.class);
     private static final long LOG_POLL_INTERVAL_MS = 2000;
     private static final long RELAY_RESTART_GRACE_MS = 5000;
+    private static final long RELAY_EXIT_GRACE_MS = 2000;
     public  static final int EMBEDDED_RELAY_PORT = 4443;
     public  static final String PUBLISH_TYPE_MOQ = "MoQ";
     public  static final String SETTINGS_KEY     = "plugin.moq";
@@ -46,6 +50,9 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     private static volatile long lastRelayRestartAttempt = 0;
     private static volatile boolean shutdownHookRegistered = false;
 
+    /** Set before we kill the relay ourselves, so the log poller does not respawn it mid-shutdown. */
+    private static volatile boolean relayStopping = false;
+
     private ApplicationContext applicationContext;
     private AppSettings appSettings;
     private Vertx vertx;
@@ -54,6 +61,8 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     // Ingest: external MoQ publishers → AMS
     private MoQAnnouncePoller announcePoller;
     private final ConcurrentMap<String, MoQStreamFetcher> activeIngests = new ConcurrentHashMap<>();
+
+    private long logPollTimerId = -1;
 
     @Override
     public void setApplicationContext(ApplicationContext ctx) throws BeansException {
@@ -65,9 +74,11 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
         app.addStreamListener(this);
 
-        vertx.setPeriodic(LOG_POLL_INTERVAL_MS, l -> pollCliLogs());
+        logPollTimerId = vertx.setPeriodic(LOG_POLL_INTERVAL_MS, l -> pollCliLogs());
 
         MoQSettings settings = loadSettings();
+
+        reapOrphanedProcesses();
 
         if (settings.isUseEmbeddedRelay()) {
             startRelay();
@@ -85,14 +96,14 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     private static synchronized void startRelay() {
         if (relayProcess.get() != null) {
-            // already running — only one relay per JVM
+            // already running, only one relay per JVM
             return;
         }
+        relayStopping = false;
         try {
             Process p = buildRelayProcessBuilder().redirectErrorStream(true).start();
             relayProcess.set(p);
             if (!shutdownHookRegistered) {
-                // resolves current process at shutdown
                 Runtime.getRuntime().addShutdownHook(new Thread(MoQPlugin::destroyRelayOnShutdown));
                 shutdownHookRegistered = true;
             }
@@ -103,14 +114,66 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     }
 
     static void destroyRelayOnShutdown() {
-        Process curr = relayProcess.get();
-        if (curr != null) {
-            curr.destroy();
+        relayStopping = true;
+        Process curr = relayProcess.getAndSet(null);
+        if (curr == null) {
+            return;
+        }
+        curr.destroy();
+        try {
+            if (!curr.waitFor(RELAY_EXIT_GRACE_MS, TimeUnit.MILLISECONDS)) {
+                logger.warn("MoQ: relay (pid {}) ignored SIGTERM, killing it", curr.pid());
+                curr.destroyForcibly();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            curr.destroyForcibly();
+        }
+    }
+
+    /**
+     * Kills moq processes left over from a previous JVM. A hard kill runs no shutdown hook, so the
+     * next start is the only chance to clean up, and a stale relay still holds port
+     * {@value #EMBEDDED_RELAY_PORT}. Only our own binaries that have been reparented to init are
+     * touched, so a relay started by hand or owned by a live JVM survives.
+     */
+    static int reapOrphanedProcesses() {
+        Set<String> ours = Set.of(MoqBinaries.resolve("moq"), MoqBinaries.resolve(MOQ_RELAY_BIN));
+        // In a container AMS is pid 1, so its own children look reparented. Never touch our own.
+        Set<Long> mine = ProcessHandle.current().descendants().map(ProcessHandle::pid).collect(Collectors.toSet());
+
+        List<ProcessHandle> orphans = ProcessHandle.allProcesses()
+                .filter(h -> h.info().command().map(ours::contains).orElse(false))
+                .filter(h -> !mine.contains(h.pid()))
+                .filter(h -> h.parent().map(parent -> parent.pid() == 1).orElse(true))
+                .toList();
+
+        if (orphans.isEmpty()) {
+            return 0;
+        }
+
+        List<Long> pids = orphans.stream().map(ProcessHandle::pid).toList();
+        logger.warn("MoQ: AMS did not shut down cleanly, killing {} orphaned moq process(es): pids {} were still holding port {}",
+                orphans.size(), pids, EMBEDDED_RELAY_PORT);
+
+        orphans.forEach(ProcessHandle::destroyForcibly);
+        orphans.forEach(MoQPlugin::awaitOrphanExit);
+        return orphans.size();
+    }
+
+    private static void awaitOrphanExit(ProcessHandle h) {
+        try {
+            h.onExit().get(RELAY_EXIT_GRACE_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            logger.error("MoQ: orphaned pid {} survived SIGKILL, port {} may still be taken",
+                    h.pid(), EMBEDDED_RELAY_PORT);
         }
     }
 
     static void maybeRestartRelay(Process relay) {
-        if (relay.isAlive()) {
+        if (relayStopping || relay.isAlive()) {
             return;
         }
 
@@ -211,6 +274,10 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     @PreDestroy
     public void destroy() {
+        if (vertx != null && logPollTimerId != -1) {
+            vertx.cancelTimer(logPollTimerId);
+            logPollTimerId = -1;
+        }
         if (announcePoller != null) {
             announcePoller.stop(vertx);
         }
@@ -243,7 +310,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
             byte[] buf = new byte[Math.min(available, 2000)];
             int n = stream.read(buf, 0, buf.length);
             if (n > 0 && logger.isInfoEnabled()) {
-                logger.info("[moq-cli {}] {}", name, new String(buf, 0, n));
+                logger.info("[moq {}] {}", name, new String(buf, 0, n));
             }
             // Discard any overflow so the buffer doesn't keep growing across polls.
             long remaining = stream.available();

@@ -90,7 +90,7 @@ public class MoQMuxer extends Muxer {
                 setExtradata(outStream, ed);
                 logger.debug("addVideoStream: copied extradata ({} bytes) to output stream for {}", ed.length, streamName);
             } else {
-                logger.warn("addVideoStream: no extradata in codecpar for {} — will try to extract from first keyframe", streamName);
+                logger.warn("addVideoStream: no extradata in codecpar for {}, will try to extract from first keyframe", streamName);
             }
         } else {
             logger.warn("addVideoStream: super.addVideoStream returned false for {}", streamName);
@@ -98,14 +98,15 @@ public class MoQMuxer extends Muxer {
         return result;
     }
 
-    /**
-     * For RTMP/ffmpeg (direct-muxing) sources: addStream is called instead of addVideoStream.
-     * The base class copies full codecpar (including extradata) via avcodec_parameters_copy,
-     * but never sets videoOutStreamIdx — so we must set it here.
-     */
+    /** Direct-muxing path. The base class copies codecpar but never sets videoOutStreamIdx, so do it here. */
     @Override
     public synchronized boolean addStream(AVCodecParameters codecParameters, AVRational timebase, int streamIndex) {
         int codecType = codecParameters.codec_type();
+        if (codecParameters.codec_id() == AV_CODEC_ID_AAC) {
+            // MPEG-TS ingest (SRT) delivers ADTS AAC with no extradata. fMP4 needs the config in an
+            // esds/ASC box, and movenc rejects every ADTS packet with EPERM without this filter.
+            setAudioBitreamFilter("aac_adtstoasc");
+        }
         boolean result = callSuperAddStream(codecParameters, timebase, streamIndex);
         if (result && codecType == AVMEDIA_TYPE_VIDEO) {
             Integer outIdx = inputOutputStreamIndexMap.get(streamIndex);
@@ -231,14 +232,7 @@ public class MoQMuxer extends Muxer {
         callSuperWritePacket(pkt, inputTimebase, outputTimebase, codecType);
     }
 
-    /**
-     * On the first keyframe: if extradata is not already set (WebRTC SFU path: isAVC=false,
-     * null codecpar), parse SPS/PPS from the Annex B frame and store them in Annex B format
-     * (first byte 0x00). The 0x00 first byte triggers FFmpeg movenc.c to call
-     * ff_nal_parse_units() on every frame, converting Annex B → AVCC length-prefix format
-     * for the mp4 mdat. ff_isom_write_avcc (avcC box) handles Annex B extradata natively.
-     * After header is written, subsequent calls go straight to super.
-     */
+    /** The header is deferred to the first keyframe, which is also where WebRTC SFU sources get their extradata. */
     @Override
     protected void writeVideoFrame(AVPacket pkt, AVFormatContext context) {
         if (!headerWritten && !ensureHeaderWritten(pkt, context)) {
@@ -279,7 +273,7 @@ public class MoQMuxer extends Muxer {
         }
     }
 
-    // Call avformat_write_header directly — writeHeader() calls clearResource() on failure,
+    // Call avformat_write_header directly: writeHeader() calls clearResource() on failure,
     // which would free tmpPacket/videoPkt still held by Muxer.writePacket up the call stack.
     private boolean writeFormatHeader(AVFormatContext context) {
         AVDictionary opts = buildOptionsDict();
@@ -317,16 +311,12 @@ public class MoQMuxer extends Muxer {
     }
 
     /**
-     * Extracts SPS and PPS NAL units from an Annex B buffer and returns them
-     * in Annex B format: {@code 00 00 00 01 <sps> 00 00 00 01 <pps>}.
+     * Pulls SPS and PPS out of an Annex B keyframe as {@code 00 00 00 01 <sps> 00 00 00 01 <pps>},
+     * empty if either is missing.
      * <p>
-     * The result MUST be stored with first byte = 0x00 so that FFmpeg's
-     * movenc.c treats it as Annex B and calls ff_nal_parse_units() to convert
-     * every video frame from Annex B to AVCC length-prefix format before writing
-     * to the mp4 mdat. ff_isom_write_avcc() (which writes the avcC box) also
-     * handles Annex B extradata natively.
-     * <p>
-     * Returns an empty array if SPS or PPS cannot be found or are too short.
+     * The leading 0x00 matters: movenc.c reads it as Annex B extradata and then runs every frame
+     * through ff_nal_parse_units() to get AVCC length prefixes in the mdat. Store it as 0x01 and
+     * the frames go into the mdat unconverted.
      */
     private byte[] extractAnnexBSPSPPS(byte[] annexB) {
         byte[] sps = null;
@@ -354,7 +344,7 @@ public class MoQMuxer extends Muxer {
 
         if (sps == null || pps == null) return new byte[0];
 
-        // 00 00 00 01 <sps> 00 00 00 01 <pps>  — first byte is 0x00, not 0x01
+        // 00 00 00 01 <sps> 00 00 00 01 <pps>, first byte is 0x00, not 0x01
         byte[] out = new byte[4 + sps.length + 4 + pps.length];
         out[2] = 0; out[3] = 1; // 00 00 00 01
         System.arraycopy(sps, 0, out, 4, sps.length);
@@ -387,7 +377,7 @@ public class MoQMuxer extends Muxer {
         return buf.length;
     }
 
-    /** Returns moq-cli stderr stream for external log draining, or null if not started. */
+    /** Returns moq stderr stream for external log draining, or null if not started. */
     public InputStream getCliErrorStream() {
         return moqCliProcess != null ? moqCliProcess.getErrorStream() : null;
     }
@@ -397,7 +387,7 @@ public class MoQMuxer extends Muxer {
             moqCliProcess = spawnMoqCli();
             startDrainThread(moqCliProcess.getOutputStream());
         } catch (Exception e) {
-            logger.error("Failed to start moq-cli for {}", streamName, e);
+            logger.error("Failed to start moq for {}", streamName, e);
         }
     }
 
@@ -410,15 +400,18 @@ public class MoQMuxer extends Muxer {
     /** Builds the moq-cli publish command; {@code --tls-disable-verify} is added only for the self-signed embedded relay. */
     List<String> buildMoqCliCommand() {
         List<String> cmd = new ArrayList<>();
-        cmd.add(MoqBinaries.resolve("moq-cli"));
-        cmd.add("publish");
-        cmd.add("--url");
+        cmd.add(MoqBinaries.resolve("moq"));
+        cmd.add("--client-connect");
         cmd.add(relayUrl);
         cmd.add("--client-bind");
         cmd.add(MoqBinaries.CLIENT_BIND);
-        if (tlsDisableVerify) cmd.add("--tls-disable-verify");
-        cmd.add("--name");
+        if (tlsDisableVerify) {
+            cmd.add("--client-tls-disable-verify");
+        }
+
+        cmd.add("--broadcast");
         cmd.add(streamName);
+        cmd.add("import");
         cmd.add("fmp4");
         return cmd;
     }

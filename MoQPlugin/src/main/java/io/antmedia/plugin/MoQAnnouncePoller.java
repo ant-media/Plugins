@@ -108,7 +108,7 @@ public class MoQAnnouncePoller {
                     handler.stopStream();
                 }
 
-                logger.info("Starting injest of stream {}", streamId);
+                logger.info("MoQ: starting ingest of stream {}", streamId);
                 owner.startIngest(streamId);
             }
         }

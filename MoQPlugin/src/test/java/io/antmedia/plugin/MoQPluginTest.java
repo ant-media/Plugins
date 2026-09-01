@@ -591,13 +591,73 @@ public class MoQPluginTest {
             relaySlot().set(null);
             MoQPlugin.destroyRelayOnShutdown();
 
-            // non-null slot: destroy() is called on the held process
+            // non-null slot: destroy() is called on the held process, and the slot is cleared
             Process p = mock(Process.class);
+            when(p.isAlive()).thenReturn(true);
+            when(p.waitFor(anyLong(), any())).thenReturn(true);
             relaySlot().set(p);
             MoQPlugin.destroyRelayOnShutdown();
             verify(p).destroy();
+            verify(p, never()).destroyForcibly();
+            assertNull("shutdown must clear the slot", relaySlot().get());
         } finally {
             relaySlot().set(savedSlot);
+            setStaticField("relayStopping", false);
+        }
+    }
+
+    @Test
+    public void testDestroyRelayOnShutdown_stubbornProcessIsKilled() throws Exception {
+        Process savedSlot = relaySlot().get();
+        try {
+            Process p = mock(Process.class);
+            when(p.isAlive()).thenReturn(true);
+            when(p.waitFor(anyLong(), any())).thenReturn(false);
+            relaySlot().set(p);
+
+            MoQPlugin.destroyRelayOnShutdown();
+
+            verify(p).destroy();
+            verify(p).destroyForcibly();
+        } finally {
+            relaySlot().set(savedSlot);
+            setStaticField("relayStopping", false);
+        }
+    }
+
+    @Test
+    public void testMaybeRestartRelay_whileStopping_doesNotRespawn() throws Exception {
+        Process savedSlot = relaySlot().get();
+        try {
+            Process p = mock(Process.class);
+            when(p.isAlive()).thenReturn(true);
+            when(p.waitFor(anyLong(), any())).thenReturn(true);
+            relaySlot().set(p);
+            MoQPlugin.destroyRelayOnShutdown();
+
+            // the log poller fires after the hook ran; it must not bring the relay back
+            Process dead = mock(Process.class);
+            when(dead.isAlive()).thenReturn(false);
+            try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+                MoQPlugin.maybeRestartRelay(dead);
+                mocked.verify(MoQPlugin::buildRelayProcessBuilder, never());
+            }
+            assertNull("relay must stay down once shutdown started", relaySlot().get());
+        } finally {
+            relaySlot().set(savedSlot);
+            setStaticField("relayStopping", false);
+        }
+    }
+
+    @Test
+    public void testReapOrphanedProcesses_leavesUnrelatedProcessesAlone() throws Exception {
+        Process child = new ProcessBuilder("/bin/sh", "-c", "sleep 30").start();
+        try {
+            MoQPlugin.reapOrphanedProcesses();
+            assertTrue("a live child of this JVM must never be reaped", child.isAlive());
+        } finally {
+            child.destroyForcibly();
+            child.waitFor();
         }
     }
 

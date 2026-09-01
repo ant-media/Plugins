@@ -157,6 +157,20 @@ public class MoQMuxerTest {
         doReturn(false).when(m4).callSuperAddStream(any(), any(), anyInt());
         assertFalse(m4.addStream(p, tb, 5));
 
+        // AAC registers the ADTS to ASC filter; other codecs do not
+        MoQMuxer m5 = spy(newMuxer(0));
+        p.codec_type(AVMEDIA_TYPE_AUDIO);
+        p.codec_id(AV_CODEC_ID_AAC);
+        doReturn(true).when(m5).callSuperAddStream(any(), any(), anyInt());
+        assertTrue(m5.addStream(p, tb, 1));
+        assertTrue(m5.getBsfAudioNames().contains("aac_adtstoasc"));
+
+        MoQMuxer m6 = spy(newMuxer(0));
+        p.codec_id(AV_CODEC_ID_OPUS);
+        doReturn(true).when(m6).callSuperAddStream(any(), any(), anyInt());
+        assertTrue(m6.addStream(p, tb, 1));
+        assertTrue(m6.getBsfAudioNames().isEmpty());
+
         p.close(); tb.close();
     }
 
@@ -404,7 +418,7 @@ public class MoQMuxerTest {
 
         // Spawn throws -> exception swallowed, no drain thread
         MoQMuxer bad = spy(newMuxer(0));
-        doThrow(new IOException("moq-cli not found")).when(bad).spawnMoqCli();
+        doThrow(new IOException("moq not found")).when(bad).spawnMoqCli();
         bad.startMoqCli();
         assertNull(getField(bad, "moqCliProcess"));
         verify(bad, never()).startDrainThread(any());

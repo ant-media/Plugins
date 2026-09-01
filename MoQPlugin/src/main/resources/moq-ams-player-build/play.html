@@ -16,23 +16,35 @@
       margin: 0 auto;
     }
 
-    h1 { font-size: 1.3rem; margin-bottom: 14px; }
+    h1 { font-size: 1.3rem; }
     h2 { font-size: 0.95rem; color: #aaa; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.05em; }
 
-    moq-watch canvas {
-      width: 100%;
-      height: auto;
-      display: block;
+    #page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
     }
-    moq-watch video {
+    #publish-link {
+      background: #1f1f1f;
+      border: 1px solid #3a3a3a;
+      border-radius: 5px;
+      padding: 6px 14px;
+      color: #f0f0f0;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    #publish-link:hover { border-color: #3b82f6; color: #93c5fd; }
+
+    moq-watch-ui { margin-bottom: 16px; }
+    moq-watch canvas {
       width: 100%;
       max-height: 80vh;
       object-fit: contain;
       display: block;
-      display: block;
-      background: #111;
-      border-radius: 6px;
-      margin-bottom: 16px;
     }
 
     /* Info panel */
@@ -177,56 +189,6 @@
     .quality-btn:hover { background: #2d4a2d; border-color: #4ade80; }
     .quality-btn.active { background: #2d4a2d; border-color: #4ade80; font-weight: bold; }
 
-    /* Player mode selector */
-    #mode-selector {
-      background: #161616;
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
-      padding: 10px 16px;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      font-size: 13px;
-    }
-    #mode-selector span { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .mode-radio { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-    .mode-radio input[type=radio] { accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer; }
-    .mode-radio label { cursor: pointer; font-size: 13px; }
-
-    /* Volume control */
-    #volume-control {
-      background: #161616;
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
-      padding: 10px 16px;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 13px;
-    }
-    #volume-control span { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-    #volume-icon { font-size: 16px; cursor: pointer; user-select: none; }
-    #volume-slider { accent-color: #3b82f6; flex: 1; max-width: 200px; cursor: pointer; }
-    #volume-label { font-size: 12px; color: #aaa; min-width: 36px; }
-
-    /* Jitter slider */
-    #jitter-control {
-      background: #161616;
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
-      padding: 10px 16px;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 13px;
-    }
-    #jitter-control > span:first-child { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-    #jitter-slider { accent-color: #3b82f6; flex: 1; max-width: 200px; cursor: pointer; }
-    #jitter-label { font-size: 12px; color: #aaa; min-width: 50px; }
-
     /* Debug panel */
     #debug-panel {
       background: #0d0d0d;
@@ -249,11 +211,14 @@
     /* Compat section */
     moq-watch-support { display: block; margin-bottom: 14px; }
   </style>
-  <script type="module" crossorigin src="./assets/play-DA0pAR74.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/time-Cy1-YUvq.js">
+  <script type="module" crossorigin src="./assets/play-B4wGzs9N.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/dom-DxD1qYbX.js">
 </head>
 <body>
-  <h1>AMS MoQ Player</h1>
+  <div id="page-header">
+    <h1>AMS MoQ Player</h1>
+    <a id="publish-link" href="publish.html">Publish from browser →</a>
+  </div>
 
   <!-- Errors injected here by JS -->
   <div id="errors"></div>
@@ -304,42 +269,16 @@
     <div id="quality-buttons"></div>
   </div>
 
-  <!-- Player mode selector -->
-  <div id="mode-selector">
-    <span>Force player:</span>
-    <label class="mode-radio">
-      <input type="radio" name="mode" value="auto" checked />
-      <span>Auto</span>
-    </label>
-    <label class="mode-radio">
-      <input type="radio" name="mode" value="webcodecs" />
-      <span>WebCodecs (canvas)</span>
-    </label>
-    <label class="mode-radio">
-      <input type="radio" name="mode" value="mse" />
-      <span>MSE (video)</span>
-    </label>
-  </div>
-
-  <!-- Volume control -->
-  <div id="volume-control">
-    <span>Volume:</span>
-    <span id="volume-icon">🔇</span>
-    <input id="volume-slider" type="range" min="0" max="100" value="0" />
-    <span id="volume-label">muted</span>
-  </div>
-
-  <!-- Jitter / buffer slider -->
-  <div id="jitter-control">
-    <span>Buffer (jitter):</span>
-    <input id="jitter-slider" type="range" min="50" max="2000" step="50" value="100" />
-    <span id="jitter-label">100 ms</span>
-  </div>
-
-  <!-- Player -->
-  <moq-watch id="player" muted reload jitter="100">
-    <canvas></canvas>
-  </moq-watch>
+  <!-- Player. moq-watch-ui supplies play/pause, volume, latency and fullscreen.
+       latency is the jitter buffer floor. AMS delivers a fragment at a time and the
+       SRT path is burstier still, so 100ms underruns the audio ring and crackles.
+       Do not swap this for "real-time": that sizes off RTT and floors at 20ms, which
+       on localhost is far worse. Override per load with ?latency=<ms>. -->
+  <moq-watch-ui>
+    <moq-watch id="player" muted reload latency="250">
+      <canvas></canvas>
+    </moq-watch>
+  </moq-watch-ui>
 
   <!-- Debug stats -->
   <h2>Debug</h2>

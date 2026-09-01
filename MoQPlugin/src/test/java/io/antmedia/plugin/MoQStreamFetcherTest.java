@@ -105,7 +105,7 @@ public class MoQStreamFetcherTest {
     public void testStartStream() throws Exception {
         // Spawn fails: early return, no relay thread, no super call
         MoQStreamFetcher bad = spy(newFetcher("s1"));
-        doThrow(new IOException("moq-cli not found")).when(bad).spawnMoqCli();
+        doThrow(new IOException("moq not found")).when(bad).spawnMoqCli();
 
         bad.startStream();
         verify(bad, never()).startRelayThread();
@@ -147,7 +147,7 @@ public class MoQStreamFetcherTest {
         MoQStreamFetcher fetcher = newFetcher("s1");
         ServerSocket ss = getField(fetcher, "serverSocket");
 
-        // Mock moq-cli stdout with a fixed payload; ByteArrayInputStream EOFs after drain
+        // Mock moq stdout with a fixed payload; ByteArrayInputStream EOFs after drain
         byte[] payload = "fmp4-bytes".getBytes();
         Process moq = mock(Process.class);
         when(moq.getInputStream()).thenReturn(new ByteArrayInputStream(payload));
@@ -188,12 +188,13 @@ public class MoQStreamFetcherTest {
         MoQStreamFetcher fetcher = newFetcher("s1"); // newFetcher passes tlsDisableVerify=true
         java.util.List<String> cmd = fetcher.buildMoqCliCommand();
 
-        assertEquals("subscribe", cmd.get(1));
-        assertTrue("--url present", cmd.contains("--url"));
+        assertEquals("export is the verb", "export", cmd.get(cmd.size() - 4));
+        assertTrue("--client-connect present", cmd.contains("--client-connect"));
         assertTrue("relay URL passed through", cmd.contains("http://localhost:4443/moq"));
-        assertTrue("--tls-disable-verify added when embedded relay", cmd.contains("--tls-disable-verify"));
+        assertTrue("--client-tls-disable-verify added when embedded relay", cmd.contains("--client-tls-disable-verify"));
         assertTrue("broadcast name has /publish suffix", cmd.contains("live/s1/publish"));
-        assertEquals("fmp4 is the last token", "fmp4", cmd.get(cmd.size() - 1));
+        assertEquals("fmp4 follows export", "fmp4", cmd.get(cmd.size() - 3));
+        assertEquals("fragment duration is capped per frame", "0s", cmd.get(cmd.size() - 1));
 
         ((ServerSocket) getField(fetcher, "serverSocket")).close();
     }
@@ -214,7 +215,7 @@ public class MoQStreamFetcherTest {
         MoQStreamFetcher fetcher = new MoQStreamFetcher("s2", "live", "https://relay.example.com/moq", scope, vertx, false);
         java.util.List<String> cmd = fetcher.buildMoqCliCommand();
 
-        assertFalse("--tls-disable-verify omitted for external relay", cmd.contains("--tls-disable-verify"));
+        assertFalse("--client-tls-disable-verify omitted for external relay", cmd.contains("--client-tls-disable-verify"));
         assertTrue("external relay URL passed through", cmd.contains("https://relay.example.com/moq"));
 
         ((ServerSocket) getField(fetcher, "serverSocket")).close();
