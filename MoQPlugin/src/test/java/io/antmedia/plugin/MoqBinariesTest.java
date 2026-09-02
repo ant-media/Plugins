@@ -1,95 +1,62 @@
 package io.antmedia.plugin;
 
+import static org.junit.Assert.*;
+
 import org.junit.Test;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
-import java.util.Set;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
 
 public class MoqBinariesTest {
 
-    private static Path makeExecutable(Path dir, String name) throws Exception {
-        Path bin = dir.resolve(name);
-        Files.writeString(bin, "");
-        Files.setPosixFilePermissions(bin, Set.of(
-                PosixFilePermission.OWNER_READ,
-                PosixFilePermission.OWNER_EXECUTE));
-        return bin;
-    }
+    private static final String MISSING = "moq-does-not-exist";
 
     @Test
-    public void returnsAbsolutePathWhenFound() throws Exception {
+    public void testScanPath() throws Exception {
         Path dir = Files.createTempDirectory("moq-bin");
-        Path bin = makeExecutable(dir, "fake-bin");
+        Path bin = Files.writeString(dir.resolve("fake-bin"), "");
+        Files.setPosixFilePermissions(bin, PosixFilePermissions.fromString("r-x------"));
+        String absolute = bin.toAbsolutePath().toString();
 
-        assertEquals(bin.toAbsolutePath().toString(),
-                MoqBinaries.scanPath("fake-bin", dir.toString()));
+        assertEquals(absolute, MoqBinaries.scanPath("fake-bin", dir.toString()));
+
+        // Empty and non-existent PATH entries are skipped rather than aborting the scan
+        assertEquals(absolute, MoqBinaries.scanPath("fake-bin",
+                File.pathSeparator + "/no/such/dir" + File.pathSeparator + dir));
+
+        // A miss hands back the bare name so ProcessBuilder produces a readable
+        // "cannot run program" instead of us guessing at a path
+        assertEquals(MISSING, MoqBinaries.scanPath(MISSING, dir.toString()));
+        assertEquals(MISSING, MoqBinaries.scanPath(MISSING, null));
+        assertEquals(MISSING, MoqBinaries.scanPath(MISSING, ""));
     }
 
     @Test
-    public void skipsEmptyAndMissingEntries() throws Exception {
-        Path dir = Files.createTempDirectory("moq-bin");
-        Path bin = makeExecutable(dir, "fake-bin");
-
-        String path = "" + File.pathSeparator + "/no/such/dir" + File.pathSeparator + dir;
-        assertEquals(bin.toAbsolutePath().toString(),
-                MoqBinaries.scanPath("fake-bin", path));
-    }
-
-    @Test
-    public void returnsBareNameWhenNotFound() {
-        assertEquals("nope", MoqBinaries.scanPath("nope", "/no/such/dir"));
-    }
-
-    @Test
-    public void returnsBareNameWhenPathNullOrEmpty() {
-        assertEquals("nope", MoqBinaries.scanPath("nope", null));
-        assertEquals("nope", MoqBinaries.scanPath("nope", ""));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, String> cache() throws Exception {
-        Field f = MoqBinaries.class.getDeclaredField("cache");
-        f.setAccessible(true);
-        return (Map<String, String>) f.get(null);
-    }
-
-    @Test
-    public void resolveFallsBackToBareNameAndCachesTheLookup() throws Exception {
-        String name = "moq-does-not-exist-" + System.nanoTime();
+    public void testResolveCachesBothHitsAndMisses() throws Exception {
+        String missing = MISSING + System.nanoTime();
         try {
-            // Not on PATH: resolve hands back the bare name so ProcessBuilder produces a
-            // readable "cannot run program" instead of us guessing at a path.
-            assertEquals(name, MoqBinaries.resolve(name));
+            assertEquals(missing, MoqBinaries.resolve(missing));
             assertEquals("the miss must be cached, not re-scanned on every spawn",
-                    name, cache().get(name));
+                    missing, cache().get(missing));
 
-            // Cache wins over a later PATH scan: seed it and resolve must return the seed
-            cache().put(name, "/opt/moq/bin/" + name);
-            assertEquals("/opt/moq/bin/" + name, MoqBinaries.resolve(name));
-        } finally {
-            cache().remove(name);
-        }
-    }
+            // Cache wins over a later PATH scan
+            cache().put(missing, "/opt/moq/bin/" + missing);
+            assertEquals("/opt/moq/bin/" + missing, MoqBinaries.resolve(missing));
 
-    @Test
-    public void resolveReturnsAbsolutePathForBinariesOnPath() throws Exception {
-        try {
             // "sh" stands in for moq: something that really is on PATH everywhere we run
-            String resolved = MoqBinaries.resolve("sh");
-            assertNotEquals("a binary on PATH must resolve to an absolute path", "sh", resolved);
-            assertTrue(resolved, new File(resolved).canExecute());
+            String sh = MoqBinaries.resolve("sh");
+            assertNotEquals("a binary on PATH must resolve to an absolute path", "sh", sh);
+            assertTrue(sh, new File(sh).canExecute());
         } finally {
+            cache().remove(missing);
             cache().remove("sh");
         }
     }
 
+    private static Map<String, String> cache() {
+        return TestReflect.staticField(MoqBinaries.class, "cache");
+    }
 }

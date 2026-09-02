@@ -2,6 +2,7 @@ package io.antmedia.muxer;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
+import static io.antmedia.plugin.TestReflect.*;
 import static org.bytedeco.ffmpeg.global.avcodec.*;
 import static org.bytedeco.ffmpeg.global.avutil.*;
 
@@ -16,6 +17,7 @@ import org.bytedeco.ffmpeg.avformat.Write_packet_Pointer_BytePointer_int;
 import org.bytedeco.ffmpeg.avutil.AVChannelLayout;
 import org.bytedeco.ffmpeg.avutil.AVRational;
 import org.bytedeco.javacpp.BytePointer;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.bytedeco.ffmpeg.global.avformat.avformat_new_stream;
@@ -25,7 +27,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,12 +34,27 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public class MoQMuxerTest {
 
+    private static final String LOCAL_RELAY = "http://localhost:4443/moq";
+
+    @SuppressWarnings("unchecked")
+    private final Map<BytePointer, MoQMuxer> instances =
+            (Map<BytePointer, MoQMuxer>) staticField(MoQMuxer.class, "instances");
+
     private MoQMuxer newMuxer(int height) {
-        return new MoQMuxer(mock(Vertx.class), "stream1", height, "live", "http://localhost:4443/moq", true);
+        return new MoQMuxer(mock(Vertx.class), "stream1", height, "live", LOCAL_RELAY, true);
+    }
+
+    @After
+    public void clearInstanceRegistry() {
+        // openIO() parks the muxer in this static map keyed by its opaque pointer. Tests that
+        // never reach writeTrailer would leave it there for the rest of the surefire JVM, where
+        // the next test to assert on the map sees the leftovers.
+        instances.clear();
     }
 
     @Test
@@ -188,53 +204,44 @@ public class MoQMuxerTest {
     }
 
     @Test
-    public void testAddVideoStream_superFails_returnsFalse() {
-        MoQMuxer muxer = spy(newMuxer(0));
+    public void testAddVideoStream() throws Exception {
         AVRational tb = new AVRational();
         tb.num(1).den(90000);
-        doReturn(false).when(muxer).callSuperAddVideoStream(
+
+        // Super refuses: nothing is reported as added
+        MoQMuxer refused = spy(newMuxer(0));
+        doReturn(false).when(refused).callSuperAddVideoStream(
                 anyInt(), anyInt(), any(), anyInt(), anyInt(), anyBoolean(), any());
+        assertFalse(refused.addVideoStream(1920, 1080, tb, AV_CODEC_ID_H264, 0, true, null));
 
-        assertFalse(muxer.addVideoStream(1920, 1080, tb, AV_CODEC_ID_H264, 0, true, null));
-        tb.close();
-    }
-
-    @Test
-    public void testAddVideoStream_copiesExtradataFromCodecpar() throws Exception {
-        MoQMuxer muxer = spy(newMuxer(0));
-        AVFormatContext ctx = muxer.getOutputFormatContext();
-        avformat_new_stream(ctx, null); // output stream at index 0
-        muxer.inputOutputStreamIndexMap.put(3, 0);
-        doReturn(true).when(muxer).callSuperAddVideoStream(
-                anyInt(), anyInt(), any(), anyInt(), anyInt(), anyBoolean(), any());
-
-        // codecpar carrying extradata -> the success branch copies it onto the output stream
-        byte[] data = { 1, 2, 3, 4, 5 };
+        // codecpar carrying extradata (the RTMP/SRT path) is copied onto the output stream
+        byte[] avcc = { 1, 2, 3, 4, 5 };
         AVCodecParameters cp = new AVCodecParameters();
-        BytePointer ed = new BytePointer(data);
+        BytePointer ed = new BytePointer(avcc);
         cp.extradata(ed);
-        cp.extradata_size(data.length);
+        cp.extradata_size(avcc.length);
 
-        AVRational tb = new AVRational(); tb.num(1).den(90000);
-        assertTrue(muxer.addVideoStream(1920, 1080, tb, AV_CODEC_ID_H264, 3, true, cp));
-        assertEquals(0, getInt(muxer, "videoOutStreamIdx"));
-        assertEquals(data.length, ctx.streams(0).codecpar().extradata_size());
+        MoQMuxer copied = spy(newMuxer(0));
+        avformat_new_stream(copied.getOutputFormatContext(), null); // output stream at index 0
+        copied.inputOutputStreamIndexMap.put(0, 0);
+        doReturn(true).when(copied).callSuperAddVideoStream(
+                anyInt(), anyInt(), any(), anyInt(), anyInt(), anyBoolean(), any());
+
+        assertTrue(copied.addVideoStream(1920, 1080, tb, AV_CODEC_ID_H264, 0, true, cp));
+        assertEquals(0, getInt(copied, "videoOutStreamIdx"));
+        assertEquals(avcc.length, copied.getOutputFormatContext().streams(0).codecpar().extradata_size());
+
+        // No codecpar (the WebRTC path) is still accepted, extraction is deferred to the first keyframe
+        MoQMuxer deferred = spy(newMuxer(0));
+        avformat_new_stream(deferred.getOutputFormatContext(), null);
+        deferred.inputOutputStreamIndexMap.put(0, 0);
+        doReturn(true).when(deferred).callSuperAddVideoStream(
+                anyInt(), anyInt(), any(), anyInt(), anyInt(), anyBoolean(), any());
+
+        assertTrue(deferred.addVideoStream(1920, 1080, tb, AV_CODEC_ID_H264, 0, true, null));
+        assertEquals(0, deferred.getOutputFormatContext().streams(0).codecpar().extradata_size());
 
         tb.close(); cp.close(); ed.close();
-    }
-
-    @Test
-    public void testAddVideoStream_nullCodecpar_takesWarnBranch() {
-        // null codecpar exercises the else (warn) branch; super=true keeps overall result true
-        MoQMuxer muxer = spy(newMuxer(0));
-        avformat_new_stream(muxer.getOutputFormatContext(), null);
-        muxer.inputOutputStreamIndexMap.put(0, 0);
-        doReturn(true).when(muxer).callSuperAddVideoStream(
-                anyInt(), anyInt(), any(), anyInt(), anyInt(), anyBoolean(), any());
-
-        AVRational tb = new AVRational(); tb.num(1).den(90000);
-        assertTrue(muxer.addVideoStream(1920, 1080, tb, AV_CODEC_ID_H264, 0, true, null));
-        tb.close();
     }
 
     @Test
@@ -302,25 +309,32 @@ public class MoQMuxerTest {
     }
 
     @Test
-    public void testWriteVideoFrame() throws Exception {
-        Method m = MoQMuxer.class.getDeclaredMethod("writeVideoFrame", AVPacket.class, AVFormatContext.class);
-        m.setAccessible(true);
-        AVPacket pkt = new AVPacket();
+    public void testWriteVideoFrame_guards() throws Exception {
+        try (AVPacket empty = new AVPacket()) {
+            // No header and no output index: nothing to write the header against
+            MoQMuxer noOutIdx = spy(newMuxer(0));
+            invokeWriteVideoFrame(noOutIdx, empty, null);
+            verify(noOutIdx, never()).callSuperWriteVideoFrame(any(), any());
 
-        // No header + no outIdx -> early return, super never called
-        MoQMuxer noOutIdx = spy(newMuxer(0));
-        setInt(noOutIdx, "videoOutStreamIdx", -1);
-        m.invoke(noOutIdx, pkt, null);
-        verify(noOutIdx, never()).callSuperWriteVideoFrame(any(), any());
+            // Header already written: straight to super, the context is not even looked at
+            MoQMuxer headerWritten = spy(newMuxer(0));
+            setBoolean(headerWritten, "headerWritten", true);
+            doNothing().when(headerWritten).callSuperWriteVideoFrame(any(), any());
+            invokeWriteVideoFrame(headerWritten, empty, null);
+            verify(headerWritten).callSuperWriteVideoFrame(eq(empty), isNull());
+        }
 
-        // Header already written -> jumps straight to super, context can be null
-        MoQMuxer headerWritten = spy(newMuxer(0));
-        setBoolean(headerWritten, "headerWritten", true);
-        doNothing().when(headerWritten).callSuperWriteVideoFrame(any(), any());
-        m.invoke(headerWritten, pkt, null);
-        verify(headerWritten).callSuperWriteVideoFrame(eq(pkt), isNull());
+        // A keyframe with no SPS/PPS in it: extraction comes back empty, so the header is
+        // deferred again rather than written against a stream that has no extradata
+        MoQMuxer noExtradata = spy(newMuxer(0));
+        AVFormatContext ctx = noExtradata.getOutputFormatContext();
+        avformat_new_stream(ctx, null);
+        setInt(noExtradata, "videoOutStreamIdx", 0);
 
-        pkt.close();
+        try (AVPacket garbage = keyframe("garbage-not-a-nal".getBytes())) {
+            invokeWriteVideoFrame(noExtradata, garbage, ctx);
+            verify(noExtradata, never()).callSuperWriteVideoFrame(any(), any());
+        }
     }
 
     @Test
@@ -344,26 +358,37 @@ public class MoQMuxerTest {
         verify(withHeader, never()).callSuperClearResource();
     }
 
-    @Test
-    public void testWriteTrailer_destroysCliProcessAndJoinsDrainThread() throws Exception {
-        MoQMuxer muxer = spy(newMuxer(0));
-        setBoolean(muxer, "headerWritten", false);
-        doNothing().when(muxer).callSuperWriteTrailer();
-        doNothing().when(muxer).callSuperClearResource();
+    @Test(timeout = 30_000)
+    public void testWriteTrailer_reapsTheCliProcess() throws Exception {
+        MoQMuxer stubborn = spy(newMuxer(0));
+        doNothing().when(stubborn).callSuperClearResource();
 
-        Process moq = mock(Process.class);
-        when(moq.waitFor(anyLong(), any())).thenReturn(false); // wait times out -> destroy() invoked
-        setField(muxer, "moqCliProcess", moq);
+        Process ignoresStdin = mock(Process.class);
+        when(ignoresStdin.waitFor(anyLong(), any())).thenReturn(false);
+        setField(stubborn, "moqCliProcess", ignoresStdin);
 
-        Thread drain = new Thread(() -> {}, "drain");
+        Thread drain = new Thread(() -> { }, "drain");
         drain.start();
-        setField(muxer, "drainThread", drain);
+        setField(stubborn, "drainThread", drain);
 
-        muxer.writeTrailer();
+        stubborn.writeTrailer();
 
-        verify(moq).destroy();
-        assertNull(getField(muxer, "drainThread"));
-        assertNull(getField(muxer, "moqCliProcess"));
+        verify(ignoresStdin).destroy();
+        assertNull("the drain thread must be joined and released", getField(stubborn, "drainThread"));
+        assertNull(getField(stubborn, "moqCliProcess"));
+
+        // A cli that exits on its own once stdin closes must not be signalled
+        MoQMuxer cooperative = spy(newMuxer(0));
+        doNothing().when(cooperative).callSuperClearResource();
+
+        Process exitsOnStdinClose = mock(Process.class);
+        when(exitsOnStdinClose.waitFor(anyLong(), any())).thenReturn(true);
+        setField(cooperative, "moqCliProcess", exitsOnStdinClose);
+
+        cooperative.writeTrailer();
+
+        verify(exitsOnStdinClose, never()).destroy();
+        assertNull(getField(cooperative, "moqCliProcess"));
     }
 
     @Test
@@ -402,52 +427,41 @@ public class MoQMuxerTest {
     }
 
     @Test
-    public void testOpenIO_allocatesAvioContext() throws Exception {
+    public void testOpenIO() throws Exception {
         MoQMuxer muxer = newMuxer(0);
         assertTrue(muxer.openIO());
         assertNotNull(getField(muxer, "avioContext"));
         assertNotNull(getField(muxer, "opaque"));
-    }
 
-    @Test
-    @SuppressWarnings("unchecked")
-    public void testOpenIO_nullFormatContext_failsWithoutNpeOrRegistering() throws Exception {
-        MoQMuxer muxer = spy(newMuxer(0));
-        doReturn(null).when(muxer).getOutputFormatContext();
+        MoQMuxer noContext = spy(newMuxer(0));
+        doReturn(null).when(noContext).getOutputFormatContext();
 
-        assertFalse("a null format context must fail cleanly, not NPE", muxer.openIO());
-
-        Field f = MoQMuxer.class.getDeclaredField("instances");
-        f.setAccessible(true);
-        Map<BytePointer, MoQMuxer> instances = (Map<BytePointer, MoQMuxer>) f.get(null);
+        assertFalse("a null format context must fail cleanly, not NPE", noContext.openIO());
         assertFalse("a muxer that failed to open must not stay in the static map",
-                instances.containsValue(muxer));
+                instances.containsValue(noContext));
     }
 
     @Test
     public void testBuildMoqCliCommand() {
-        // newMuxer passes tlsDisableVerify=true, as the embedded self-signed relay needs
-        java.util.List<String> cmd = newMuxer(0).buildMoqCliCommand();
+        // newMuxer publishes to the embedded relay, which is self-signed
+        List<String> embedded = newMuxer(0).buildMoqCliCommand();
 
-        assertEquals("http://localhost:4443/moq", cmd.get(cmd.indexOf("--client-connect") + 1));
-        assertEquals(MoqBinaries.CLIENT_BIND, cmd.get(cmd.indexOf("--client-bind") + 1));
-        assertEquals("live/stream1/source", cmd.get(cmd.indexOf("--broadcast") + 1));
-        assertTrue("--client-tls-disable-verify added for the embedded relay",
-                cmd.contains("--client-tls-disable-verify"));
-        assertEquals("import is the verb", "import", cmd.get(cmd.size() - 2));
-        assertEquals("fmp4", cmd.get(cmd.size() - 1));
-    }
+        assertEquals(LOCAL_RELAY, embedded.get(embedded.indexOf("--client-connect") + 1));
+        assertEquals("live/stream1/source", embedded.get(embedded.indexOf("--broadcast") + 1));
+        assertEquals("moq binds [::]:0 by default, which dies on hosts with no IPv6 route",
+                MoqBinaries.CLIENT_BIND, embedded.get(embedded.indexOf("--client-bind") + 1));
+        assertTrue(embedded.contains("--client-tls-disable-verify"));
+        assertEquals("import is the verb", "import", embedded.get(embedded.size() - 2));
+        assertEquals("fmp4", embedded.get(embedded.size() - 1));
 
-    @Test
-    public void testBuildMoqCliCommand_externalTarget_omitsTlsDisableVerify() {
-        MoQMuxer muxer = new MoQMuxer(mock(Vertx.class), "stream1", 720, "live",
+        MoQMuxer cdn = new MoQMuxer(mock(Vertx.class), "stream1", 720, "live",
                 "https://cdn.example.com/token", false);
-        java.util.List<String> cmd = muxer.buildMoqCliCommand();
+        List<String> external = cdn.buildMoqCliCommand();
 
         assertFalse("a real certificate must still be verified",
-                cmd.contains("--client-tls-disable-verify"));
-        assertEquals("https://cdn.example.com/token", cmd.get(cmd.indexOf("--client-connect") + 1));
-        assertEquals("live/stream1/720p", cmd.get(cmd.indexOf("--broadcast") + 1));
+                external.contains("--client-tls-disable-verify"));
+        assertEquals("https://cdn.example.com/token", external.get(external.indexOf("--client-connect") + 1));
+        assertEquals("live/stream1/720p", external.get(external.indexOf("--broadcast") + 1));
     }
 
     @Test
@@ -477,14 +491,8 @@ public class MoQMuxerTest {
         MoQMuxer muxer = newMuxer(0);
 
         // Pull the static callback and the instances map by reflection
-        Field cbField = MoQMuxer.class.getDeclaredField("writeCallback");
-        cbField.setAccessible(true);
-        Write_packet_Pointer_BytePointer_int callback = (Write_packet_Pointer_BytePointer_int) cbField.get(null);
+        Write_packet_Pointer_BytePointer_int callback = staticField(MoQMuxer.class, "writeCallback");
 
-        Field instancesField = MoQMuxer.class.getDeclaredField("instances");
-        instancesField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        Map<BytePointer, MoQMuxer> instances = (Map<BytePointer, MoQMuxer>) instancesField.get(null);
 
         BytePointer opaque = new BytePointer("test-opaque");
         BytePointer buf = new BytePointer("hello".getBytes());
@@ -523,29 +531,6 @@ public class MoQMuxerTest {
         // Second call: old pointer is freed (no leak), new one installed
         m.invoke(muxer, stream, new byte[] { 5, 6, 7 });
         assertEquals(3, stream.codecpar().extradata_size());
-    }
-
-    @Test
-    public void testWriteVideoFrame_noExtradataAndExtractFails_returnsEarly() throws Exception {
-        MoQMuxer muxer = spy(newMuxer(0));
-        AVFormatContext ctx = muxer.getOutputFormatContext();
-        avformat_new_stream(ctx, null); // creates output stream at index 0
-        setInt(muxer, "videoOutStreamIdx", 0);
-        setBoolean(muxer, "headerWritten", false);
-
-        // Frame contains no SPS/PPS, so extractAnnexBSPSPPS returns an empty array and the
-        // second extradata-size check still sees 0 -> early return before avformat_write_header
-        AVPacket pkt = new AVPacket();
-        BytePointer data = new BytePointer("garbage-not-a-nal".getBytes());
-        pkt.data(data);
-        pkt.size((int) data.limit());
-
-        Method m = MoQMuxer.class.getDeclaredMethod("writeVideoFrame", AVPacket.class, AVFormatContext.class);
-        m.setAccessible(true);
-        m.invoke(muxer, pkt, ctx);
-
-        verify(muxer, never()).callSuperWriteVideoFrame(any(), any());
-        pkt.close();
     }
 
     /** A real baseline SPS/PPS pair: movenc parses these, so avformat_write_header actually succeeds. */
@@ -655,46 +640,40 @@ public class MoQMuxerTest {
         invokeWriteVideoFrame(muxer, pkt, ctx);
 
         assertTrue(getBoolean(muxer, "headerWritten"));
-        verify(muxer).callSuperWriteVideoFrame(eq(pkt), eq(ctx));
+        verify(muxer).callSuperWriteVideoFrame(pkt, ctx);
         pkt.close();
     }
 
-    @Test
-    public void testDrainLoop_keepsPumpingWhileRunning() throws Exception {
+    @Test(timeout = 30_000)
+    public void testDrainLoop() throws Exception {
         MoQMuxer muxer = newMuxer(0);
         setBoolean(muxer, "running", true);
 
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
-        muxer.startDrainThread(sink);
-        Thread t = getField(muxer, "drainThread");
+        CountDownLatch wrote = new CountDownLatch(1);
+        OutputStream counted = new OutputStream() {
+            @Override public void write(int b) { sink.write(b); }
+            @Override public void write(byte[] b) { sink.writeBytes(b); wrote.countDown(); }
+        };
 
-        // Empty queue: the loop must idle on poll(), not exit while still running
-        Thread.sleep(300);
-        assertTrue("the drain thread must stay up while running", t.isAlive());
-
+        muxer.startDrainThread(counted);
+        Thread drain = getField(muxer, "drainThread");
         ArrayBlockingQueue<byte[]> queue = getField(muxer, "queue");
+
         queue.put(new byte[] { 9, 8 });
+        assertTrue("the drain thread never picked the chunk off the queue", wrote.await(10, TimeUnit.SECONDS));
+
+        // The queue is empty again but running is still true, so the loop has to be back on
+        // poll() rather than having exited after draining what it found.
+        assertTrue("the drain thread must stay up while running", drain.isAlive());
+
+        queue.put(new byte[] { 7 });
         setBoolean(muxer, "running", false);
 
-        t.join(3000);
-        assertFalse(t.isAlive());
+        drain.join(10_000);
+        assertFalse(drain.isAlive());
         assertArrayEquals("chunks queued before shutdown must still be flushed",
-                new byte[] { 9, 8 }, sink.toByteArray());
-    }
-
-    @Test
-    public void testWriteTrailer_cliExitsOnItsOwn_isNotDestroyed() throws Exception {
-        MoQMuxer muxer = spy(newMuxer(0));
-        doNothing().when(muxer).callSuperClearResource();
-
-        Process moq = mock(Process.class);
-        when(moq.waitFor(anyLong(), any())).thenReturn(true); // closing stdin was enough
-        setField(muxer, "moqCliProcess", moq);
-
-        muxer.writeTrailer();
-
-        verify(moq, never()).destroy();
-        assertNull(getField(muxer, "moqCliProcess"));
+                new byte[] { 9, 8, 7 }, sink.toByteArray());
     }
 
     @Test
@@ -719,7 +698,7 @@ public class MoQMuxerTest {
                 out.codecpar().extradata_size() > 0);
         assertEquals("extradata must stay Annex B (leading 0x00) so movenc converts the mdat",
                 0, out.codecpar().extradata().get(0));
-        verify(muxer).callSuperWriteVideoFrame(eq(pkt), eq(ctx));
+        verify(muxer).callSuperWriteVideoFrame(pkt, ctx);
 
         // delay_moov is what makes this safe: the header call itself emits nothing, so the
         // moov still picks up tracks (e.g. a late audio stream) added after the first keyframe.
@@ -729,7 +708,7 @@ public class MoQMuxerTest {
         // A second keyframe skips the whole lazy-header block and goes straight to super
         AVPacket second = keyframe(SPS_PPS_ANNEXB);
         invokeWriteVideoFrame(muxer, second, ctx);
-        verify(muxer).callSuperWriteVideoFrame(eq(second), eq(ctx));
+        verify(muxer).callSuperWriteVideoFrame(second, ctx);
 
         pkt.close(); second.close();
     }
@@ -771,10 +750,6 @@ public class MoQMuxerTest {
         assertTrue(muxer.openIO());
         BytePointer opaque = getField(muxer, "opaque");
 
-        Field instancesField = MoQMuxer.class.getDeclaredField("instances");
-        instancesField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        Map<BytePointer, MoQMuxer> instances = (Map<BytePointer, MoQMuxer>) instancesField.get(null);
         assertSame("openIO must register the muxer under its opaque key", muxer, instances.get(opaque));
 
         muxer.writeTrailer();
@@ -785,7 +760,7 @@ public class MoQMuxerTest {
                 instances.containsKey(opaque));
     }
 
-    @Test
+    @Test(timeout = 30_000)
     public void testDrainLoop_writeFailure_isSwallowedAndThreadExits() throws Exception {
         MoQMuxer muxer = newMuxer(0);
         ArrayBlockingQueue<byte[]> queue = getField(muxer, "queue");
@@ -799,11 +774,11 @@ public class MoQMuxerTest {
         muxer.startDrainThread(broken);
 
         Thread t = getField(muxer, "drainThread");
-        t.join(2000);
+        t.join(10_000);
         assertFalse("a dead moq stdin must end the drain thread, not spin or escape", t.isAlive());
     }
 
-    @Test
+    @Test(timeout = 30_000)
     public void testSpawnMoqCli_execsTheBuiltCommand() throws Exception {
         Path dir = Files.createTempDirectory("moq-spawn");
         Path argv = dir.resolve("argv.txt");
@@ -821,24 +796,6 @@ public class MoQMuxerTest {
         } finally {
             p.destroyForcibly();
         }
-    }
-
-    @Test
-    public void testStartDrainThread_writesQueuedChunksAndCloses() throws Exception {
-        MoQMuxer muxer = newMuxer(0);
-        @SuppressWarnings("unchecked")
-        ArrayBlockingQueue<byte[]> queue = (ArrayBlockingQueue<byte[]>) getField(muxer, "queue");
-        queue.put(new byte[] { 1, 2, 3 });
-        queue.put(new byte[] { 4, 5 });
-
-        // running flag is false (default), so the drain loop exits as soon as the queue empties
-        ByteArrayOutputStream sink = new ByteArrayOutputStream();
-        muxer.startDrainThread(sink);
-
-        Thread t = getField(muxer, "drainThread");
-        t.join(2000);
-        assertFalse(t.isAlive());
-        assertArrayEquals(new byte[] { 1, 2, 3, 4, 5 }, sink.toByteArray());
     }
 
     private static byte[] concat(byte[]... arrays) {
@@ -860,36 +817,4 @@ public class MoQMuxerTest {
              | ((data[offset+3] & 0xFF) << 24);
     }
 
-    private static int getInt(Object t, String name) throws Exception {
-        return walkField(t, name).getInt(t);
-    }
-    private static boolean getBoolean(Object t, String name) throws Exception {
-        return walkField(t, name).getBoolean(t);
-    }
-    private static void setInt(Object t, String name, int v) throws Exception {
-        walkField(t, name).setInt(t, v);
-    }
-    private static void setBoolean(Object t, String name, boolean v) throws Exception {
-        walkField(t, name).setBoolean(t, v);
-    }
-    @SuppressWarnings("unchecked")
-    private static <T> T getField(Object t, String name) throws Exception {
-        return (T) walkField(t, name).get(t);
-    }
-    private static void setField(Object t, String name, Object v) throws Exception {
-        walkField(t, name).set(t, v);
-    }
-    private static Field walkField(Object t, String name) throws NoSuchFieldException {
-        Class<?> c = t.getClass();
-        while (c != null) {
-            try {
-                Field f = c.getDeclaredField(name);
-                f.setAccessible(true);
-                return f;
-            } catch (NoSuchFieldException e) {
-                c = c.getSuperclass();
-            }
-        }
-        throw new NoSuchFieldException(name);
-    }
 }

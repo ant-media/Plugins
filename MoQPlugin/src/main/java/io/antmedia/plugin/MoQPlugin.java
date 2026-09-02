@@ -272,12 +272,14 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     @PreDestroy
     public void destroy() {
-        if (vertx != null && logPollTimerId != -1) {
-            vertx.cancelTimer(logPollTimerId);
-            logPollTimerId = -1;
-        }
-        if (announcePoller != null) {
-            announcePoller.stop(vertx);
+        if (vertx != null) {
+            if (logPollTimerId != -1) {
+                vertx.cancelTimer(logPollTimerId);
+                logPollTimerId = -1;
+            }
+            if (announcePoller != null) {
+                announcePoller.stop(vertx);
+            }
         }
         activeIngests.values().forEach(MoQStreamFetcher::stopStream);
         activeIngests.clear();

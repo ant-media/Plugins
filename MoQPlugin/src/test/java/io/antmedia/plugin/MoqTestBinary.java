@@ -1,7 +1,6 @@
 package io.antmedia.plugin;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -30,12 +29,8 @@ public final class MoqTestBinary {
 
     /** Runs {@code body} with {@code MoqBinaries.resolve("moq")} pinned to {@code bin}, then restores the cache. */
     public static <T> T withResolvedMoq(Path bin, Callable<T> body) throws Exception {
-        Field f = MoqBinaries.class.getDeclaredField("cache");
-        f.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        Map<String, String> cache = (Map<String, String>) f.get(null);
-        String saved = cache.get("moq");
-        cache.put("moq", bin.toString());
+        Map<String, String> cache = TestReflect.staticField(MoqBinaries.class, "cache");
+        String saved = cache.put("moq", bin.toString());
         try {
             return body.call();
         } finally {

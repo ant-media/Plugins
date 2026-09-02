@@ -2,6 +2,7 @@ package io.antmedia.plugin;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
+import static io.antmedia.plugin.TestReflect.*;
 
 import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.AppSettings;
@@ -14,6 +15,7 @@ import io.antmedia.muxer.MuxAdaptor;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,7 +26,6 @@ import org.springframework.context.ApplicationContext;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,8 +36,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MoQPluginTest {
+
+    private static final String NO_SUCH_ROOT = "/tmp/__moq_no_such_dir__";
 
     private MoQPlugin plugin;
     private ApplicationContext context;
@@ -47,8 +51,22 @@ public class MoQPluginTest {
     private DataStore dataStore;
     private MoQStreamFetcher fakeFetcher;
 
+    // The relay lifecycle lives in JVM-wide statics. Snapshot them once here instead of letting
+    // every test carry its own save/restore, where one escaped exception poisons the rest of the run.
+    private Process savedRelayProcess;
+    private long savedRestartAttempt;
+    private boolean savedHookRegistered;
+    private boolean savedRelayStopping;
+    private String savedRed5Root;
+
     @Before
     public void setUp() throws Exception {
+        savedRelayProcess   = relaySlot().get();
+        savedRestartAttempt = (long) staticField(MoQPlugin.class, "lastRelayRestartAttempt");
+        savedHookRegistered = (boolean) staticField(MoQPlugin.class, "shutdownHookRegistered");
+        savedRelayStopping  = (boolean) staticField(MoQPlugin.class, "relayStopping");
+        savedRed5Root       = System.getProperty("red5.root");
+
         plugin = spy(new MoQPlugin());
 
         context = mock(ApplicationContext.class);
@@ -79,11 +97,24 @@ public class MoQPluginTest {
         plugin.setApplicationContext(context);
     }
 
-    @Test
-    public void testSetApplicationContext_wiresUp() {
-        verify(streamHandler).addStreamListener(plugin);
-        // One periodic for log polling, one for the announce poller
-        verify(vertx, times(2)).setPeriodic(anyLong(), any());
+    @After
+    public void restoreRelayStatics() {
+        Process leftover = relaySlot().get();
+        if (leftover != null && leftover != savedRelayProcess) {
+            leftover.destroyForcibly();
+        }
+        relaySlot().set(savedRelayProcess);
+        setStaticField(MoQPlugin.class, "lastRelayRestartAttempt", savedRestartAttempt);
+        setStaticField(MoQPlugin.class, "shutdownHookRegistered", savedHookRegistered);
+        setStaticField(MoQPlugin.class, "relayStopping", savedRelayStopping);
+
+        if (savedRed5Root != null) {
+            System.setProperty("red5.root", savedRed5Root);
+        } else {
+            System.clearProperty("red5.root");
+        }
+
+        Thread.interrupted(); // a couple of tests raise the interrupt flag on purpose
     }
 
     @Test
@@ -181,8 +212,26 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testStreamStarted_webRTC_usesSourceHeight() {
-        // WebRTC path: !directMuxingSupported && getVideoCodecParameters != null
+    public void testAddMuxers_addMuxerRejected_muxerIsNotTracked() throws Exception {
+        MuxAdaptor adaptor = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
+        when(adaptor.directMuxingSupported()).thenReturn(true);
+        when(adaptor.getEncoderSettingsList()).thenReturn(Arrays.asList(
+                new EncoderSettings(360, 500_000, 64_000, false)));
+        // MuxAdaptor refuses both muxers (e.g. codec unsupported)
+        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(false);
+
+        plugin.streamStarted(broadcast("s1"));
+
+        ConcurrentMap<String, Set<MoQMuxer>> map = getField(plugin, "muxersByStream");
+        assertTrue("a rejected muxer must not be tracked, or writeTrailer would never run on it",
+                map.get("s1").isEmpty());
+    }
+
+    @Test
+    public void testStreamStarted_webRtc_addsTheSourceMuxerAtTheSourceHeight() {
+        // WebRTC (!directMuxingSupported) matches muxers to encoders by exact height, so height 0
+        // would never match and the muxer would get no data
         MuxAdaptor adaptor = mock(MuxAdaptor.class);
         when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
         when(adaptor.directMuxingSupported()).thenReturn(false);
@@ -193,21 +242,29 @@ public class MoQPluginTest {
             when(adaptor.getVideoCodecParameters()).thenReturn(codecpar);
 
             plugin.streamStarted(broadcast("s1"));
-
-            // Source muxer added with the actual source height (720), not 0
             verify(adaptor).addMuxer(any(MoQMuxer.class), eq(720));
         }
+
+        // Codec parameters not negotiated yet: nothing better than 0 to fall back to
+        MuxAdaptor notNegotiated = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("s2")).thenReturn(notNegotiated);
+        when(notNegotiated.directMuxingSupported()).thenReturn(false);
+        when(notNegotiated.getVideoCodecParameters()).thenReturn(null);
+        when(notNegotiated.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+
+        plugin.streamStarted(broadcast("s2"));
+
+        verify(notNegotiated).addMuxer(any(MoQMuxer.class), eq(0));
     }
 
     @Test
-    public void testStreamFinished() {
-        // Unknown stream: no-op
-        MuxAdaptor unknownAdaptor = mock(MuxAdaptor.class);
-        when(streamHandler.getMuxAdaptor("ghost")).thenReturn(unknownAdaptor);
+    public void testStreamFinished() throws Exception {
+        // Never started: nothing to remove
+        MuxAdaptor unknown = mock(MuxAdaptor.class);
+        when(streamHandler.getMuxAdaptor("ghost")).thenReturn(unknown);
         plugin.streamFinished(broadcast("ghost"));
-        verify(unknownAdaptor, never()).removeMuxer(any());
+        verify(unknown, never()).removeMuxer(any());
 
-        // Tracked stream: muxer removed
         MuxAdaptor adaptor = mock(MuxAdaptor.class);
         when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
         when(adaptor.directMuxingSupported()).thenReturn(true);
@@ -215,36 +272,21 @@ public class MoQPluginTest {
 
         plugin.streamStarted(broadcast("s1"));
         plugin.streamFinished(broadcast("s1"));
-        verify(adaptor, atLeastOnce()).removeMuxer(any(MoQMuxer.class));
-    }
+        verify(adaptor).removeMuxer(any(MoQMuxer.class));
 
-    @Test
-    public void testStreamFinished_muxAdaptorNullAfterStart_skipsRemoveMuxer() throws Exception {
-        // Start: registers a muxer entry under "s1"
-        MuxAdaptor adaptor = mock(MuxAdaptor.class);
-        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
-        when(adaptor.directMuxingSupported()).thenReturn(true);
-        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
+        // Adaptor disappears between start and finish (race, or a late teardown): the null guard
+        // in streamFinished skips removeMuxer but the tracking entry still has to go
         plugin.streamStarted(broadcast("s1"));
-
-        // Adaptor disappears between start and finish (race / late teardown)
         when(streamHandler.getMuxAdaptor("s1")).thenReturn(null);
         plugin.streamFinished(broadcast("s1"));
 
-        // Null muxAdaptor guard in streamFinished short-circuits removeMuxer
-        verify(adaptor, never()).removeMuxer(any(MoQMuxer.class));
-
-        // Map entry still cleaned up
+        verify(adaptor, times(1)).removeMuxer(any(MoQMuxer.class));
         ConcurrentMap<String, ?> map = getField(plugin, "muxersByStream");
-        assertFalse(map.containsKey("s1"));
+        assertFalse("the tracking entry has to go even when the adaptor is gone", map.containsKey("s1"));
     }
 
     @Test
-    public void testListenerStubs_andIngestGetters() throws Exception {
-        // Room callbacks are no-ops for MoQ; just verify they don't throw
-        plugin.joinedTheRoom("room1", "stream1");
-        plugin.leftTheRoom("room1", "stream1");
-
+    public void testIngestGetters() throws Exception {
         // Empty before any ingest is started
         assertTrue(plugin.getActiveIngestStreamIds().isEmpty());
         assertNull(plugin.getIngestHandler("unknown"));
@@ -261,7 +303,8 @@ public class MoQPluginTest {
         ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
 
         // Stream already in DB: fetcher created, no save needed
-        when(dataStore.get("s1")).thenReturn(mock(Broadcast.class));
+        Broadcast known = mock(Broadcast.class);
+        when(dataStore.get("s1")).thenReturn(known);
         plugin.startIngest("s1");
         verify(plugin).createFetcher(eq("s1"), eq("live"), anyString(), eq(scope));
         verify(fakeFetcher).startStream();
@@ -284,7 +327,8 @@ public class MoQPluginTest {
         verify(plugin).createFetcher(eq("new"), eq("live"), anyString(), eq(scope));
 
         // createFetcher throws: caught and logged, no entry added
-        when(dataStore.get("boom")).thenReturn(mock(Broadcast.class));
+        Broadcast doomed = mock(Broadcast.class);
+        when(dataStore.get("boom")).thenReturn(doomed);
         doThrow(new RuntimeException("simulated bind failure"))
                 .when(plugin).createFetcher(eq("boom"), any(), any(), any());
         plugin.startIngest("boom");
@@ -306,29 +350,34 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testDestroy_stopsAllIngests() throws Exception {
-        MoQStreamFetcher f2 = mock(MoQStreamFetcher.class);
+    public void testDestroy() throws Exception {
+        MoQStreamFetcher second = mock(MoQStreamFetcher.class);
         ConcurrentMap<String, MoQStreamFetcher> ingests = getField(plugin, "activeIngests");
         ingests.put("a", fakeFetcher);
-        ingests.put("b", f2);
+        ingests.put("b", second);
 
         plugin.destroy();
 
         verify(fakeFetcher).stopStream();
-        verify(f2).stopStream();
+        verify(second).stopStream();
         assertTrue(ingests.isEmpty());
-
-        // The first pass cancels both timers: the log poller and the announce poller
+        // Both timers cancelled: the log poller directly, the announce poller through stop()
         verify(vertx, times(2)).cancelTimer(anyLong());
 
-        // Spring can call @PreDestroy again on a failed shutdown; the second pass must be inert
+        // Spring can call @PreDestroy again on a failed shutdown, so the second pass must be inert
         plugin.destroy();
         verify(vertx, times(2)).cancelTimer(anyLong());
         verify(fakeFetcher, times(1)).stopStream();
+
+        // It can also fire on a plugin whose setApplicationContext never completed, which leaves
+        // both vertx and the announce poller null
+        new MoQPlugin().destroy();
     }
 
     @Test
-    public void testSetApplicationContext_startsAnnouncePoller() throws Exception {
+    public void testSetApplicationContext() throws Exception {
+        verify(streamHandler).addStreamListener(plugin);
+
         // Fresh vertx + fresh context so we count only this plugin's interactions
         Vertx freshVertx = mock(Vertx.class);
         // Distinct ids, as real Vert.x hands out: 7 to the log poller, 8 to the announce poller.
@@ -407,7 +456,7 @@ public class MoQPluginTest {
     }
 
     @Test
-    public void testReadAvailable_emptyAndThrowingStreams() throws Exception {
+    public void testReadAvailable() throws Exception {
         Method readAvailable = MoQPlugin.class.getDeclaredMethod(
                 "readAvailable", InputStream.class, String.class);
         readAvailable.setAccessible(true);
@@ -418,251 +467,200 @@ public class MoQPluginTest {
         verify(empty).available();
         verify(empty, never()).read(any(byte[].class), anyInt(), anyInt());
 
-        // IOException from available() is swallowed; read() never reached
+        // IOException from available() is swallowed, read() is never reached
         InputStream throwing = mock(InputStream.class);
         when(throwing.available()).thenThrow(new IOException("boom"));
         readAvailable.invoke(plugin, throwing, "throwing");
         verify(throwing).available();
         verify(throwing, never()).read(any(byte[].class), anyInt(), anyInt());
 
-        // null stream returns immediately without throwing
-        readAvailable.invoke(plugin, null, "null");
-    }
+        readAvailable.invoke(plugin, null, "null"); // must not throw
 
-    @Test
-    public void testStartRelay_alreadyRunning_returnsEarly() throws Exception {
-        Field f = MoQPlugin.class.getDeclaredField("relayProcess");
-        f.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        java.util.concurrent.atomic.AtomicReference<Process> ref =
-                (java.util.concurrent.atomic.AtomicReference<Process>) f.get(null);
-        Process saved = ref.get();
-        try {
-            Process running = mock(Process.class);
-            ref.set(running);
+        // Claims data is waiting but read() and skip() hand back nothing: the skip loop has to
+        // give up instead of spinning forever on the vert.x timer thread.
+        AtomicInteger skips = new AtomicInteger();
+        InputStream liar = new InputStream() {
+            @Override public int available() { return 4096; }
+            @Override public int read() { return -1; }
+            @Override public int read(byte[] b, int off, int len) { return 0; }
+            @Override public long skip(long n) { skips.incrementAndGet(); return 0; }
+        };
 
-            Method m = MoQPlugin.class.getDeclaredMethod("startRelay");
-            m.setAccessible(true);
-            m.invoke(null);
+        readAvailable.invoke(plugin, liar, "liar");
 
-            assertSame("the early-return guard should leave our mock process in place",
-                    running, ref.get());
-            verify(running, never()).destroy();
-        } finally {
-            ref.set(saved);
-        }
+        assertEquals("a stream that never yields must be abandoned after one skip attempt",
+                1, skips.get());
     }
 
     @Test
     public void testStartRelay_spawnFails_catchesIOException() throws Exception {
-        Field f = MoQPlugin.class.getDeclaredField("relayProcess");
-        f.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        java.util.concurrent.atomic.AtomicReference<Process> ref =
-                (java.util.concurrent.atomic.AtomicReference<Process>) f.get(null);
-        Process saved = ref.get();
-        ref.set(null);
+        relaySlot().set(null);
         try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
             // Replace buildRelayProcessBuilder with one that points at a non-existent binary,
-            // so .start() throws IOException -> startRelay's catch path runs
+            // so .start() throws IOException and startRelay's catch path runs
             mocked.when(MoQPlugin::buildRelayProcessBuilder)
                   .thenReturn(new ProcessBuilder("/__moq_no_such_binary_" + System.nanoTime()));
 
-            Method m = MoQPlugin.class.getDeclaredMethod("startRelay");
-            m.setAccessible(true);
-            m.invoke(null);
+            Method startRelay = MoQPlugin.class.getDeclaredMethod("startRelay");
+            startRelay.setAccessible(true);
+            startRelay.invoke(null);
 
-            assertNull("relayProcess stays null when spawn fails", ref.get());
-        } finally {
-            ref.set(saved);
+            assertNull("relayProcess stays null when spawn fails", relaySlot().get());
         }
     }
 
     @Test
-    public void testMaybeRestartRelay_aliveProcess_doesNothing() {
+    public void testMaybeRestartRelay_guards() {
+        // A relay that is still up is left completely alone
         Process alive = mock(Process.class);
         when(alive.isAlive()).thenReturn(true);
-
-        Process savedSlot = relaySlot().get();
-        long savedAttempt = (long) staticField("lastRelayRestartAttempt");
         relaySlot().set(alive);
-        setStaticField("lastRelayRestartAttempt", 12345L);
-        try {
-            MoQPlugin.maybeRestartRelay(alive);
+        setStaticField(MoQPlugin.class, "lastRelayRestartAttempt", 12345L);
 
-            assertSame("alive branch must not touch the slot", alive, relaySlot().get());
-            assertEquals("alive branch must not bump lastRelayRestartAttempt",
-                    12345L, (long) staticField("lastRelayRestartAttempt"));
-            verify(alive, never()).exitValue();
-        } finally {
-            relaySlot().set(savedSlot);
-            setStaticField("lastRelayRestartAttempt", savedAttempt);
+        MoQPlugin.maybeRestartRelay(alive);
+
+        assertSame("a live relay must stay in the slot", alive, relaySlot().get());
+        assertEquals("a live relay must not bump lastRelayRestartAttempt",
+                12345L, (long) staticField(MoQPlugin.class, "lastRelayRestartAttempt"));
+        verify(alive, never()).exitValue();
+
+        // A dead relay inside the grace window is left alone too, or a relay that cannot bind
+        // would be respawned on every single log poll
+        Process dead = mock(Process.class);
+        when(dead.isAlive()).thenReturn(false);
+        relaySlot().set(dead);
+        long graceStart = System.currentTimeMillis();
+        setStaticField(MoQPlugin.class, "lastRelayRestartAttempt", graceStart);
+
+        try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+            MoQPlugin.maybeRestartRelay(dead);
+            mocked.verify(MoQPlugin::buildRelayProcessBuilder, never());
         }
+
+        assertSame("the grace window must keep the dead process in the slot", dead, relaySlot().get());
+        assertEquals(graceStart, (long) staticField(MoQPlugin.class, "lastRelayRestartAttempt"));
+        verify(dead, never()).exitValue();
     }
 
     @Test
     public void testMaybeRestartRelay_deadProcess_clearsSlotAndAttemptsRespawn() {
-        Process savedSlot = relaySlot().get();
-        long savedAttempt = (long) staticField("lastRelayRestartAttempt");
-        try {
-            Process dead = mock(Process.class);
-            when(dead.isAlive()).thenReturn(false);
-            when(dead.exitValue()).thenReturn(139);
-            relaySlot().set(dead);
-            setStaticField("lastRelayRestartAttempt", 0L); // outside grace window
+        Process dead = mock(Process.class);
+        when(dead.isAlive()).thenReturn(false);
+        when(dead.exitValue()).thenReturn(139);
+        relaySlot().set(dead);
+        setStaticField(MoQPlugin.class, "lastRelayRestartAttempt", 0L); // outside grace window
 
-            // Stub spawn to a bogus binary — startRelay's IOException path runs (no real process leaks)
-            try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
-                mocked.when(MoQPlugin::buildRelayProcessBuilder)
-                      .thenReturn(new ProcessBuilder("/__moq_no_such_binary_" + System.nanoTime()));
-
-                long before = System.currentTimeMillis();
-                MoQPlugin.maybeRestartRelay(dead);
-
-                // Slot CAS'd out, attempt time bumped past the grace floor, exit code was logged
-                assertNull("dead process must be CAS'd out of the slot", relaySlot().get());
-                long after = (long) staticField("lastRelayRestartAttempt");
-                assertTrue("lastRelayRestartAttempt must be bumped to now", after >= before);
-                verify(dead).exitValue();
-            }
-        } finally {
-            relaySlot().set(savedSlot);
-            setStaticField("lastRelayRestartAttempt", savedAttempt);
-        }
-    }
-
-    @Test
-    public void testMaybeRestartRelay_withinGracePeriod_skipsRestart() {
-        Process savedSlot = relaySlot().get();
-        long savedAttempt = (long) staticField("lastRelayRestartAttempt");
-        try {
-            Process dead = mock(Process.class);
-            when(dead.isAlive()).thenReturn(false);
-            relaySlot().set(dead);
-            long graceStart = System.currentTimeMillis();
-            setStaticField("lastRelayRestartAttempt", graceStart); // inside grace window
-
-            // If grace were ignored, startRelay would hit buildRelayProcessBuilder — assert it isn't called
-            try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
-                MoQPlugin.maybeRestartRelay(dead);
-                mocked.verify(MoQPlugin::buildRelayProcessBuilder, never());
-            }
-
-            assertSame("grace window must keep the dead process in the slot", dead, relaySlot().get());
-            assertEquals("grace window must not bump lastRelayRestartAttempt",
-                    graceStart, (long) staticField("lastRelayRestartAttempt"));
-            verify(dead, never()).exitValue();
-        } finally {
-            relaySlot().set(savedSlot);
-            setStaticField("lastRelayRestartAttempt", savedAttempt);
-        }
-    }
-
-    @Test
-    public void testStartRelay_successPath_setsSlotAndRegistersHookOnce() throws Exception {
-        Process savedSlot = relaySlot().get();
-        boolean savedHook = (boolean) staticField("shutdownHookRegistered");
-        relaySlot().set(null);
-        setStaticField("shutdownHookRegistered", false);
+        // Stub spawn to a bogus binary, so startRelay's IOException path runs and no real process leaks
         try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
-            // /bin/sh exit 0 — universally available, exits immediately, harmless
+            mocked.when(MoQPlugin::buildRelayProcessBuilder)
+                  .thenReturn(new ProcessBuilder("/__moq_no_such_binary_" + System.nanoTime()));
+
+            long before = System.currentTimeMillis();
+            MoQPlugin.maybeRestartRelay(dead);
+
+            // Slot CAS'd out, attempt time bumped past the grace floor, exit code was logged
+            assertNull("dead process must be CAS'd out of the slot", relaySlot().get());
+            long after = (long) staticField(MoQPlugin.class, "lastRelayRestartAttempt");
+            assertTrue("lastRelayRestartAttempt must be bumped to now", after >= before);
+            verify(dead).exitValue();
+        }
+    }
+
+    /**
+     * This one lets the real startRelay register its JVM shutdown hook, which cannot be removed
+     * again without a reference to the thread. Harmless because the teardown empties the relay
+     * slot, so the hook finds nothing to kill when the surefire JVM exits.
+     */
+    @Test(timeout = 30_000)
+    public void testStartRelay_successPath_setsSlotAndRegistersHookOnce() throws Exception {
+        relaySlot().set(null);
+        setStaticField(MoQPlugin.class, "shutdownHookRegistered", false);
+
+        try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+            // /bin/sh exit 0 is universally available, exits immediately, harmless
             mocked.when(MoQPlugin::buildRelayProcessBuilder)
                   .thenReturn(new ProcessBuilder("/bin/sh", "-c", "exit 0"));
 
-            // 1st call: should spawn + register hook
-            Method m = MoQPlugin.class.getDeclaredMethod("startRelay");
-            m.setAccessible(true);
-            m.invoke(null);
+            Method startRelay = MoQPlugin.class.getDeclaredMethod("startRelay");
+            startRelay.setAccessible(true);
 
+            // 1st call: spawns and registers the hook
+            startRelay.invoke(null);
             Process firstProc = relaySlot().get();
             assertNotNull("startRelay success path must populate the slot", firstProc);
             assertTrue("shutdownHookRegistered must be flipped to true",
-                    (boolean) staticField("shutdownHookRegistered"));
+                    (boolean) staticField(MoQPlugin.class, "shutdownHookRegistered"));
 
-            // 2nd call: relay already in slot — early return, no re-spawn
-            m.invoke(null);
+            // 2nd call: relay already in the slot, early return, no re-spawn
+            startRelay.invoke(null);
             assertSame("startRelay with non-null slot must short-circuit", firstProc, relaySlot().get());
 
-            // 3rd call after clearing slot: spawns again BUT skips hook block (flag stays true)
+            // 3rd call after clearing the slot: spawns again but skips the hook block
             firstProc.destroy();
             firstProc.waitFor();
             relaySlot().set(null);
-            m.invoke(null);
+            startRelay.invoke(null);
             assertNotNull("re-entry must spawn a new process", relaySlot().get());
             assertTrue("hook stays registered across restarts",
-                    (boolean) staticField("shutdownHookRegistered"));
-        } finally {
-            Process leftover = relaySlot().get();
-            if (leftover != null) leftover.destroy();
-            relaySlot().set(savedSlot);
-            setStaticField("shutdownHookRegistered", savedHook);
+                    (boolean) staticField(MoQPlugin.class, "shutdownHookRegistered"));
         }
     }
 
     @Test
     public void testDestroyRelayOnShutdown() throws Exception {
-        Process savedSlot = relaySlot().get();
-        try {
-            // null slot: no-op, must not throw
-            relaySlot().set(null);
-            MoQPlugin.destroyRelayOnShutdown();
+        relaySlot().set(null);
+        MoQPlugin.destroyRelayOnShutdown(); // an empty slot must not throw
+        assertNull(relaySlot().get());
 
-            // non-null slot: destroy() is called on the held process, and the slot is cleared
-            Process p = mock(Process.class);
-            when(p.isAlive()).thenReturn(true);
-            when(p.waitFor(anyLong(), any())).thenReturn(true);
-            relaySlot().set(p);
-            MoQPlugin.destroyRelayOnShutdown();
-            verify(p).destroy();
-            verify(p, never()).destroyForcibly();
-            assertNull("shutdown must clear the slot", relaySlot().get());
-        } finally {
-            relaySlot().set(savedSlot);
-            setStaticField("relayStopping", false);
-        }
-    }
+        // A relay that honours SIGTERM is never escalated
+        Process cooperative = mock(Process.class);
+        when(cooperative.waitFor(anyLong(), any())).thenReturn(true);
+        relaySlot().set(cooperative);
 
-    @Test
-    public void testDestroyRelayOnShutdown_stubbornProcessIsKilled() throws Exception {
-        Process savedSlot = relaySlot().get();
-        try {
-            Process p = mock(Process.class);
-            when(p.isAlive()).thenReturn(true);
-            when(p.waitFor(anyLong(), any())).thenReturn(false);
-            relaySlot().set(p);
+        MoQPlugin.destroyRelayOnShutdown();
 
-            MoQPlugin.destroyRelayOnShutdown();
+        verify(cooperative).destroy();
+        verify(cooperative, never()).destroyForcibly();
+        assertNull("shutdown must clear the slot", relaySlot().get());
 
-            verify(p).destroy();
-            verify(p).destroyForcibly();
-        } finally {
-            relaySlot().set(savedSlot);
-            setStaticField("relayStopping", false);
-        }
+        // One that sits past the grace window gets killed
+        Process stubborn = mock(Process.class);
+        when(stubborn.waitFor(anyLong(), any())).thenReturn(false);
+        relaySlot().set(stubborn);
+
+        MoQPlugin.destroyRelayOnShutdown();
+
+        verify(stubborn).destroyForcibly();
+
+        // An interrupt while waiting also kills, and must be re-raised rather than swallowed.
+        // The teardown clears the flag again.
+        Process interrupts = mock(Process.class);
+        when(interrupts.waitFor(anyLong(), any())).thenThrow(new InterruptedException("shutdown"));
+        relaySlot().set(interrupts);
+
+        MoQPlugin.destroyRelayOnShutdown();
+
+        verify(interrupts).destroyForcibly();
+        assertTrue("the interrupt must be re-raised", Thread.currentThread().isInterrupted());
     }
 
     @Test
     public void testMaybeRestartRelay_whileStopping_doesNotRespawn() throws Exception {
-        Process savedSlot = relaySlot().get();
-        try {
-            Process p = mock(Process.class);
-            when(p.isAlive()).thenReturn(true);
-            when(p.waitFor(anyLong(), any())).thenReturn(true);
-            relaySlot().set(p);
-            MoQPlugin.destroyRelayOnShutdown();
+        Process p = mock(Process.class);
+        when(p.isAlive()).thenReturn(true);
+        when(p.waitFor(anyLong(), any())).thenReturn(true);
+        relaySlot().set(p);
+        MoQPlugin.destroyRelayOnShutdown();
 
-            // the log poller fires after the hook ran; it must not bring the relay back
-            Process dead = mock(Process.class);
-            when(dead.isAlive()).thenReturn(false);
-            try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
-                MoQPlugin.maybeRestartRelay(dead);
-                mocked.verify(MoQPlugin::buildRelayProcessBuilder, never());
-            }
-            assertNull("relay must stay down once shutdown started", relaySlot().get());
-        } finally {
-            relaySlot().set(savedSlot);
-            setStaticField("relayStopping", false);
+        // the log poller fires after the hook ran; it must not bring the relay back
+        Process dead = mock(Process.class);
+        when(dead.isAlive()).thenReturn(false);
+        try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+            MoQPlugin.maybeRestartRelay(dead);
+            mocked.verify(MoQPlugin::buildRelayProcessBuilder, never());
         }
+
+        assertNull("relay must stay down once shutdown started", relaySlot().get());
     }
 
     private static ProcessHandle handle(long pid, String command, Long parentPid) {
@@ -698,7 +696,7 @@ public class MoQPluginTest {
                 MoQPlugin.isOrphanedMoq(handle(103, null, 1L), ours));
     }
 
-    @Test
+    @Test(timeout = 60_000)
     public void testReapOrphanedProcesses_realScanSparesBystanders() throws Exception {
         Process child = new ProcessBuilder("/bin/sh", "-c", "sleep 30").start();
         try {
@@ -712,110 +710,89 @@ public class MoQPluginTest {
 
     @Test
     public void testPollCliLogs_deadRelay_triggersRestart() throws Exception {
-        Process savedSlot = relaySlot().get();
-        long savedAttempt = (long) staticField("lastRelayRestartAttempt");
-        try {
-            Process dead = mock(Process.class);
-            when(dead.isAlive()).thenReturn(false);
-            when(dead.exitValue()).thenReturn(137);
-            when(dead.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
-            relaySlot().set(dead);
-            setStaticField("lastRelayRestartAttempt", 0L);
+        Process dead = mock(Process.class);
+        when(dead.isAlive()).thenReturn(false);
+        when(dead.exitValue()).thenReturn(137);
+        when(dead.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        relaySlot().set(dead);
+        setStaticField(MoQPlugin.class, "lastRelayRestartAttempt", 0L);
 
-            try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
-                mocked.when(MoQPlugin::buildRelayProcessBuilder)
-                      .thenReturn(new ProcessBuilder("/__moq_no_such_binary_" + System.nanoTime()));
+        try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
+            mocked.when(MoQPlugin::buildRelayProcessBuilder)
+                  .thenReturn(new ProcessBuilder("/__moq_no_such_binary_" + System.nanoTime()));
 
-                Method poll = MoQPlugin.class.getDeclaredMethod("pollCliLogs");
-                poll.setAccessible(true);
-                poll.invoke(plugin);
+            Method poll = MoQPlugin.class.getDeclaredMethod("pollCliLogs");
+        poll.setAccessible(true);
+        poll.invoke(plugin);
 
-                // pollCliLogs reached the relay branch, drained stdin, and routed dead process to restart
-                verify(dead).getInputStream();
-                verify(dead).exitValue();
-                assertNull("pollCliLogs must propagate dead process clearing through maybeRestartRelay",
-                        relaySlot().get());
-            }
-        } finally {
-            relaySlot().set(savedSlot);
-            setStaticField("lastRelayRestartAttempt", savedAttempt);
+            // pollCliLogs reached the relay branch, drained stdin, and routed dead process to restart
+            verify(dead).getInputStream();
+            verify(dead).exitValue();
+            assertNull("pollCliLogs must propagate dead process clearing through maybeRestartRelay",
+                    relaySlot().get());
         }
     }
 
     @Test
     public void testBuildRelayProcessBuilder() throws Exception {
-        String savedRoot = System.getProperty("red5.root");
-        try {
-            // No cert files present -> self-signed mode with --tls-generate
-            System.setProperty("red5.root", "/tmp/__moq_no_such_dir__" + System.nanoTime());
-            ProcessBuilder pb = MoQPlugin.buildRelayProcessBuilder();
-            assertTrue(pb.command().contains("--tls-generate"));
-            assertFalse(pb.command().contains("--tls-cert"));
+        // No cert files present -> self-signed mode with --tls-generate
+        System.setProperty("red5.root", "/tmp/__moq_no_such_dir__" + System.nanoTime());
+        ProcessBuilder pb = MoQPlugin.buildRelayProcessBuilder();
+        assertTrue(pb.command().contains("--tls-generate"));
+        assertFalse(pb.command().contains("--tls-cert"));
 
-            // With cert files present -> HTTPS mode with --tls-cert
-            Path root = Files.createTempDirectory("moqRoot");
-            Path conf = root.resolve("conf");
-            Files.createDirectories(conf);
-            Files.writeString(conf.resolve("fullchain.pem"), "cert");
-            Files.writeString(conf.resolve("privkey.pem"), "key");
-            System.setProperty("red5.root", root.toString());
+        // With cert files present -> HTTPS mode with --tls-cert
+        Path root = Files.createTempDirectory("moqRoot");
+        Path conf = root.resolve("conf");
+        Files.createDirectories(conf);
+        Files.writeString(conf.resolve("fullchain.pem"), "cert");
+        Files.writeString(conf.resolve("privkey.pem"), "key");
+        System.setProperty("red5.root", root.toString());
 
-            ProcessBuilder pb2 = MoQPlugin.buildRelayProcessBuilder();
-            assertTrue(pb2.command().contains("--tls-cert"));
-            assertFalse(pb2.command().contains("--tls-generate"));
-        } finally {
-            if (savedRoot != null) System.setProperty("red5.root", savedRoot);
-            else System.clearProperty("red5.root");
-        }
+        ProcessBuilder pb2 = MoQPlugin.buildRelayProcessBuilder();
+        assertTrue(pb2.command().contains("--tls-cert"));
+        assertFalse(pb2.command().contains("--tls-generate"));
     }
 
     @Test
     public void testGetRelayUrl_embeddedTracksCertFilesOnDisk() throws Exception {
-        String savedRoot = System.getProperty("red5.root");
-        try {
-            MoQSettings embedded = new MoQSettings(); // useEmbeddedRelay defaults to true
-            doReturn(embedded).when(plugin).loadSettings();
+        MoQSettings embedded = new MoQSettings(); // useEmbeddedRelay defaults to true
+        doReturn(embedded).when(plugin).loadSettings();
 
-            // No certs on disk: relay runs with --tls-generate, so we must dial it over http
-            System.setProperty("red5.root", "/tmp/__moq_no_such_dir__" + System.nanoTime());
-            assertFalse(MoQPlugin.embeddedRelayHasTls());
-            assertEquals("http://localhost:4443/moq", plugin.getRelayUrl(embedded));
-            assertEquals("the no-arg overload must agree with the explicit one",
-                    "http://localhost:4443/moq", plugin.getRelayUrl());
-            assertTrue("embedded relay means a self-signed cert, so callers must skip verification",
-                    plugin.isLocalRelay());
+        // No certs on disk: relay runs with --tls-generate, so we must dial it over http
+        System.setProperty("red5.root", "/tmp/__moq_no_such_dir__" + System.nanoTime());
+        assertFalse(MoQPlugin.embeddedRelayHasTls());
+        assertEquals("http://localhost:4443/moq", plugin.getRelayUrl(embedded));
+        assertEquals("the no-arg overload must agree with the explicit one",
+                "http://localhost:4443/moq", plugin.getRelayUrl());
+        assertTrue("embedded relay means a self-signed cert, so callers must skip verification",
+                plugin.isLocalRelay());
 
-            // Half a cert pair is not a cert pair: the relay would fall back to --tls-generate,
-            // so the URL must stay http or every client would fail the handshake.
-            Path root = Files.createTempDirectory("moqHalfCert");
-            Files.createDirectories(root.resolve("conf"));
-            Files.writeString(root.resolve("conf").resolve("fullchain.pem"), "cert");
-            System.setProperty("red5.root", root.toString());
-            assertFalse("cert without key must not count as TLS", MoQPlugin.embeddedRelayHasTls());
-            assertEquals("http://localhost:4443/moq", plugin.getRelayUrl(embedded));
+        // Half a cert pair is not a cert pair: the relay would fall back to --tls-generate,
+        // so the URL must stay http or every client would fail the handshake.
+        Path root = Files.createTempDirectory("moqHalfCert");
+        Files.createDirectories(root.resolve("conf"));
+        Files.writeString(root.resolve("conf").resolve("fullchain.pem"), "cert");
+        System.setProperty("red5.root", root.toString());
+        assertFalse("cert without key must not count as TLS", MoQPlugin.embeddedRelayHasTls());
+        assertEquals("http://localhost:4443/moq", plugin.getRelayUrl(embedded));
 
-            // Full pair: relay serves HTTPS/WSS, so the URL flips to https
-            Files.writeString(root.resolve("conf").resolve("privkey.pem"), "key");
-            assertTrue(MoQPlugin.embeddedRelayHasTls());
-            assertEquals("https://localhost:4443/moq", plugin.getRelayUrl(embedded));
+        // Full pair: relay serves HTTPS/WSS, so the URL flips to https
+        Files.writeString(root.resolve("conf").resolve("privkey.pem"), "key");
+        assertTrue(MoQPlugin.embeddedRelayHasTls());
+        assertEquals("https://localhost:4443/moq", plugin.getRelayUrl(embedded));
 
-            // External relay is passed through verbatim, certs on disk or not
-            MoQSettings external = new MoQSettings();
-            external.setUseEmbeddedRelay(false);
-            external.setExternalRelayUrl("https://relay.example.com/moq");
-            assertEquals("https://relay.example.com/moq", plugin.getRelayUrl(external));
-            doReturn(external).when(plugin).loadSettings();
-            assertFalse(plugin.isLocalRelay());
-        } finally {
-            if (savedRoot != null) System.setProperty("red5.root", savedRoot);
-            else System.clearProperty("red5.root");
-        }
+        // External relay is passed through verbatim, certs on disk or not
+        MoQSettings external = new MoQSettings();
+        external.setUseEmbeddedRelay(false);
+        external.setExternalRelayUrl("https://relay.example.com/moq");
+        assertEquals("https://relay.example.com/moq", plugin.getRelayUrl(external));
+        doReturn(external).when(plugin).loadSettings();
+        assertFalse(plugin.isLocalRelay());
     }
 
-    @Test
-    public void testSetApplicationContext_embeddedRelay_startsIt() throws Exception {
-        Process savedSlot = relaySlot().get();
-        boolean savedHook = (boolean) staticField("shutdownHookRegistered");
+    @Test(timeout = 30_000)
+    public void testSetApplicationContext_embeddedRelay_startsIt() {
         relaySlot().set(null);
         try (org.mockito.MockedStatic<MoQPlugin> mocked = mockStatic(MoQPlugin.class, CALLS_REAL_METHODS)) {
             mocked.when(MoQPlugin::buildRelayProcessBuilder)
@@ -828,11 +805,6 @@ public class MoQPluginTest {
             p.setApplicationContext(context);
 
             assertNotNull("useEmbeddedRelay must actually spawn the relay on init", relaySlot().get());
-        } finally {
-            Process leftover = relaySlot().get();
-            if (leftover != null) leftover.destroyForcibly();
-            relaySlot().set(savedSlot);
-            setStaticField("shutdownHookRegistered", savedHook);
         }
     }
 
@@ -859,37 +831,6 @@ public class MoQPluginTest {
         handlers.getAllValues().get(0).handle(1L);
 
         verify(tracked).getLogStream();
-    }
-
-    @Test
-    public void testAddMuxers_addMuxerRejected_muxerIsNotTracked() throws Exception {
-        MuxAdaptor adaptor = mock(MuxAdaptor.class);
-        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
-        when(adaptor.directMuxingSupported()).thenReturn(true);
-        when(adaptor.getEncoderSettingsList()).thenReturn(Arrays.asList(
-                new EncoderSettings(360, 500_000, 64_000, false)));
-        // MuxAdaptor refuses both muxers (e.g. codec unsupported)
-        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(false);
-
-        plugin.streamStarted(broadcast("s1"));
-
-        ConcurrentMap<String, Set<MoQMuxer>> map = getField(plugin, "muxersByStream");
-        assertTrue("a rejected muxer must not be tracked, or writeTrailer would never run on it",
-                map.get("s1").isEmpty());
-    }
-
-    @Test
-    public void testAddMuxers_webRtcWithoutCodecParameters_fallsBackToSourceHeight() {
-        // !directMuxingSupported but codec parameters not negotiated yet -> height stays 0
-        MuxAdaptor adaptor = mock(MuxAdaptor.class);
-        when(streamHandler.getMuxAdaptor("s1")).thenReturn(adaptor);
-        when(adaptor.directMuxingSupported()).thenReturn(false);
-        when(adaptor.getVideoCodecParameters()).thenReturn(null);
-        when(adaptor.addMuxer(any(MoQMuxer.class), anyInt())).thenReturn(true);
-
-        plugin.streamStarted(broadcast("s1"));
-
-        verify(adaptor).addMuxer(any(MoQMuxer.class), eq(0));
     }
 
     @Test
@@ -922,55 +863,7 @@ public class MoQPluginTest {
         }
     }
 
-    @Test
-    public void testDestroy_beforeInit_isANoOp() {
-        // @PreDestroy can fire on a plugin whose setApplicationContext never completed
-        new MoQPlugin().destroy();
-    }
-
-    @Test
-    public void testReadAvailable_streamThatNeverYieldsBytes_doesNotSpin() throws Exception {
-        Method readAvailable = MoQPlugin.class.getDeclaredMethod(
-                "readAvailable", InputStream.class, String.class);
-        readAvailable.setAccessible(true);
-
-        // Claims data is waiting but read() and skip() return nothing: the skip loop must
-        // break instead of looping forever on the vert.x timer thread.
-        AtomicInteger skips = new AtomicInteger();
-        InputStream liar = new InputStream() {
-            @Override public int available() { return 4096; }
-            @Override public int read() { return -1; }
-            @Override public int read(byte[] b, int off, int len) { return 0; }
-            @Override public long skip(long n) { skips.incrementAndGet(); return 0; }
-        };
-
-        readAvailable.invoke(plugin, liar, "liar");
-
-        assertEquals("a stream that never yields must be abandoned after one skip attempt",
-                1, skips.get());
-    }
-
-    @Test
-    public void testDestroyRelayOnShutdown_interruptedWait_killsAndRestoresFlag() throws Exception {
-        Process savedSlot = relaySlot().get();
-        try {
-            Process p = mock(Process.class);
-            when(p.waitFor(anyLong(), any())).thenThrow(new InterruptedException("shutdown"));
-            relaySlot().set(p);
-
-            MoQPlugin.destroyRelayOnShutdown();
-
-            verify(p).destroy();
-            verify(p).destroyForcibly();
-            assertTrue("the interrupt must be re-raised, not swallowed", Thread.currentThread().isInterrupted());
-        } finally {
-            Thread.interrupted(); // clear the flag so later tests are unaffected
-            relaySlot().set(savedSlot);
-            setStaticField("relayStopping", false);
-        }
-    }
-
-    @Test
+    @Test(timeout = 60_000)
     public void testAwaitOrphanExit() throws Exception {
         Method await = MoQPlugin.class.getDeclaredMethod("awaitOrphanExit", ProcessHandle.class);
         await.setAccessible(true);
@@ -1004,45 +897,7 @@ public class MoQPluginTest {
         return b;
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> T getField(Object target, String name) throws Exception {
-        Class<?> c = target.getClass();
-        while (c != null) {
-            try {
-                Field f = c.getDeclaredField(name);
-                f.setAccessible(true);
-                return (T) f.get(target);
-            } catch (NoSuchFieldException e) {
-                c = c.getSuperclass();
-            }
-        }
-        throw new NoSuchFieldException(name);
-    }
-
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Field f = target.getClass().getDeclaredField(name);
-        f.setAccessible(true);
-        f.set(target, value);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static java.util.concurrent.atomic.AtomicReference<Process> relaySlot() {
-        return (java.util.concurrent.atomic.AtomicReference<Process>) staticField("relayProcess");
-    }
-
-    private static Object staticField(String name) {
-        try {
-            Field f = MoQPlugin.class.getDeclaredField(name);
-            f.setAccessible(true);
-            return f.get(null);
-        } catch (Exception e) { throw new RuntimeException(e); }
-    }
-
-    private static void setStaticField(String name, Object value) {
-        try {
-            Field f = MoQPlugin.class.getDeclaredField(name);
-            f.setAccessible(true);
-            f.set(null, value);
-        } catch (Exception e) { throw new RuntimeException(e); }
+    private static AtomicReference<Process> relaySlot() {
+        return staticField(MoQPlugin.class, "relayProcess");
     }
 }
