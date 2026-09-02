@@ -22,9 +22,11 @@ import javax.annotation.PreDestroy;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Component(value = "moqPlugin")
@@ -33,6 +35,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     private static final Logger logger = LoggerFactory.getLogger(MoQPlugin.class);
     private static final long LOG_POLL_INTERVAL_MS = 2000;
     private static final long RELAY_RESTART_GRACE_MS = 5000;
+    private static final long RELAY_EXIT_GRACE_MS = 2000;
     public  static final int EMBEDDED_RELAY_PORT = 4443;
     public  static final String PUBLISH_TYPE_MOQ = "MoQ";
     public  static final String SETTINGS_KEY     = "plugin.moq";
@@ -46,6 +49,9 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     private static volatile long lastRelayRestartAttempt = 0;
     private static volatile boolean shutdownHookRegistered = false;
 
+    /** Set before we kill the relay ourselves, so the log poller does not respawn it mid-shutdown. */
+    private static volatile boolean relayStopping = false;
+
     private ApplicationContext applicationContext;
     private AppSettings appSettings;
     private Vertx vertx;
@@ -54,6 +60,8 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     // Ingest: external MoQ publishers → AMS
     private MoQAnnouncePoller announcePoller;
     private final ConcurrentMap<String, MoQStreamFetcher> activeIngests = new ConcurrentHashMap<>();
+
+    private long logPollTimerId = -1;
 
     @Override
     public void setApplicationContext(ApplicationContext ctx) throws BeansException {
@@ -65,9 +73,11 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
         app.addStreamListener(this);
 
-        vertx.setPeriodic(LOG_POLL_INTERVAL_MS, l -> pollCliLogs());
+        logPollTimerId = vertx.setPeriodic(LOG_POLL_INTERVAL_MS, l -> pollCliLogs());
 
         MoQSettings settings = loadSettings();
+
+        reapOrphanedProcesses();
 
         if (settings.isUseEmbeddedRelay()) {
             startRelay();
@@ -76,24 +86,23 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         }
 
         String relayUrl = getRelayUrl(settings);
-        if (settings.isIngestEnabled()) {
-            announcePoller = new MoQAnnouncePoller(relayUrl, app.getScope().getName(), this, settings.isUseEmbeddedRelay());
-            announcePoller.start(vertx);
-        }
+        announcePoller = new MoQAnnouncePoller(relayUrl, app.getScope().getName(), this, settings.isUseEmbeddedRelay());
+        announcePoller.start(vertx);
 
-        logger.info("MoQ plugin initialized for app: {}, relay: {}", app.getScope().getName(), relayUrl);
+        logger.info("MoQ plugin initialized for app: {}, relay: {}, cdn: {}",
+                app.getScope().getName(), relayUrl, settings.getMoqCdnUrl());
     }
 
     private static synchronized void startRelay() {
         if (relayProcess.get() != null) {
-            // already running — only one relay per JVM
+            // already running, only one relay per JVM
             return;
         }
+        relayStopping = false;
         try {
             Process p = buildRelayProcessBuilder().redirectErrorStream(true).start();
             relayProcess.set(p);
             if (!shutdownHookRegistered) {
-                // resolves current process at shutdown
                 Runtime.getRuntime().addShutdownHook(new Thread(MoQPlugin::destroyRelayOnShutdown));
                 shutdownHookRegistered = true;
             }
@@ -104,14 +113,65 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     }
 
     static void destroyRelayOnShutdown() {
-        Process curr = relayProcess.get();
-        if (curr != null) {
-            curr.destroy();
+        relayStopping = true;
+        Process curr = relayProcess.getAndSet(null);
+        if (curr == null) {
+            return;
+        }
+        curr.destroy();
+        try {
+            if (!curr.waitFor(RELAY_EXIT_GRACE_MS, TimeUnit.MILLISECONDS)) {
+                logger.warn("MoQ: relay (pid {}) ignored SIGTERM, killing it", curr.pid());
+                curr.destroyForcibly();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            curr.destroyForcibly();
+        }
+    }
+
+    /** Kills moq processes left running by a previous session. */
+    static int reapOrphanedProcesses() {
+        if (ProcessHandle.current().pid() == 1) {
+            return 0;
+        }
+
+        Set<String> ours = Set.of(MoqBinaries.resolve("moq"), MoqBinaries.resolve(MOQ_RELAY_BIN));
+        List<ProcessHandle> orphans = ProcessHandle.allProcesses()
+                .filter(h -> isOrphanedMoq(h, ours))
+                .toList();
+
+        if (orphans.isEmpty()) {
+            return 0;
+        }
+
+        List<Long> pids = orphans.stream().map(ProcessHandle::pid).toList();
+        logger.warn("MoQ: AMS did not shut down cleanly, killing {} orphaned moq process(es): pids {} were still holding port {}",
+                orphans.size(), pids, EMBEDDED_RELAY_PORT);
+
+        orphans.forEach(ProcessHandle::destroyForcibly);
+        orphans.forEach(MoQPlugin::awaitOrphanExit);
+        return orphans.size();
+    }
+
+    static boolean isOrphanedMoq(ProcessHandle h, Set<String> ours) {
+        return h.info().command().map(ours::contains).orElse(false)
+                && h.parent().map(parent -> parent.pid() == 1).orElse(true);
+    }
+
+    private static void awaitOrphanExit(ProcessHandle h) {
+        try {
+            h.onExit().get(RELAY_EXIT_GRACE_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            logger.error("MoQ: orphaned pid {} survived SIGKILL, port {} may still be taken",
+                    h.pid(), EMBEDDED_RELAY_PORT);
         }
     }
 
     static void maybeRestartRelay(Process relay) {
-        if (relay.isAlive()) {
+        if (relayStopping || relay.isAlive()) {
             return;
         }
 
@@ -212,8 +272,14 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
 
     @PreDestroy
     public void destroy() {
-        if (announcePoller != null) {
-            announcePoller.stop(vertx);
+        if (vertx != null) {
+            if (logPollTimerId != -1) {
+                vertx.cancelTimer(logPollTimerId);
+                logPollTimerId = -1;
+            }
+            if (announcePoller != null) {
+                announcePoller.stop(vertx);
+            }
         }
         activeIngests.values().forEach(MoQStreamFetcher::stopStream);
         activeIngests.clear();
@@ -244,7 +310,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
             byte[] buf = new byte[Math.min(available, 2000)];
             int n = stream.read(buf, 0, buf.length);
             if (n > 0 && logger.isInfoEnabled()) {
-                logger.info("[moq-cli {}] {}", name, new String(buf, 0, n));
+                logger.info("[moq {}] {}", name, new String(buf, 0, n));
             }
             // Discard any overflow so the buffer doesn't keep growing across polls.
             long remaining = stream.available();
@@ -267,11 +333,24 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
             return;
         }
 
-        String appName = getApplication().getScope().getName();
         MoQSettings settings = loadSettings();
-        String relayUrl = getRelayUrl(settings);
-        boolean tlsDisableVerify = settings.isUseEmbeddedRelay();
         Set<MoQMuxer> muxers = ConcurrentHashMap.newKeySet();
+
+        addMuxers(muxAdaptor, streamId, getRelayUrl(settings), settings.isUseEmbeddedRelay(), muxers);
+
+        String cdnUrl = settings.getMoqCdnUrl();
+        if (!cdnUrl.isBlank()) {
+            // A CDN is an extra destination, not a replacement, and it has a real certificate.
+            addMuxers(muxAdaptor, streamId, cdnUrl, false, muxers);
+        }
+
+        muxersByStream.put(streamId, muxers);
+        logger.info("MoQ: {} muxer(s) publishing for stream {}, with CDN: {}", muxers.size(), streamId, !cdnUrl.isBlank());
+    }
+
+    /** Attaches one muxer per quality (source plus ABR ladder) publishing to the given URL. */
+    private void addMuxers(MuxAdaptor muxAdaptor, String streamId, String url, boolean tlsDisableVerify, Set<MoQMuxer> muxers) {
+        String appName = getApplication().getScope().getName();
 
         // For direct-muxing (RTMP/SRT), height=0 means "match any resolution".
         // For WebRTC (directMuxingSupported=false), the EncoderAdaptor fallback in addMuxer()
@@ -281,22 +360,19 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
         if (!muxAdaptor.directMuxingSupported() && muxAdaptor.getVideoCodecParameters() != null) {
             sourceAddHeight = muxAdaptor.getVideoCodecParameters().height();
         }
-        MoQMuxer sourceMuxer = new MoQMuxer(vertx, streamId, 0, appName, relayUrl, tlsDisableVerify);
+        MoQMuxer sourceMuxer = new MoQMuxer(vertx, streamId, 0, appName, url, tlsDisableVerify);
         if (muxAdaptor.addMuxer(sourceMuxer, sourceAddHeight)) {
             muxers.add(sourceMuxer);
         }
 
         if (muxAdaptor.getEncoderSettingsList() != null) {
             for (var encoderSettings : muxAdaptor.getEncoderSettingsList()) {
-                MoQMuxer muxer = new MoQMuxer(vertx, streamId, encoderSettings.getHeight(), appName, relayUrl, tlsDisableVerify);
+                MoQMuxer muxer = new MoQMuxer(vertx, streamId, encoderSettings.getHeight(), appName, url, tlsDisableVerify);
                 if (muxAdaptor.addMuxer(muxer, encoderSettings.getHeight())){
                     muxers.add(muxer);
                 }
             }
         }
-
-        muxersByStream.put(streamId, muxers);
-        logger.info("MoQ: {} quality muxer(s) publishing for stream {}", muxers.size(), streamId);
     }
 
     @Override

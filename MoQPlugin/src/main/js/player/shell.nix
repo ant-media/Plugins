@@ -8,8 +8,8 @@ pkgs.mkShell {
 
   shellHook = ''
     echo "AMS MoQ Player/Publisher dev environment"
-    echo "  npm run dev    — start Vite dev server"
-    echo "  npm run build  — production build"
-    echo "  bun install    — needed when deps point at the moq/ submodule (bun workspaces)"
+    echo "  npm install    pulls @moq/watch and @moq/publish from npm"
+    echo "  npm run dev    start Vite dev server"
+    echo "  npm run build  production build"
   '';
 }

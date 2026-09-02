@@ -156,7 +156,7 @@ if (typeof WebTransport === "undefined") {
   } else {
     warn.innerHTML =
       `⚠️ <strong>WebTransport not supported in this browser.</strong> ` +
-      `Falling back to WebSocket — try Chrome/Edge 97+ or Firefox 114+ for low-latency.`;
+      `Falling back to WebSocket, try Chrome/Edge 97+ or Firefox 114+ for low-latency.`;
   }
   errors.appendChild(warn);
 }
@@ -185,7 +185,7 @@ function setRowStatus(i, state, label) {
 async function probeUrl(url, timeoutMs = 4000) {
   const parsed = new URL(url);
 
-  // http:// uses the lib's dev cert-pin flow — probe that endpoint instead of WT.
+  // http:// uses the lib's dev cert-pin flow, so probe that endpoint instead of WT.
   if (parsed.protocol === "http:") {
     const fp = new URL(parsed);
     fp.pathname = "/certificate.sha256";
@@ -244,7 +244,7 @@ async function findWorkingUrl() {
 // ─── Phase 1: Start preview immediately ──────────────────────────────────────
 // Setting source="camera" triggers getUserMedia(). The <video> child inside
 // <moq-publish> automatically receives the raw video track for local preview.
-// No relay URL is set yet — nothing is published to the network.
+// No relay URL is set yet, nothing is published to the network.
 publisher.setAttribute("source", "camera");
 infoStatus.innerHTML = badge("preview", "blue");
 
@@ -276,14 +276,12 @@ btnPublish.addEventListener("click", async () => {
   infoUrl.textContent = workingUrl;
   infoName.textContent = broadcastName;
 
-  // Force H.264. moq-cli's fmp4 exporter only supports H.264/H.265, but browsers with
-  // VP9 hardware encoding (macOS/Apple Silicon) auto-select VP9 first → publish fails with
-  // "unsupported video codec for fmp4 export". The encoder filters its candidate list with
-  // `codec.startsWith(required)`, so "avc1" narrows selection to avc1.* (still tries
-  // hardware first, then software) without locking a specific profile.
-  // Done here (not at module load) so `publisher.broadcast` is guaranteed initialized,
-  // and before `url` is set so the encoder's reactive config picks it up before connecting.
-  publisher.broadcast.video.hd.config.set({ codec: "avc1" });
+  // Force H.264. moq's fmp4 importer only supports H.264/H.265, but browsers that can
+  // hardware encode AV1/VP9 (mostly macOS) pick those first and the publish then fails
+  // with "unsupported video codec". The encoder treats this as a prefix, so "avc1" keeps
+  // hardware selection and profile choice, it only rules out the other families.
+  // Set before `url` so the encoder resolves it before connecting.
+  publisher.video.config.set({ codec: "avc1" });
 
   publisher.setAttribute("url", workingUrl);
   publisher.setAttribute("name", broadcastName);
