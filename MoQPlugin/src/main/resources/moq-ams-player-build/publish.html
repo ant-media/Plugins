@@ -150,20 +150,6 @@
     .source-radio label { cursor: pointer; font-size: 13px; }
     .toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
     .toggle-label input[type=checkbox] { accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer; }
-    .select-label { display: flex; align-items: center; gap: 8px; }
-    .select-label > span { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
-    #controls select {
-      background: #0a0a0a;
-      border: 1px solid #3a3a3a;
-      border-radius: 5px;
-      color: #f0f0f0;
-      font-size: 13px;
-      padding: 5px 8px;
-      outline: none;
-      cursor: pointer;
-    }
-    #controls select:focus    { border-color: #3b82f6; }
-    #controls select:disabled { opacity: 0.45; cursor: not-allowed; }
 
     /* Publish / Stop buttons */
     #btn-row {
@@ -189,7 +175,7 @@
     /* Compat section */
     moq-publish-support { display: block; margin-bottom: 14px; }
   </style>
-  <script type="module" crossorigin src="./assets/publish-D1Wmyzrm.js"></script>
+  <script type="module" crossorigin src="./assets/publish-BcS9mT7p.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/dom-DxD1qYbX.js">
 </head>
 <body>
@@ -244,14 +230,6 @@
     <label class="toggle-label">
       <input type="checkbox" id="chk-invisible" />
       <span>No video</span>
-    </label>
-    <label class="select-label">
-      <span>Audio codec:</span>
-      <select id="sel-audio-codec">
-        <option value="auto">Auto (Opus)</option>
-        <option value="opus">Opus</option>
-        <option value="aac">AAC</option>
-      </select>
     </label>
   </div>
 
