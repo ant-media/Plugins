@@ -9,6 +9,8 @@ import static org.bytedeco.ffmpeg.global.avutil.*;
 import io.antmedia.plugin.MoqBinaries;
 import io.antmedia.plugin.MoqTestBinary;
 import io.vertx.core.Vertx;
+import org.bytedeco.ffmpeg.avcodec.AVCodec;
+import org.bytedeco.ffmpeg.avcodec.AVCodecContext;
 import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avformat.AVFormatContext;
@@ -33,6 +35,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -156,51 +159,133 @@ public class MoQMuxerTest {
         AVRational tb = new AVRational();
         tb.num(1).den(90000);
 
-        // Video + outIdx in map -> sets videoOutStreamIdx
+        // Video + outIdx in map -> sets videoOutStreamIdx, and every argument reaches super untouched
         MoQMuxer m1 = spy(newMuxer(0));
         p.codec_type(AVMEDIA_TYPE_VIDEO);
-        doReturn(true).when(m1).callSuperAddStream(any(), any(), anyInt());
+        doReturn(true).when(m1).callSuperAddStream(any(), any(), anyInt(), any());
         m1.inputOutputStreamIndexMap.put(5, 7);
-        assertTrue(m1.addStream(p, tb, 5));
+        Optional<String> language = Optional.of("eng");
+        assertTrue(m1.addStream(p, tb, 5, language));
         assertEquals(7, getInt(m1, "videoOutStreamIdx"));
+        verify(m1).callSuperAddStream(same(p), same(tb), eq(5), same(language));
+
+        // The three argument overload the direct muxing path uses must land in the same override
+        MoQMuxer m1b = spy(newMuxer(0));
+        doReturn(true).when(m1b).callSuperAddStream(any(), any(), anyInt(), any());
+        m1b.inputOutputStreamIndexMap.put(5, 7);
+        assertTrue(m1b.addStream(p, tb, 5));
+        assertEquals(7, getInt(m1b, "videoOutStreamIdx"));
 
         // Video without outIdx -> field stays at default
         MoQMuxer m2 = spy(newMuxer(0));
         setInt(m2, "videoOutStreamIdx", -1);
-        doReturn(true).when(m2).callSuperAddStream(any(), any(), anyInt());
-        assertTrue(m2.addStream(p, tb, 5));
+        doReturn(true).when(m2).callSuperAddStream(any(), any(), anyInt(), any());
+        assertTrue(m2.addStream(p, tb, 5, Optional.empty()));
         assertEquals(-1, getInt(m2, "videoOutStreamIdx"));
 
         // Audio: never touches videoOutStreamIdx, even with outIdx in map
         MoQMuxer m3 = spy(newMuxer(0));
         setInt(m3, "videoOutStreamIdx", -1);
         p.codec_type(AVMEDIA_TYPE_AUDIO);
-        doReturn(true).when(m3).callSuperAddStream(any(), any(), anyInt());
+        doReturn(true).when(m3).callSuperAddStream(any(), any(), anyInt(), any());
         m3.inputOutputStreamIndexMap.put(0, 0);
-        assertTrue(m3.addStream(p, tb, 0));
+        assertTrue(m3.addStream(p, tb, 0, Optional.empty()));
         assertEquals(-1, getInt(m3, "videoOutStreamIdx"));
 
         // Super fails -> returns false
         MoQMuxer m4 = spy(newMuxer(0));
         p.codec_type(AVMEDIA_TYPE_VIDEO);
-        doReturn(false).when(m4).callSuperAddStream(any(), any(), anyInt());
-        assertFalse(m4.addStream(p, tb, 5));
+        doReturn(false).when(m4).callSuperAddStream(any(), any(), anyInt(), any());
+        assertFalse(m4.addStream(p, tb, 5, Optional.empty()));
 
-        // AAC registers the ADTS to ASC filter; other codecs do not
+        // ADTS AAC (no extradata) registers the ADTS to ASC filter; other codecs do not
         MoQMuxer m5 = spy(newMuxer(0));
         p.codec_type(AVMEDIA_TYPE_AUDIO);
         p.codec_id(AV_CODEC_ID_AAC);
-        doReturn(true).when(m5).callSuperAddStream(any(), any(), anyInt());
-        assertTrue(m5.addStream(p, tb, 1));
+        doReturn(true).when(m5).callSuperAddStream(any(), any(), anyInt(), any());
+        assertTrue(m5.addStream(p, tb, 1, Optional.empty()));
         assertTrue(m5.getBsfAudioNames().contains("aac_adtstoasc"));
 
         MoQMuxer m6 = spy(newMuxer(0));
         p.codec_id(AV_CODEC_ID_OPUS);
-        doReturn(true).when(m6).callSuperAddStream(any(), any(), anyInt());
-        assertTrue(m6.addStream(p, tb, 1));
+        doReturn(true).when(m6).callSuperAddStream(any(), any(), anyInt(), any());
+        assertTrue(m6.addStream(p, tb, 1, Optional.empty()));
         assertTrue(m6.getBsfAudioNames().isEmpty());
 
+        // AAC that already carries an ASC (the transcoder output) must not be filtered
+        MoQMuxer m7 = spy(newMuxer(0));
+        AVCodecParameters asc = new AVCodecParameters();
+        asc.codec_type(AVMEDIA_TYPE_AUDIO);
+        asc.codec_id(AV_CODEC_ID_AAC);
+        BytePointer ascData = new BytePointer(new byte[] { 0x11, (byte) 0x90 });
+        asc.extradata(ascData);
+        asc.extradata_size(2);
+        doReturn(true).when(m7).callSuperAddStream(any(), any(), anyInt(), any());
+        assertTrue(m7.addStream(asc, tb, 1, Optional.empty()));
+        assertTrue(m7.getBsfAudioNames().isEmpty());
+
+        asc.extradata_size(0);
+        asc.extradata(null);
+        asc.close(); ascData.close();
         p.close(); tb.close();
+    }
+
+    /**
+     * The whole ABR rung and WebRTC ingest contract in one test. The transcoder never calls
+     * addStream(codecpar, timebase, index): it calls the AVCodecContext overload, which jumps
+     * straight to the four argument one. Override only the three argument version and
+     * videoOutStreamIdx stays -1, no header is ever written, and the broadcast is silent.
+     */
+    @Test
+    public void testAddStreamFromCodecContext_writesTheHeaderOnTheFirstKeyframe() throws Exception {
+        MoQMuxer muxer = spy(newMuxer(720));
+        doNothing().when(muxer).startMoqCli();
+        doNothing().when(muxer).callSuperWriteVideoFrame(any(), any());
+
+        AVRational tb = new AVRational();
+        tb.num(1).den(30);
+
+        // An H264Encoder as AMS opens it: AV_CODEC_FLAG_GLOBAL_HEADER, so SPS/PPS sit in Annex B
+        // extradata and the packets themselves carry slices only.
+        AVCodecContext ctx = avcodec_alloc_context3((AVCodec) null);
+        ctx.codec_type(AVMEDIA_TYPE_VIDEO);
+        ctx.codec_id(AV_CODEC_ID_H264);
+        ctx.width(176);
+        ctx.height(144);
+        ctx.pix_fmt(AV_PIX_FMT_YUV420P);
+        ctx.time_base(tb);
+        ctx.extradata(avMallocCopy(SPS_PPS_ANNEXB));
+        ctx.extradata_size(SPS_PPS_ANNEXB.length);
+
+        assertTrue(muxer.addStream((AVCodec) null, ctx, 0));
+        assertEquals("the AVCodecContext path must register the video output index",
+                0, getInt(muxer, "videoOutStreamIdx"));
+
+        AVFormatContext out = muxer.getOutputFormatContext();
+        assertArrayEquals("the encoder's SPS/PPS must land on the output stream",
+                SPS_PPS_ANNEXB, extradataOf(out.streams(0)));
+
+        assertTrue(muxer.prepareIO());
+
+        AVPacket idr = keyframe(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x65, 0x11, 0x22, 0x33 });
+        invokeWriteVideoFrame(muxer, idr, out);
+
+        assertTrue("an ABR rung must write its header on the first keyframe, or it publishes nothing",
+                getBoolean(muxer, "headerWritten"));
+        verify(muxer).callSuperWriteVideoFrame(idr, out);
+
+        idr.close();
+        avcodec_free_context(ctx);
+        tb.close();
+    }
+
+    /** extradata handed to an AVCodecContext must be av_malloc'd: avcodec_free_context frees it. */
+    private static BytePointer avMallocCopy(byte[] data) {
+        BytePointer ptr = new BytePointer(av_mallocz(data.length + (long) AV_INPUT_BUFFER_PADDING_SIZE));
+        for (int i = 0; i < data.length; i++) {
+            ptr.put(i, data[i]);
+        }
+        return ptr;
     }
 
     @Test
@@ -246,29 +331,45 @@ public class MoQMuxerTest {
 
     @Test
     public void testAddAudioStream() {
-        // AAC: super=true -> no OpusHead path executed
+        // AAC carries its config in the esds box the base class already wrote, so an OpusHead
+        // stapled onto it would corrupt the track
         MoQMuxer aac = spy(newMuxer(0));
+        AVFormatContext aacCtx = aac.getOutputFormatContext();
+        avformat_new_stream(aacCtx, null);
+        aac.inputOutputStreamIndexMap.put(0, 0);
         doReturn(true).when(aac).callSuperAddAudioStream(anyInt(), any(), anyInt(), anyInt());
         assertTrue(aac.addAudioStream(48000, null, AV_CODEC_ID_AAC, 0));
+        assertEquals("only Opus gets a synthesised header",
+                0, aacCtx.streams(0).codecpar().extradata_size());
 
-        // Opus + no outIdx in map -> warns and skips extradata setup
+        // Opus + no outIdx in map -> warns and skips extradata setup rather than guessing an index
         MoQMuxer opusNoMap = spy(newMuxer(0));
+        AVFormatContext noMapCtx = opusNoMap.getOutputFormatContext();
+        avformat_new_stream(noMapCtx, null);
         doReturn(true).when(opusNoMap).callSuperAddAudioStream(anyInt(), any(), anyInt(), anyInt());
         assertTrue(opusNoMap.addAudioStream(48000, null, AV_CODEC_ID_OPUS, 0));
+        assertEquals("an unmapped stream must be left alone, not written to at index 0",
+                0, noMapCtx.streams(0).codecpar().extradata_size());
 
-        // Opus + outIdx in map -> OpusHead synthesised and stored as 19-byte extradata
+        // Opus + outIdx in map -> OpusHead synthesised and stored as 19-byte extradata.
+        // A null channel layout is the WebRTC case, and has to fall back to stereo.
         MoQMuxer opusInMap = spy(newMuxer(0));
         AVFormatContext ctx = opusInMap.getOutputFormatContext();
         avformat_new_stream(ctx, null); // index 0
         opusInMap.inputOutputStreamIndexMap.put(0, 0);
         doReturn(true).when(opusInMap).callSuperAddAudioStream(anyInt(), any(), anyInt(), anyInt());
         assertTrue(opusInMap.addAudioStream(48000, null, AV_CODEC_ID_OPUS, 0));
-        assertEquals(19, ctx.streams(0).codecpar().extradata_size());
+        assertArrayEquals(MoQMuxer.buildOpusHead(2, 48000), extradataOf(ctx.streams(0)));
 
-        // Super fails -> returns false (whatever the codec)
+        // Super fails -> returns false and the stream is left untouched
         MoQMuxer fail = spy(newMuxer(0));
+        AVFormatContext failCtx = fail.getOutputFormatContext();
+        avformat_new_stream(failCtx, null);
+        fail.inputOutputStreamIndexMap.put(0, 0);
         doReturn(false).when(fail).callSuperAddAudioStream(anyInt(), any(), anyInt(), anyInt());
         assertFalse(fail.addAudioStream(48000, null, AV_CODEC_ID_OPUS, 0));
+        assertEquals("a rejected stream must not get extradata",
+                0, failCtx.streams(0).codecpar().extradata_size());
     }
 
     @Test

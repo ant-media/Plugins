@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -98,16 +99,25 @@ public class MoQMuxer extends Muxer {
         return result;
     }
 
-    /** Direct-muxing path. The base class copies codecpar but never sets videoOutStreamIdx, so do it here. */
+    /**
+     * The base class copies codecpar but never sets videoOutStreamIdx, so do it here.
+     * <p>
+     * This is the four argument overload on purpose. Direct muxing (RTMP/SRT) goes through the three
+     * argument one, but the transcoder calls addStream(AVCodec, AVCodecContext, int), which lands
+     * here directly. Override only the three argument version and every ABR rung and every WebRTC
+     * ingest ends up with videoOutStreamIdx == -1, no header, and a silent broadcast.
+     */
     @Override
-    public synchronized boolean addStream(AVCodecParameters codecParameters, AVRational timebase, int streamIndex) {
+    public synchronized boolean addStream(AVCodecParameters codecParameters, AVRational timebase, int streamIndex,
+            Optional<String> language) {
         int codecType = codecParameters.codec_type();
-        if (codecParameters.codec_id() == AV_CODEC_ID_AAC) {
+        if (codecParameters.codec_id() == AV_CODEC_ID_AAC && codecParameters.extradata_size() <= 0) {
             // MPEG-TS ingest (SRT) delivers ADTS AAC with no extradata. fMP4 needs the config in an
             // esds/ASC box, and movenc rejects every ADTS packet with EPERM without this filter.
+            // The AAC encoder already hands us an ASC, so it must not go through the filter.
             setAudioBitreamFilter("aac_adtstoasc");
         }
-        boolean result = callSuperAddStream(codecParameters, timebase, streamIndex);
+        boolean result = callSuperAddStream(codecParameters, timebase, streamIndex, language);
         if (result && codecType == AVMEDIA_TYPE_VIDEO) {
             Integer outIdx = inputOutputStreamIndexMap.get(streamIndex);
             if (outIdx != null) {
@@ -250,7 +260,11 @@ public class MoQMuxer extends Muxer {
 
     /** Lazily prepares extradata + writes the AVFormat header on the first keyframe. Returns true once {@code headerWritten}. */
     private boolean ensureHeaderWritten(AVPacket pkt, AVFormatContext context) {
-        if (videoOutStreamIdx < 0 || headerFailed) {
+        if (videoOutStreamIdx < 0) {
+            logPacketIssue("No video output stream registered for {}, nothing will be published", streamName);
+            return false;
+        }
+        if (headerFailed) {
             return false;
         }
         AVStream outStream = context.streams(videoOutStreamIdx);
@@ -495,8 +509,9 @@ public class MoQMuxer extends Muxer {
         return super.addVideoStream(width, height, timebase, codecId, streamIndex, isAVC, codecpar);
     }
 
-    protected boolean callSuperAddStream(AVCodecParameters codecParameters, AVRational timebase, int streamIndex) {
-        return super.addStream(codecParameters, timebase, streamIndex);
+    protected boolean callSuperAddStream(AVCodecParameters codecParameters, AVRational timebase, int streamIndex,
+            Optional<String> language) {
+        return super.addStream(codecParameters, timebase, streamIndex, language);
     }
 
     protected boolean callSuperAddAudioStream(int sampleRate, AVChannelLayout channelLayout, int codecId, int streamIndex) {

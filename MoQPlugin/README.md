@@ -111,10 +111,13 @@ Or from a terminal, which is how you tell a CDN problem from a browser problem:
 ```bash
 moq --client-connect "https://draft-16.cloudflare.mediaoverquic.com/<SUBSCRIBE_TOKEN>" \
     --client-bind 0.0.0.0:0 \
-    --broadcast live/<streamId>/source export fmp4 | ffplay -fflags nobuffer -flags low_delay -i -
+    --broadcast live/<streamId>/source export fmp4 --fragment-duration 0s \
+    | ffplay -fflags nobuffer -flags low_delay -i -
 ```
 
 `--client-bind 0.0.0.0:0` keeps `moq` off IPv6. Without it it binds `[::]:0` and dies with `NetworkUnreachable` on a host with no IPv6 route. The plugin always passes it.
+
+`--fragment-duration 0s` is not optional if you care about the latency you measure. Leave it out and `export fmp4` emits one fragment per GOP, and audio never.
 
 Cloudflare specifics:
 

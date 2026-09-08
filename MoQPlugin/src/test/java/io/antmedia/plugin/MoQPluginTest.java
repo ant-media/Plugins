@@ -438,21 +438,29 @@ public class MoQPluginTest {
     @Test
     public void testPollCliLogs_muxerSide() throws Exception {
         // Separate test because mock(MoQMuxer.class) requires FFmpeg natives
+        ByteArrayInputStream stderr = new ByteArrayInputStream("muxlog\n".getBytes());
         MoQMuxer muxer = mock(MoQMuxer.class);
-        when(muxer.getCliErrorStream()).thenReturn(new ByteArrayInputStream("muxlog\n".getBytes()));
+        when(muxer.getCliErrorStream()).thenReturn(stderr);
         when(muxer.getOutputURL()).thenReturn("moq://live/s1/source");
+
+        // A muxer that never started moq has no stderr, and must not take the poll down with it
+        MoQMuxer notStarted = mock(MoQMuxer.class);
+        when(notStarted.getCliErrorStream()).thenReturn(null);
 
         ConcurrentMap<String, Set<MoQMuxer>> muxers = getField(plugin, "muxersByStream");
         Set<MoQMuxer> set = ConcurrentHashMap.newKeySet();
         set.add(muxer);
+        set.add(notStarted);
         muxers.put("s1", set);
 
         Method poll = MoQPlugin.class.getDeclaredMethod("pollCliLogs");
         poll.setAccessible(true);
         poll.invoke(plugin);
 
-        verify(muxer).getCliErrorStream();
         verify(muxer).getOutputURL();
+        assertEquals("moq stderr must actually be drained, or it fills and blocks the process",
+                0, stderr.available());
+        verify(notStarted).getCliErrorStream();
     }
 
     @Test
