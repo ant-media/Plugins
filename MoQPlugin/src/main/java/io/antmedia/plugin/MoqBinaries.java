@@ -9,6 +9,9 @@ import java.util.concurrent.ConcurrentMap;
 
 public final class MoqBinaries {
 
+    /** moq-cli binds [::]:0 by default, which picks the AAAA record and dies on hosts without an IPv6 route. */
+    public static final String CLIENT_BIND = "0.0.0.0:0";
+
     private static final Logger logger = LoggerFactory.getLogger(MoqBinaries.class);
     private static final ConcurrentMap<String, String> cache = new ConcurrentHashMap<>();
 

@@ -1,4 +1,5 @@
 import "@moq/watch/element";
+import "@moq/watch/ui";
 import "@moq/watch/support/element";
 
 // ─── Elements ────────────────────────────────────────────────────────────────
@@ -13,12 +14,7 @@ const infoMode     = document.getElementById("info-mode");
 const infoStatus   = document.getElementById("info-status");
 const streamForm   = document.getElementById("stream-control");
 const streamInput  = document.getElementById("stream-input");
-const modeRadios   = document.querySelectorAll("input[name=mode]");
-const volumeSlider = document.getElementById("volume-slider");
-const volumeIcon   = document.getElementById("volume-icon");
-const volumeLabel  = document.getElementById("volume-label");
-const jitterSlider = document.getElementById("jitter-slider");
-const jitterLabel  = document.getElementById("jitter-label");
+const publishLink  = document.getElementById("publish-link");
 const dbgFps       = document.getElementById("dbg-fps");
 const dbgBuf       = document.getElementById("dbg-buf");
 const dbgStalled   = document.getElementById("dbg-stalled");
@@ -52,115 +48,29 @@ const broadcastName =
 // Source host: ?url= (full URL or just hostname[:port]), or ?host=, or page hostname
 const rawUrl  = params.get("url") ?? params.get("host") ?? null;
 
-// Force MSE fallback player: ?fallbackPlayer=true
-const forceFallback = params.get("fallbackPlayer") === "true";
+// Jitter buffer override: ?latency=<ms>, or "real-time" to size it from RTT instead.
+// The page default lives on the element; see the note there before lowering it.
+const latency = params.get("latency");
+if (latency) player.setAttribute("latency", latency);
+
+// Send the publish page to the same relay we were pointed at.
+if (rawUrl) publishLink.href = `publish.html?url=${encodeURIComponent(rawUrl)}`;
 
 // Pre-fill the stream input from URL params (if provided)
 streamInput.value = broadcastName ?? "";
 infoName.textContent = broadcastName ?? "—";
 
 // ─── WebCodecs check ─────────────────────────────────────────────────────────
-const hasWebCodecs = typeof VideoDecoder !== "undefined";
-
-if (!hasWebCodecs) {
-  const warn = document.createElement("div");
-  warn.className = "banner banner-warn";
-  warn.innerHTML =
-    `⚠️ <strong>WebCodecs is not supported in this browser.</strong> ` +
-    `Falling back to MSE player. Chrome 94+, Edge 94+, or Safari 17.4+ required for WebCodecs.`;
-  errors.appendChild(warn);
+// Required: the library dropped its MSE renderer, a <canvas> is the only output.
+if (typeof VideoDecoder === "undefined") {
+  showError("WebCodecs is not supported in this browser. Chrome 94+, Edge 94+, or Safari 17.4+ required.");
+  infoMode.innerHTML = badge("unsupported", "red");
+} else {
+  infoMode.innerHTML = badge("WebCodecs", "blue");
 }
-
-// ─── Player mode switching ────────────────────────────────────────────────────
-/**
- * "auto"       → canvas if WebCodecs available, else video (MSE)
- * "webcodecs"  → force canvas
- * "mse"        → force video
- */
-// ─── Jitter (buffer) settings per player mode ────────────────────────────────
-// Increase jitter for MSE because it needs more buffer for smooth playback.
-// WebCodecs decodes frame-by-frame so 100ms is sufficient.
-// Search "MSE_JITTER" to find this quickly.
-const JITTER_WEBCODECS = 100; // ms
-const JITTER_MSE       = 200; // ms — MSE_JITTER
-
-function applyMode(mode) {
-  const useCanvas = mode === "webcodecs" || (mode === "auto" && hasWebCodecs);
-
-  // Remove existing child element and replace with the correct one
-  const existing = player.querySelector("canvas, video");
-  if (existing) existing.remove();
-
-  if (useCanvas) {
-    const canvas = document.createElement("canvas");
-    player.appendChild(canvas);
-    player.setAttribute("jitter", JITTER_WEBCODECS);
-    jitterSlider.value = JITTER_WEBCODECS;
-    jitterLabel.textContent = `${JITTER_WEBCODECS} ms`;
-    infoMode.innerHTML = badge("WebCodecs (canvas)", "blue");
-  } else {
-    const video = document.createElement("video");
-    video.autoplay = true;
-    video.muted = true;
-    player.appendChild(video);
-    player.setAttribute("jitter", JITTER_MSE);
-    jitterSlider.value = JITTER_MSE;
-    jitterLabel.textContent = `${JITTER_MSE} ms`;
-    infoMode.innerHTML = badge("MSE (video)", "yellow");
-  }
-}
-
-// Apply initial mode — forced MSE if ?fallbackPlayer=true, otherwise auto
-const initialMode = forceFallback ? "mse" : "auto";
-applyMode(initialMode);
-document.querySelector(`input[name=mode][value="${initialMode}"]`).checked = true;
-
-// Wire up radio buttons
-// No need to re-set url/name: the MutationObserver inside moq-watch detects the
-// new child element and reactively re-initialises the backend on its own.
-modeRadios.forEach((radio) => {
-  radio.addEventListener("change", () => applyMode(radio.value));
-});
-
-// ─── Volume control ───────────────────────────────────────────────────────────
-// Player starts muted (muted attribute on <moq-watch>). Slider unmutes on first move.
-function applyVolume(pct) {
-  const muted = pct === 0;
-  if (muted) {
-    player.setAttribute("muted", "");
-    volumeIcon.textContent = "🔇";
-    volumeLabel.textContent = "muted";
-  } else {
-    player.removeAttribute("muted");
-    player.setAttribute("volume", (pct / 100).toFixed(2));
-    volumeIcon.textContent = pct < 50 ? "🔉" : "🔊";
-    volumeLabel.textContent = `${pct}%`;
-  }
-}
-
-volumeSlider.addEventListener("input", () => applyVolume(Number(volumeSlider.value)));
-volumeIcon.addEventListener("click", () => {
-  if (player.hasAttribute("muted")) {
-    // Unmute at last used volume, or 50% if never set
-    const last = Number(volumeSlider.value) || 50;
-    volumeSlider.value = last;
-    applyVolume(last);
-  } else {
-    volumeSlider.value = 0;
-    applyVolume(0);
-  }
-});
-
-// ─── Jitter slider ────────────────────────────────────────────────────────────
-jitterSlider.addEventListener("input", () => {
-  const ms = Number(jitterSlider.value);
-  jitterLabel.textContent = `${ms} ms`;
-  player.setAttribute("jitter", ms);
-});
 
 // ─── Debug stats panel ────────────────────────────────────────────────────────
-// Polls player.backend signals every second.
-// FPS is calculated from the frameCount delta (WebCodecs only; N/A for MSE).
+// Polls the decoder and sync signals every second. FPS is the frameCount delta.
 let prevFrameCount = 0;
 
 function formatBytes(n) {
@@ -171,59 +81,26 @@ function formatBytes(n) {
 }
 
 setInterval(() => {
-  const b = player.backend;
-  if (!b) return;
-
-  // FPS — WebCodecs only (MSE stats not implemented in library)
-  const vstats = b.video.stats.peek();
-  if (vstats) {
-    const fps = vstats.frameCount - prevFrameCount;
-    prevFrameCount = vstats.frameCount;
-    dbgFps.textContent = `${fps} fps`;
+  const stats = player.video.out.stats.peek();
+  if (stats) {
+    dbgFps.textContent = `${stats.frameCount - prevFrameCount} fps`;
     dbgFps.className = "dbg-value ok";
-    dbgVbytes.textContent = formatBytes(vstats.bytesReceived);
-  } else {
-    dbgFps.textContent = "N/A (MSE)";
-    dbgFps.className = "dbg-value";
-    dbgVbytes.textContent = "—";
+    prevFrameCount = stats.frameCount;
+    dbgVbytes.textContent = formatBytes(stats.bytesReceived);
   }
 
-  // Buffer size — works for both modes
-  const buffered = b.video.buffered.peek();
-  if (buffered && buffered.length > 0) {
-    const range = buffered[buffered.length - 1];
-    const sizeMs = range.end - range.start;
-    dbgBuf.textContent = `${sizeMs.toFixed(0)} ms`;
-  } else {
-    dbgBuf.textContent = "empty";
-  }
+  const buffered = player.video.out.buffered.peek();
+  const range = buffered[buffered.length - 1];
+  dbgBuf.textContent = range ? `${(range.end - range.start).toFixed(0)} ms` : "empty";
 
-  // Stalled
-  const stalled = b.video.stalled.peek();
+  const stalled = player.video.out.stalled.peek();
   dbgStalled.textContent = stalled ? "yes" : "no";
   dbgStalled.className = `dbg-value ${stalled ? "stalled" : "ok"}`;
 
-  // Computed latency and active jitter from sync
-  const latency = b.video.source.sync.latency.peek();
-  dbgLatency.textContent = latency != null ? `${latency.toFixed(0)} ms` : "—";
-
-  const activeJitter = b.jitter.peek();
-  dbgJitter.textContent = activeJitter != null ? `${activeJitter} ms` : "—";
-
-  // Codec from current video config
-  const config = b.video.source.config.peek();
-  dbgCodec.textContent = config?.codec ?? "—";
+  dbgLatency.textContent = `${player.sync.out.buffer.peek().toFixed(0)} ms`;
+  dbgJitter.textContent = `${player.sync.out.jitter.peek().toFixed(0)} ms`;
+  dbgCodec.textContent = player.video.source.out.config.peek()?.codec ?? "—";
 }, 1000);
-
-// Disable WebCodecs radio if not supported
-if (!hasWebCodecs) {
-  const wcRadio = document.querySelector("input[value=webcodecs]");
-  if (wcRadio) {
-    wcRadio.disabled = true;
-    wcRadio.closest("label").style.opacity = "0.4";
-    wcRadio.closest("label").title = "WebCodecs not supported in this browser";
-  }
-}
 
 // ─── Build URL candidates ─────────────────────────────────────────────────────
 function formatHost(hostname) {
@@ -290,7 +167,7 @@ if (typeof WebTransport === "undefined") {
   } else {
     warn.innerHTML =
       `⚠️ <strong>WebTransport not supported in this browser.</strong> ` +
-      `Falling back to WebSocket — try Chrome/Edge 97+ or Firefox 114+ for low-latency.`;
+      `Falling back to WebSocket, try Chrome/Edge 97+ or Firefox 114+ for low-latency.`;
   }
   errors.appendChild(warn);
 }
@@ -319,7 +196,7 @@ function setRowStatus(i, state, label) {
 async function probeUrl(url, timeoutMs = 4000) {
   const parsed = new URL(url);
 
-  // http:// uses the lib's dev cert-pin flow — probe that endpoint instead of WT.
+  // http:// uses the lib's dev cert-pin flow, so probe that endpoint instead of WT.
   if (parsed.protocol === "http:") {
     const fp = new URL(parsed);
     fp.pathname = "/certificate.sha256";
@@ -378,13 +255,12 @@ async function findWorkingUrl() {
 }
 
 // ─── Quality discovery ────────────────────────────────────────────────────────
-// The npm @moq/lite@0.1.5 does not have connection.announced as a Signal.
-// Instead we use Established.announced() — an async iterator that emits
-// { path, active } entries as the relay announces/unannounces tracks.
+// AMS publishes each ABR rung as its own broadcast, so switching quality means
+// pointing the player at a different name rather than picking a catalog rendition.
 
 let currentStreamId = broadcastName ?? "";
-let currentBroadcasts = new Set();
-let currentSelected = "";
+const currentBroadcasts = new Set();
+let currentSelected = broadcastName ?? "";
 
 function renderQualities() {
   qualityButtons.innerHTML = "";
@@ -416,56 +292,34 @@ function renderQualities() {
     btn.className = "quality-btn" + (isSelected ? " active" : "");
     btn.addEventListener("click", () => {
       player.name = name;
+      currentSelected = name;
+      renderQualities();
     });
     qualityButtons.appendChild(btn);
   }
 }
 
-// Track the active connection so we can detect stale loops on reconnect.
-let activeConn = null;
+// This stream spans reconnects: the library retracts everything on a drop and
+// re-announces on reconnect, so the set stays accurate without tracking sessions.
+(async () => {
+  const announced = player.connection.announced();
+  for (;;) {
+    const entry = await announced.next();
+    if (!entry) break;
 
-player.connection.established.subscribe(async (conn) => {
-  // Clear stale broadcasts whenever the connection changes.
-  currentBroadcasts = new Set();
-  renderQualities();
-
-  if (!conn) return;
-  activeConn = conn;
-
-  const announced = conn.announced();
-
-  try {
-    for (;;) {
-      const entry = await announced.next();
-      if (!entry) break; // connection closed
-
-      // Ignore updates from a stale connection (reconnect happened).
-      if (activeConn !== conn) break;
-
-      const name = entry.path.toString();
-      if (entry.active) {
-        currentBroadcasts = new Set([...currentBroadcasts, name]);
-      } else {
-        currentBroadcasts = new Set([...currentBroadcasts].filter((p) => p !== name));
-      }
-      renderQualities();
-    }
-  } catch {
-    // Connection dropped — next established event will restart discovery.
+    const name = entry.path.toString();
+    if (entry.active) currentBroadcasts.add(name);
+    else currentBroadcasts.delete(name);
+    renderQualities();
   }
-});
-
-// Keep active quality button highlighted when player.broadcast.name changes.
-player.broadcast.name.subscribe((name) => {
-  currentSelected = name.toString();
-  renderQualities();
-});
+})();
 
 // ─── Stream ID form ───────────────────────────────────────────────────────────
 // Apply a new stream ID to the player (works before and after relay is connected).
 function applyStreamId(id) {
   if (!id) return;
   currentStreamId = id;
+  currentSelected = id;
   player.setAttribute("name", id);
   infoName.textContent = id;
   renderQualities();

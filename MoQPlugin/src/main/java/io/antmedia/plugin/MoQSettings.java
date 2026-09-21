@@ -9,8 +9,8 @@ public class MoQSettings {
      * relay URL resolution lives in MoQPlugin#getRelayUrl() */
     private String externalRelayUrl = "https://localhost:4443/moq";
 
-    /** If true, the plugin polls the relay for external publishers and ingests them into AMS. */
-    private boolean ingestEnabled = true;
+    /** When set, streams are also published to this CDN (EX: Cloudflare MoQ relay url) */
+    private String moqCdnUrl = "";
 
     /** How often to poll the relay's /announced endpoint, in milliseconds. */
     private int ingestPollIntervalMs = 2000;
@@ -22,8 +22,8 @@ public class MoQSettings {
     public String getExternalRelayUrl() { return externalRelayUrl; }
     public void setExternalRelayUrl(String v) { this.externalRelayUrl = v; }
 
-    public boolean isIngestEnabled() { return ingestEnabled; }
-    public void setIngestEnabled(boolean v) { this.ingestEnabled = v; }
+    public String getMoqCdnUrl() { return moqCdnUrl; }
+    public void setMoqCdnUrl(String v) { this.moqCdnUrl = v; }
 
     public int getIngestPollIntervalMs() { return ingestPollIntervalMs; }
     public void setIngestPollIntervalMs(int v) { this.ingestPollIntervalMs = v; }
