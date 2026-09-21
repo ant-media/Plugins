@@ -15,15 +15,25 @@ import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_PCM_ALAW;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_PCM_MULAW;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_VORBIS;
 import static org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_VP8;
+import static org.bytedeco.ffmpeg.global.avcodec.AV_INPUT_BUFFER_PADDING_SIZE;
+import static org.bytedeco.ffmpeg.global.avcodec.av_bsf_receive_packet;
+import static org.bytedeco.ffmpeg.global.avcodec.av_bsf_send_packet;
 import static org.bytedeco.ffmpeg.global.avformat.av_write_frame;
 import static org.bytedeco.ffmpeg.global.avformat.avformat_alloc_output_context2;
+import static org.bytedeco.ffmpeg.global.avutil.av_mallocz;
 
+import java.util.Optional;
 import java.util.Set;
 
+import org.apache.commons.lang3.ArrayUtils;
+import org.bytedeco.ffmpeg.avcodec.AVBSFContext;
+import org.bytedeco.ffmpeg.avcodec.AVCodecParameters;
 import org.bytedeco.ffmpeg.avcodec.AVPacket;
 import org.bytedeco.ffmpeg.avformat.AVFormatContext;
 import org.bytedeco.ffmpeg.avutil.AVRational;
+import org.bytedeco.javacpp.BytePointer;
 
+import io.antmedia.muxer.parser.codec.AACAudio;
 import io.vertx.core.Vertx;
 
 /** Publishes into the local MediaMTX with RTSP ANNOUNCE. The rtsp muxer is AVFMT_NOFILE, so openIO() does
@@ -59,7 +69,7 @@ public class RtspMuxer extends Muxer {
 
 	@Override
 	public AVFormatContext getOutputFormatContext() {
-		if (outputFormatContext == null) {
+		if (outputFormatContext == null && writable) {
 			outputFormatContext = new AVFormatContext(null);
 			if (avformat_alloc_output_context2(outputFormatContext, null, format, url) < 0) {
 				logger.error("Could not create RTSP output context for {}", url);
@@ -67,6 +77,34 @@ public class RtspMuxer extends Muxer {
 			}
 		}
 		return outputFormatContext;
+	}
+
+	/** MPEG-TS ingest leaves AAC extradata empty and keeps the config in every ADTS header instead, but the
+	 * SDP has to carry it before the first packet goes out. */
+	@Override
+	public synchronized boolean addStream(AVCodecParameters params, AVRational timebase, int streamIndex,
+			Optional<String> language) {
+		byte[] config = params.codec_id() == AV_CODEC_ID_AAC && params.extradata_size() == 0
+				? audioSpecificConfig(params)
+				: null;
+
+		if (config == null) {
+			return super.addStream(params, timebase, streamIndex, language);
+		}
+
+		// the payloader only strips the ADTS header itself while extradata is empty
+		setAudioBitreamFilter("aac_adtstoasc");
+		if (!super.addStream(params, timebase, streamIndex, language)) {
+			return false;
+		}
+
+		// freed with the format context, so it has to come out of av_malloc and carry the decoder padding
+		AVFormatContext context = getOutputFormatContext();
+		AVCodecParameters added = context.streams(context.nb_streams() - 1).codecpar();
+		added.extradata(new BytePointer(av_mallocz(config.length + (long) AV_INPUT_BUFFER_PADDING_SIZE))
+				.capacity(config.length).put(config));
+		added.extradata_size(config.length);
+		return true;
 	}
 
 	@Override
@@ -77,6 +115,16 @@ public class RtspMuxer extends Muxer {
 	@Override
 	protected void writeAudioFrame(AVPacket pkt, AVRational inputTimebase, AVRational outputTimebase,
 			AVFormatContext context, long dts) {
+		if (!writable) {
+			return;
+		}
+
+		for (AVBSFContext filter : bsfAudioFilterContextMap.getOrDefault(pkt.stream_index(), Set.of())) {
+			if (av_bsf_send_packet(filter, pkt) < 0 || av_bsf_receive_packet(filter, pkt) < 0) {
+				logPacketIssue("Audio bitstream filter dropped a packet for stream {}", streamId);
+				return;
+			}
+		}
 		write(pkt, context);
 	}
 
@@ -90,7 +138,19 @@ public class RtspMuxer extends Muxer {
 		}
 	}
 
-	/** No filter loop, RTSP registers no bitstream filters. */
+	/** Also runs when the header fails, and it frees the AVPackets. */
+	@Override
+	protected synchronized void clearResource() {
+		super.clearResource();
+		writable = false;
+	}
+
+	@Override
+	public synchronized boolean prepareIO() {
+		return writable && super.prepareIO();
+	}
+
+	/** No filter loop, RTSP registers no video bitstream filters. */
 	private void write(AVPacket pkt, AVFormatContext context) {
 		if (!writable) {
 			return;
@@ -102,6 +162,25 @@ public class RtspMuxer extends Muxer {
 			logger.warn("RTSP publish to {} failed for stream {}, dropping the rest of the stream. Error is {}",
 					url, streamId, getErrorDefinition(ret));
 		}
+	}
+
+	/** 2 byte AudioSpecificConfig: 5 bits object type, 4 bits sample rate index, 4 bits channel config.
+	 * Null when the parameters have no config that describes them. */
+	private static byte[] audioSpecificConfig(AVCodecParameters params) {
+		int rateIndex = ArrayUtils.indexOf(AACAudio.AAC_SAMPLERATES, params.sample_rate());
+		int channels = params.ch_layout().nb_channels();
+		if (rateIndex < 0 || channels < 1 || channels == 7 || channels > 8) {
+			return null;
+		}
+
+		// ADTS carries 2 bits of profile, so anything outside that came from elsewhere and is AAC-LC in the frames
+		int profile = params.profile();
+		int objectType = profile >= 0 && profile <= 3 ? profile + 1 : 2;
+		int channelConfig = channels == 8 ? 7 : channels;
+
+		return new byte[] {
+				(byte) ((objectType << 3) | (rateIndex >> 1)),
+				(byte) (((rateIndex & 1) << 7) | (channelConfig << 3)) };
 	}
 
 	@Override
