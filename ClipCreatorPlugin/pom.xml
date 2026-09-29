@@ -87,11 +87,33 @@
 			</plugin>
 			<plugin>
 				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifestEntries>
+							<AMS-Plugin-Name>Clip Creator Plugin</AMS-Plugin-Name>
+							<AMS-Plugin-Author>Ant Media Inc.</AMS-Plugin-Author>
+							<AMS-Plugin-Version>${project.version}</AMS-Plugin-Version>
+							<AMS-Plugin-Requires-Version>2.16.0</AMS-Plugin-Requires-Version>
+							<AMS-Plugin-Description>Converts live HLS streams to MP4 clips at configurable intervals.</AMS-Plugin-Description>
+							<AMS-Plugin-License>Apache-2.0</AMS-Plugin-License>
+						</manifestEntries>
+					</archive>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.felix</groupId>
 				<artifactId>maven-bundle-plugin</artifactId>
 				<extensions>true</extensions>
+				<configuration>
+					<instructions>
+						<AMS-Plugin-Name>Clip Creator Plugin</AMS-Plugin-Name>
+						<AMS-Plugin-Author>Ant Media Inc.</AMS-Plugin-Author>
+						<AMS-Plugin-Version>${project.version}</AMS-Plugin-Version>
+						<AMS-Plugin-Requires-Version>2.16.0</AMS-Plugin-Requires-Version>
+						<AMS-Plugin-Description>Converts live HLS streams to MP4 clips at configurable intervals.</AMS-Plugin-Description>
+						<AMS-Plugin-License>Apache-2.0</AMS-Plugin-License>
+					</instructions>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
