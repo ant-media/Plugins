@@ -15,15 +15,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
+import io.antmedia.AppSettings;
 import io.antmedia.filter.AbstractFilter;
+import io.antmedia.filter.TokenFilterManager;
 import io.antmedia.muxer.MuxAdaptor;
-import io.antmedia.scte35.SCTE35ManifestModifier.ModificationResult;
+import io.antmedia.plugin.SCTE35Plugin;
 
 /**
  * Servlet filter that injects SCTE‐35 HLS tags on the fly while serving M3U8 playlists.
  * <p>
  * It follows the same interception pattern as {@link io.antmedia.filter.HlsManifestModifierFilter}
- * but it augments the playlist with ad‐break signalling that is produced by {@link SCTE35HLSMuxer}.
+ * but it augments the playlist with the ad breaks held by {@link SCTE35CueTracker}.
  * <p>
  * Advantages:
  * <ul>
@@ -41,9 +43,7 @@ public class SCTE35ManifestModifierFilter extends AbstractFilter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
-        // Only intercept GET requests for single‐bitrate playlists (skip master/adaptive)
-        if (HttpMethod.GET.equals(httpRequest.getMethod()) && httpRequest.getRequestURI().endsWith(".m3u8") &&
-                !httpRequest.getRequestURI().contains(MuxAdaptor.ADAPTIVE_SUFFIX)) {
+        if (HttpMethod.GET.equals(httpRequest.getMethod()) && httpRequest.getRequestURI().endsWith(".m3u8")) {
 
             ContentCachingResponseWrapper wrapper = new ContentCachingResponseWrapper(httpResponse);
             
@@ -54,8 +54,19 @@ public class SCTE35ManifestModifierFilter extends AbstractFilter {
                 if (status >= HttpServletResponse.SC_OK && status <= HttpServletResponse.SC_BAD_REQUEST) {
                     String original = new String(wrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
 
-                    String streamId = extractStreamId(httpRequest.getRequestURI());
-                    String modified = injectScte35Tags(original, streamId);
+                    AppSettings appSettings = getAppSettings();
+                    String suffixFormat = appSettings != null ? appSettings.getHlsSegmentFileSuffixFormat() : "";
+
+                    // ABR variants are served as streamId_360p800kbps.m3u8, so the stream id has to be parsed out of the file name
+                    String streamId = TokenFilterManager.getStreamId(httpRequest.getRequestURI(), suffixFormat);
+
+                    String modified = original;
+                    if (streamId != null) {
+                        //the master carries no ad break tags, it only needs its bandwidth held still
+                        modified = httpRequest.getRequestURI().contains(MuxAdaptor.ADAPTIVE_SUFFIX)
+                                ? pinMasterBandwidths(original, streamId)
+                                : injectScte35Tags(original, streamId);
+                    }
 
                     // Write modified content to wrapper's output stream
                     wrapper.resetBuffer();
@@ -72,57 +83,56 @@ public class SCTE35ManifestModifierFilter extends AbstractFilter {
         }
     }
 
-    private String extractStreamId(String uri) {
-        // Assumes URI ends with /<streamId>.m3u8
-        String fileName = uri.substring(uri.lastIndexOf('/') + 1);
-        return fileName.replace(".m3u8", "");
+    private String pinMasterBandwidths(String playlist, String streamId) {
+        try {
+            SCTE35Plugin plugin = getPlugin();
+            if (plugin == null) {
+                return playlist;
+            }
+
+            String modified = plugin.pinMasterBandwidths(streamId, playlist);
+            return modified != null ? modified : playlist;
+
+        } catch (Exception e) {
+            logger.error("Error pinning master playlist bandwidth for stream {}: {}", streamId, e.getMessage());
+            return playlist;
+        }
     }
 
     private String injectScte35Tags(String playlist, String streamId) {
         try {
-//            logger.info("injectScte35Tags: playlist: {}, streamId: {}", playlist, streamId);
-            var app = getAntMediaApplicationAdapter();
-            if (app == null) {
-                return playlist;
-            }
-            var muxAdaptor = app.getMuxAdaptor(streamId);
-            if (muxAdaptor == null) {
-                logger.warn("injectScte35Tags: muxAdaptor is null for stream: {}", streamId);
+            SCTE35Plugin plugin = getPlugin();
+            if (plugin == null) {
                 return playlist;
             }
 
-            SCTE35HLSMuxer scte35Muxer = null;
-            for (var muxer : muxAdaptor.getMuxerList()) {
-                if (muxer instanceof SCTE35HLSMuxer) {
-                    scte35Muxer = (SCTE35HLSMuxer) muxer;
-                    break;
-                }
-            }
-
-            if (scte35Muxer == null || !scte35Muxer.isSCTE35Enabled()) {
-                logger.warn("injectScte35Tags: scte35Muxer is null or not enabled for stream: {}", streamId);
+            SCTE35CueTracker cueTracker = plugin.getCueTracker(streamId);
+            if (cueTracker == null) {
                 return playlist;
             }
 
-            // Use the SCTE35ManifestModifier to inject tags
-            ModificationResult result = SCTE35ManifestModifier.injectSCTE35Tags(
-                playlist,
-                scte35Muxer.getActiveCues(),
-                scte35Muxer.getSCTE35TagType()
-            );
+            //a break with no position yet takes the live edge of the first playlist served after it
+            cueTracker.anchorPendingCues(SCTE35ManifestModifier.liveEdgeTime(playlist));
 
-            // Return modified playlist if modifications were made, otherwise return original
-            if (result.hasModifications()) {
-                logger.debug("SCTE-35 tags injected for stream: {}", streamId);
-                return result.modifiedPlaylist;
-            } else {
-                logger.debug("No active cues in window for stream: {}", streamId);
+            String modified = SCTE35ManifestModifier.injectSCTE35Tags(playlist, cueTracker.getCues());
+            if (modified == null) {
+                logger.debug("No ad break to signal for stream: {}", streamId);
                 return playlist;
             }
+            return modified;
 
         } catch (Exception e) {
-            logger.error("Error injecting SCTE-35 tags on the fly for stream {}: {}", streamId, e.getMessage());
+            logger.error("Error injecting SCTE-35 tags for stream {}: {}", streamId, e.getMessage());
             return playlist;
         }
     }
+
+    private SCTE35Plugin getPlugin() {
+        var appContext = getAppContext();
+        if (appContext == null || !appContext.containsBean(SCTE35Plugin.BEAN_NAME)) {
+            return null;
+        }
+        return (SCTE35Plugin) appContext.getBean(SCTE35Plugin.BEAN_NAME);
+    }
+
 }

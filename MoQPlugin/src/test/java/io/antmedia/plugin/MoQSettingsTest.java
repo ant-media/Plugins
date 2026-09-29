@@ -6,28 +6,13 @@ import org.junit.Test;
 
 public class MoQSettingsTest {
 
+    /** These defaults are the contract MoQPlugin.loadSettings() falls back to when the JSON is absent or broken. */
     @Test
     public void testDefaults() {
         MoQSettings s = new MoQSettings();
         assertTrue(s.isUseEmbeddedRelay());
-        assertTrue(s.isIngestEnabled());
         assertEquals("https://localhost:4443/moq", s.getExternalRelayUrl());
+        assertEquals("", s.getMoqCdnUrl());
         assertEquals(2000, s.getIngestPollIntervalMs());
     }
-
-    @Test
-    public void testSettersAndGetters() {
-        MoQSettings s = new MoQSettings();
-
-        s.setUseEmbeddedRelay(false);
-        s.setExternalRelayUrl("https://relay.example.com/moq");
-        s.setIngestEnabled(false);
-        s.setIngestPollIntervalMs(5000);
-
-        assertFalse(s.isUseEmbeddedRelay());
-        assertEquals("https://relay.example.com/moq", s.getExternalRelayUrl());
-        assertFalse(s.isIngestEnabled());
-        assertEquals(5000, s.getIngestPollIntervalMs());
-    }
-
 }

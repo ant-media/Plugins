@@ -17,30 +17,22 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Pulls an external MoQ broadcast into AMS by spawning {@code moq-cli subscribe ... fmp4}
+ * Pulls an external MoQ broadcast into AMS by spawning {@code moq ... export fmp4}
  * and relaying its fMP4 output over a local TCP socket that FFmpeg (StreamFetcher) reads.
  *
  * <p>Data flow:
  * <pre>
- *   moq-cli stdout
+ *   moq stdout
  *       │  (Java pipe)
  *       ▼
  *   relay thread  ──TCP──►  FFmpeg (avformat_open_input)  ──►  MuxAdaptor  ──►  AMS
  * </pre>
  *
- * <p>Lifecycle:
- * <ol>
- *   <li>Constructor binds a {@link ServerSocket} on an OS-assigned port — immediately ready.</li>
- *   <li>{@link #startStream()} spawns moq-cli, starts the relay thread, then calls
- *       {@code super.startStream()} which eventually calls {@code avformat_open_input("tcp://localhost:PORT")}.
- *       The relay thread is already waiting on {@code accept()} so the connection is instant.</li>
- *   <li>The relay thread calls {@link InputStream#transferTo} — blocks until moq-cli exits or
- *       the socket is closed.</li>
- *   <li>{@link #stopStream()} destroys moq-cli → {@code transferTo} returns → socket closes →
- *       FFmpeg gets EOF → WorkerThread exits cleanly.</li>
- * </ol>
+ * <p>The socket is bound in the constructor so the relay thread is already in {@code accept()}
+ * by the time FFmpeg dials in. Shutdown runs the other way: killing moq ends {@code transferTo},
+ * the socket closes, and FFmpeg sees a clean EOF.
  *
- * <p>moq-cli stderr is available via {@link #getLogStream()} and polled by
+ * <p>moq stderr is available via {@link #getLogStream()} and polled by
  * {@link MoQPlugin#pollCliLogs()}.
  */
 public class MoQStreamFetcher extends StreamFetcher {
@@ -53,7 +45,7 @@ public class MoQStreamFetcher extends StreamFetcher {
     private static final ThreadLocal<ServerSocket> socketCarrier = new ThreadLocal<>();
 
     private final String streamId;
-    private final String appName;
+    private final String broadcastName;
     private final String relayUrl;
     private final boolean tlsDisableVerify;
     private final ServerSocket serverSocket;
@@ -67,7 +59,7 @@ public class MoQStreamFetcher extends StreamFetcher {
         socketCarrier.remove();
 
         this.streamId = streamId;
-        this.appName  = appName;
+        this.broadcastName = appName + "/" + streamId + "/publish";
         this.relayUrl = relayUrl;
         this.tlsDisableVerify = tlsDisableVerify;
 
@@ -105,7 +97,7 @@ public class MoQStreamFetcher extends StreamFetcher {
         try {
             moqProcess.set(spawnMoqCli());
         } catch (IOException e) {
-            logger.error("MoQ: failed to spawn moq-cli for stream {}", streamId, e);
+            logger.error("MoQ: failed to spawn moq for stream {}", streamId, e);
             return;
         }
 
@@ -117,25 +109,28 @@ public class MoQStreamFetcher extends StreamFetcher {
     }
 
     protected Process spawnMoqCli() throws IOException {
-        List<String> cmd = buildMoqCliCommand();
-        // stdout → Java pipe (relay thread reads it); stderr → Java pipe (log polling)
-        Process p = new ProcessBuilder(cmd).start();
-        logger.info("MoQ: moq-cli subscribe started for {}", cmd.get(cmd.size() - 2));
+        Process p = new ProcessBuilder(buildMoqCliCommand()).start();
+        logger.info("MoQ: moq export started for {}", broadcastName);
         return p;
     }
 
-    /** Builds the moq-cli subscribe command; the {@code --tls-disable-verify} flag is added only for the embedded localhost relay. */
+    /** Builds the moq export command; the {@code --client-tls-disable-verify} flag is added only for the embedded localhost relay. */
     List<String> buildMoqCliCommand() {
-        String broadcastName = appName + "/" + streamId + "/publish";
         List<String> cmd = new ArrayList<>();
-        cmd.add(MoqBinaries.resolve("moq-cli"));
-        cmd.add("subscribe");
-        cmd.add("--url");
+        cmd.add(MoqBinaries.resolve("moq"));
+        cmd.add("--client-connect");
         cmd.add(relayUrl);
-        if (tlsDisableVerify) cmd.add("--tls-disable-verify");
-        cmd.add("--name");
+        cmd.add("--client-bind");
+        cmd.add(MoqBinaries.CLIENT_BIND);
+        if (tlsDisableVerify) cmd.add("--client-tls-disable-verify");
+        cmd.add("--broadcast");
         cmd.add(broadcastName);
+        cmd.add("export");
         cmd.add("fmp4");
+        // Without a cap moq only flushes on a video keyframe, so the audio track buffers
+        // forever and never reaches us. 0s means one fragment per frame on every track.
+        cmd.add("--fragment-duration");
+        cmd.add("0s");
         return cmd;
     }
 
@@ -145,7 +140,7 @@ public class MoQStreamFetcher extends StreamFetcher {
 
     @Override
     public void stopStream() {
-        // 1. Kill moq-cli → transferTo() in relay thread gets IOException/EOF → relay exits.
+        // 1. Kill moq → transferTo() in relay thread gets IOException/EOF → relay exits.
         Process p = moqProcess.get();
         if (p != null) {
             p.destroy();
@@ -173,7 +168,7 @@ public class MoQStreamFetcher extends StreamFetcher {
             relaySocket.set(s);
             logger.info("MoQ: relay connected for stream {}", streamId);
 
-            // Pump moq-cli stdout → FFmpeg. Blocks until moq-cli exits or socket closes.
+            // Pump moq stdout → FFmpeg. Blocks until moq exits or socket closes.
             moqProcess.get().getInputStream().transferTo(s.getOutputStream());
 
             logger.info("MoQ: relay ended for stream {}", streamId);
@@ -186,7 +181,9 @@ public class MoQStreamFetcher extends StreamFetcher {
             stopStream();
         } catch (IOException e) {
             // Normal on shutdown: moqProcess destroyed or socket closed by stopStream().
-            logger.debug("MoQ: relay IO ended for stream {}: {}", streamId, e.getMessage());
+            if (logger.isDebugEnabled()) {
+                logger.debug("MoQ: relay IO ended for stream {}: {}", streamId, e.getMessage());
+            }
         }
     }
 

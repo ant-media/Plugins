@@ -39,6 +39,8 @@ import java.text.DateFormat;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.Nonnull;
 
@@ -52,6 +54,12 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	private Vertx vertx;
 	private ApplicationContext applicationContext;
 	private Map<String, Long> lastMp4CreateTimeMSForStream = new ConcurrentHashMap<>();
+
+	private Map<String, ReentrantLock> streamLocks = new ConcurrentHashMap<>();
+
+	private volatile Semaphore conversionSlots = new Semaphore(defaultConcurrency());
+
+	private volatile int maxConcurrentClips = defaultConcurrency();
 
 	private AppSettings appSettings;
 
@@ -124,7 +132,8 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 				if (newClipCreatorSettings.getMp4CreationIntervalSeconds() != clipCreatorSettings
 						.getMp4CreationIntervalSeconds() || newClipCreatorSettings.isEnabled() != clipCreatorSettings.isEnabled()
-						|| newClipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4() != clipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4()) 
+						|| newClipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4() != clipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4()
+						|| newClipCreatorSettings.getMaxConcurrentClips() != clipCreatorSettings.getMaxConcurrentClips()) 
 				{
 					logger.info("Clip-creator settings has changed in {}. The interval: {}secs and enabled:{} and deleteHLSFilesOnEnded:{}", appName, newClipCreatorSettings.getMp4CreationIntervalSeconds(),
 							newClipCreatorSettings.isEnabled(), newClipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4());
@@ -138,7 +147,11 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 					result = true;
 				}
 				
+				boolean concurrencyChanged = newClipCreatorSettings.getMaxConcurrentClips() != clipCreatorSettings.getMaxConcurrentClips();
 				clipCreatorSettings = newClipCreatorSettings;
+				if (concurrencyChanged) {
+					initConversionSlots();
+				}
 
 				return result;
 			}
@@ -150,6 +163,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		});
 
 		clipCreatorSettings = getClipCreatorSettings(appSettings);
+		initConversionSlots();
 
 		if (clipCreatorSettings.isEnabled()) {
 			logger.info("Clip Creator Plugin is enabled for app: {}", appName);
@@ -198,31 +212,37 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		List<Broadcast> broadcasts = dataStore.getLocalLiveBroadcasts(serverSettings.getHostAddress());
 		logger.info("createRecordings for active broadcasts size:{} for app:{}", broadcasts.size(), appName);
 
+		long segmentDurationMs = getSegmentDurationMs();
+
 		for (Broadcast broadcast : broadcasts) 
 		{
-			vertx.executeBlocking(() -> 
-			{
-				long endTime = System.currentTimeMillis();
-				// Get TS segment duration from appSettings (hlsTime) and add 100ms
-				long segmentDurationMs = 2100; // default fallback
-				try {
-					String hlsTimeStr = appSettings.getHlsTime();
-					if (hlsTimeStr != null) {
-						logger.info("The HLS segment duration is:{}", hlsTimeStr);
-						double hlsTime = Double.parseDouble(hlsTimeStr);
-						segmentDurationMs = (long)(hlsTime * 1000) + 200;
-					}
-				} catch (Exception e) {
-					logger.warn("Could not parse hlsTime from appSettings, using default 2100ms", e);
-				}
-				vertx.setTimer(segmentDurationMs, (l) -> {
+			long endTime = System.currentTimeMillis();
+
+			//the timer callback fires on the event loop and convertHlsToMp4 blocks on ffmpeg,
+			//so hand the conversion to a worker thread
+			vertx.setTimer(segmentDurationMs, l -> 
+				vertx.executeBlocking(() -> {
 					convertHlsToMp4(broadcast, true, endTime);
-				});
-
-				return null;
-			}, false);
-
+					return null;
+				}, false)
+			);
 		}
+	}
+
+	/**
+	 * TS segment duration from appSettings(hlsTime) plus a margin so the last segment is flushed
+	 */
+	private long getSegmentDurationMs() 
+	{
+		try {
+			String hlsTimeStr = appSettings.getHlsTime();
+			if (hlsTimeStr != null) {
+				return (long) (Double.parseDouble(hlsTimeStr) * 1000) + 200;
+			}
+		} catch (Exception e) {
+			logger.warn("Could not parse hlsTime from appSettings, using default 2100ms", e);
+		}
+		return 2100;
 	}
 
 	public Result stopPeriodicRecording() 
@@ -267,6 +287,19 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 	}
 
+	private void initConversionSlots() {
+		int configured = clipCreatorSettings.getMaxConcurrentClips();
+		maxConcurrentClips = configured > 0 ? configured : defaultConcurrency();
+		conversionSlots = new Semaphore(maxConcurrentClips);
+		logger.info("Clip Creator concurrent conversion limit for app:{} is {}", appName, maxConcurrentClips);
+	}
+
+	private static int defaultConcurrency() {
+		//conversions are CPU bound on segment remux and share the box with transcoding,
+		//so stay well under the core count rather than at the measured throughput knee
+		return Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors() / 4));
+	}
+
 	public ClipCreatorSettings getClipCreatorSettings(AppSettings appSettingsParameter) {
 		Object clipCreatorSettingsValue = appSettingsParameter.getCustomSetting("plugin."+ClipCreatorPlugin.PLUGIN_KEY);
 
@@ -308,24 +341,23 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		}
 		return null;
 	}
-	public synchronized Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime) {
+	public Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime) {
 		return convertHlsToMp4(broadcast, updateLastMp4CreateTime, System.currentTimeMillis());
 	}
 
-	// `synchronized` here is a webapp-wide mutex shared with convertHlsToMp4Range —
-	// concurrent conversions across all streams serialize. Acceptable for v1; revisit
-	// with a per-stream lock if range-endpoint throughput becomes a problem under load.
-	public synchronized Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime, long endTime) {
+	//conversions are bounded by the conversionSlots semaphore and serialized per stream
+	//in runConversion, so different streams convert in parallel
+	public Mp4CreationResponse convertHlsToMp4(Broadcast broadcast, boolean updateLastMp4CreateTime, long endTime) {
 
 		Long startTime = lastMp4CreateTimeMSForStream.get(broadcast.getStreamId());
 		if (startTime == null) {
 			startTime = endTime - (clipCreatorSettings.getMp4CreationIntervalSeconds() * 1000);
 		}
 
-		return doConvert(broadcast, startTime, endTime, updateLastMp4CreateTime);
+		return doConvert(broadcast, startTime, endTime, updateLastMp4CreateTime, true);
 	}
-	public synchronized Mp4CreationResponse convertHlsToMp4Range(Broadcast broadcast, long startTimeMs, long endTimeMs) {
-		return doConvert(broadcast, startTimeMs, endTimeMs, false);
+	public Mp4CreationResponse convertHlsToMp4Range(Broadcast broadcast, long startTimeMs, long endTimeMs) {
+		return doConvert(broadcast, startTimeMs, endTimeMs, false, false);
 	}
 
 	public Mp4CreationResponse convertHlsToMp4RangeAsync(Broadcast broadcast, long startTimeMs, long endTimeMs) {
@@ -341,7 +373,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		registerProcessingVod(broadcast, input.vodId, input.mp4FilePath, startTimeMs);
 
 		vertx.executeBlocking(() -> {
-			Mp4CreationResponse jobResult = runConversion(broadcast, input, startTimeMs, endTimeMs, false);
+			Mp4CreationResponse jobResult = runConversion(broadcast, input, startTimeMs, endTimeMs, false, false);
 
 			String status = jobResult.isSuccess() ? VoD.PROCESS_STATUS_FINISHED : VoD.PROCESS_STATUS_FAILED;
 			if (!dataStore.updateVoDProcessStatus(input.vodId, status)) {
@@ -359,14 +391,14 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		return response;
 	}
 
-	private Mp4CreationResponse doConvert(Broadcast broadcast, long startTime, long endTime, boolean updateLastMp4CreateTime) {
+	private Mp4CreationResponse doConvert(Broadcast broadcast, long startTime, long endTime, boolean updateLastMp4CreateTime, boolean deleteSegmentsAfter) {
 		ConversionInput input = prepareConversion(broadcast, startTime, endTime);
 		if (!input.isReady()) {
 			Mp4CreationResponse response = new Mp4CreationResponse();
 			response.setMessage(input.failureMessage);
 			return response;
 		}
-		return runConversion(broadcast, input, startTime, endTime, updateLastMp4CreateTime);
+		return runConversion(broadcast, input, startTime, endTime, updateLastMp4CreateTime, deleteSegmentsAfter);
 	}
 
 	private ConversionInput prepareConversion(Broadcast broadcast, long startTime, long endTime) {
@@ -398,12 +430,50 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 		input.m3u8File = m3u8File;
 		input.tsFiles = tsFilesToMerge;
+		input.firstSegmentPdtMs = getFirstSegmentPdtMs(playList, startTime, endTime);
 		input.vodId = RandomStringUtils.randomAlphanumeric(24);
 		input.mp4FilePath = m3u8File.getParentFile().getAbsolutePath() + File.separator + input.vodId + ".mp4";
 		return input;
 	}
-	private synchronized Mp4CreationResponse runConversion(Broadcast broadcast, ConversionInput input,
-			long startTime, long endTime, boolean updateLastMp4CreateTime) {
+	/**
+	 * Bounds how many conversions run at once and keeps same-stream conversions serialized.
+	 * The permit is always taken BEFORE the per-stream lock: the reverse order deadlocks, because a
+	 * thread could hold a stream lock while waiting for a permit only same-stream threads can release.
+	 */
+	private Mp4CreationResponse runConversion(Broadcast broadcast, ConversionInput input,
+			long startTime, long endTime, boolean updateLastMp4CreateTime, boolean deleteSegmentsAfter) {
+
+		String streamId = broadcast.getStreamId();
+		//read the field once so a settings update that swaps the semaphore cannot leak permits
+		Semaphore slots = conversionSlots;
+		long waitStartMs = System.currentTimeMillis();
+
+		try {
+			slots.acquire();
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			Mp4CreationResponse interrupted = new Mp4CreationResponse();
+			interrupted.setMessage("Interrupted while waiting for a conversion slot for stream " + streamId);
+			return interrupted;
+		}
+
+		ReentrantLock streamLock = streamLocks.computeIfAbsent(streamId, k -> new ReentrantLock());
+		streamLock.lock();
+		try {
+			logger.info("Conversion starting for stream:{} after waiting {}ms. active:{} queued:{} limit:{}",
+					streamId, System.currentTimeMillis() - waitStartMs,
+					maxConcurrentClips - slots.availablePermits(), slots.getQueueLength(), maxConcurrentClips);
+
+			return doRunConversion(broadcast, input, startTime, endTime, updateLastMp4CreateTime, deleteSegmentsAfter);
+		}
+		finally {
+			streamLock.unlock();
+			slots.release();
+		}
+	}
+
+	private Mp4CreationResponse doRunConversion(Broadcast broadcast, ConversionInput input,
+			long startTime, long endTime, boolean updateLastMp4CreateTime, boolean deleteSegmentsAfter) {
 
 		Mp4CreationResponse response = new Mp4CreationResponse();
 		String streamId = broadcast.getStreamId();
@@ -412,7 +482,11 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 			logger.info("number of ts files: {} for streamId:{} and startTime:{}", input.tsFiles.size(), streamId, dateFormat.format(new Date(startTime)));
 			File tsFileListTextFile = writeTsFilePathsToTxt(input.m3u8File, input.tsFiles);
 
-			if (ClipCreatorConverter.createMp4(tsFileListTextFile, input.mp4FilePath, startTime, endTime))
+			//the concat begins at the first selected segment, which may start slightly before the
+			//requested startTime - trim against that, not against startTime, or the tail comes up short
+			long contentStartMs = input.firstSegmentPdtMs > 0 ? input.firstSegmentPdtMs : startTime;
+
+			if (ClipCreatorConverter.createMp4(tsFileListTextFile, input.mp4FilePath, contentStartMs, endTime))
 			{
 				File mp4File = new File(input.mp4FilePath);
 
@@ -435,7 +509,9 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 						);
 				createdMp4Count++;
 
-				if (clipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4()) {
+				//range clips extract arbitrary historical windows that overlapping requests and the
+				//periodic recorder still need, so only the periodic/on-demand path reclaims segments
+				if (deleteSegmentsAfter && clipCreatorSettings.isDeleteHLSFilesAfterCreatedMp4()) {
 					deleteFiles(input.tsFiles);
 				}
 
@@ -472,6 +548,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 	private static class ConversionInput {
 		File m3u8File;
 		ArrayList<File> tsFiles;
+		long firstSegmentPdtMs = -1;
 		String vodId;
 		String mp4FilePath;
 		String failureMessage;
@@ -614,27 +691,61 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 		ArrayList<File> segmentFiles = new ArrayList<>();
 
 		Path playlistBasePath = m3u8File.getParentFile().toPath();
+		File containingSegment = null;
 
-		List<MediaSegment> mediaSegments = playList.mediaSegments();
-
-		for (MediaSegment segment : mediaSegments) 
+		for (MediaSegment segment : playList.mediaSegments()) 
 		{
 			Optional<OffsetDateTime> segmentDateTimeOpt = segment.programDateTime();
+			if (!segmentDateTimeOpt.isPresent()) {
+				continue;
+			}
 
-			if (segmentDateTimeOpt.isPresent()) 
-			{
-				OffsetDateTime segmentDateTime = segmentDateTimeOpt.get();
-				long segmentTime = segmentDateTime.toEpochSecond() * 1000;
+			long segmentTime = segmentDateTimeOpt.get().toInstant().toEpochMilli();
+			File segmentFile = playlistBasePath.resolve(segment.uri()).toFile();
 
-				if (segmentTime >= startTimeMs && segmentTime <= endTimeMs) 
-				{
-					Path segmentPath = playlistBasePath.resolve(segment.uri());
-					segmentFiles.add(segmentPath.toFile());
-				}
+			if (segmentTime <= startTimeMs) {
+				//PDT marks the segment start, so the last segment starting at or before startTimeMs is
+				//the one that actually contains it. Keeping it means the clip never loses content off
+				//the front - it carries up to one segment of lead-in instead, which is the safe direction.
+				containingSegment = segmentFile;
+			}
+			else if (segmentTime <= endTimeMs) {
+				segmentFiles.add(segmentFile);
 			}
 		}
 
+		if (containingSegment != null) {
+			segmentFiles.add(0, containingSegment);
+		}
+
 		return segmentFiles;
+	}
+
+	/**
+	 * PDT of the first segment getSegmentFilesWithinTimeRange would pick for the same range, so the
+	 * caller knows where the concatenated content actually begins. -1 when nothing matches.
+	 */
+	public long getFirstSegmentPdtMs(MediaPlaylist playList, long startTimeMs, long endTimeMs) {
+		long containing = -1;
+		long firstAfterStart = -1;
+
+		for (MediaSegment segment : playList.mediaSegments()) 
+		{
+			Optional<OffsetDateTime> segmentDateTimeOpt = segment.programDateTime();
+			if (!segmentDateTimeOpt.isPresent()) {
+				continue;
+			}
+
+			long segmentTime = segmentDateTimeOpt.get().toInstant().toEpochMilli();
+			if (segmentTime <= startTimeMs) {
+				containing = segmentTime;
+			}
+			else if (segmentTime <= endTimeMs && firstAfterStart < 0) {
+				firstAfterStart = segmentTime;
+			}
+		}
+
+		return containing >= 0 ? containing : firstAfterStart;
 	}
 
 	public File getM3u8File(String streamId) {
@@ -677,6 +788,10 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 	public Map<String, Long> getLastMp4CreateTimeForStream() {
 		return lastMp4CreateTimeMSForStream;
+	}
+
+	public int getMaxConcurrentClips() {
+		return maxConcurrentClips;
 	}
 
 	public ClipCreatorSettings getClipCreatorSettings() {
@@ -723,6 +838,7 @@ public class ClipCreatorPlugin implements ApplicationContextAware, IStreamListen
 
 				convertHlsToMp4(broadcast, true, System.currentTimeMillis());
 				lastMp4CreateTimeMSForStream.remove(broadcast.getStreamId());
+				streamLocks.remove(broadcast.getStreamId());
 				return null;
 			}, false);
 		}

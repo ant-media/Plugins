@@ -5,7 +5,7 @@ set -euo pipefail
 PLUGINS_DIR="${PLUGINS_DIR:-/usr/local/antmedia/plugins}"
 PLUGIN_JAR="${PLUGIN_JAR:-MoQPlugin.jar}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
-BINARIES=("moq-cli" "moq-relay")
+BINARIES=("moq" "moq-relay")
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -119,7 +119,7 @@ main() {
     verify_binaries
     deploy_plugin_jar "$jar"
 
-    info "Done. moq-cli and moq-relay installed to $INSTALL_DIR, MoQPlugin.jar deployed to $PLUGINS_DIR."
+    info "Done. moq and moq-relay installed to $INSTALL_DIR, MoQPlugin.jar deployed to $PLUGINS_DIR."
 }
 
 main "$@"

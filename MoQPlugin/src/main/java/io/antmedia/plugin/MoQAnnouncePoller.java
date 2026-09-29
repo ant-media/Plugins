@@ -108,7 +108,7 @@ public class MoQAnnouncePoller {
                     handler.stopStream();
                 }
 
-                logger.info("Starting injest of stream {}", streamId);
+                logger.info("MoQ: starting ingest of stream {}", streamId);
                 owner.startIngest(streamId);
             }
         }
@@ -126,9 +126,9 @@ public class MoQAnnouncePoller {
     Set<String> fetchAnnounced() {
         try {
             HttpURLConnection conn = (HttpURLConnection) new URL(announceUrl).openConnection();
-            if (trustSelfSignedCerts && conn instanceof HttpsURLConnection) {
-                ((HttpsURLConnection) conn).setSSLSocketFactory(TRUST_ALL_CTX.getSocketFactory());
-                ((HttpsURLConnection) conn).setHostnameVerifier((h, s) -> true);
+            if (trustSelfSignedCerts && conn instanceof HttpsURLConnection https) {
+                https.setSSLSocketFactory(TRUST_ALL_CTX.getSocketFactory());
+                https.setHostnameVerifier((h, s) -> true);
             }
             conn.setConnectTimeout(1500);
             conn.setReadTimeout(1500);

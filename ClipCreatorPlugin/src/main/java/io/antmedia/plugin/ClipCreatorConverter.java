@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.util.Locale;
 
 import static org.bytedeco.ffmpeg.global.avformat.avformat_find_stream_info;
 import static org.bytedeco.ffmpeg.global.avformat.avformat_open_input;
@@ -68,50 +69,38 @@ public class ClipCreatorConverter {
 		}
 	}
 
-	public static boolean createMp4(File tsFileList, String outputFilePath, long exactStartTimeMs, long exactEndTimeMs) {
-        
-        long startTime = System.nanoTime();
-        
-        double exactDurationSecs = (exactEndTimeMs - exactStartTimeMs) / 1000.0;
-        
-        String tempMp4Path = outputFilePath + ".temp.mp4";
-        String command = String.format(
-			"%s -f concat -safe 0 -i %s -c copy -bsf:a aac_adtstoasc %s",
-			ffmpegPath,
-			tsFileList.getAbsolutePath(),
-			tempMp4Path
-		);
+	/**
+	 * Concatenates the segment list into a single MP4 ending at exactEndTimeMs.
+	 * contentStartTimeMs is where the concatenated content actually starts - the PDT of the first
+	 * segment - which can be slightly earlier than the requested clip start.
+	 */
+	public static boolean createMp4(File tsFileList, String outputFilePath, long contentStartTimeMs, long exactEndTimeMs) {
 
-        boolean success = runCommand(command);
-        
-        if (success) {
-            //The 2nd command is to trim the exact duration 
-            //because ts file lengths on the above command are not exact 
-            //and can't be trusted to be exact
-            command = String.format(
-                    "%s -i %s -ss 0 -t %.3f -c copy -avoid_negative_ts 1 %s",
-                    ffmpegPath,
-                    tempMp4Path,
-                    exactDurationSecs,
-                    outputFilePath
-                    );
-            
-            success = runCommand(command);
-            
-            // Clean up temp file
-            deleteFile(new File(tempMp4Path));
-        }
-        
-        long endTime = System.nanoTime();
-        long duration = (endTime - startTime) / 1000000;  //divide by 1000000 to get milliseconds.
-        logger.info("Mp4 creation duration: {} ms for {} with exact duration: {:.3f}s", duration, outputFilePath, exactDurationSecs);
-        
-        if (success) {
-            deleteFile(tsFileList);
-            return true;
-        }
-        return false;
-    }
+		long startTime = System.nanoTime();
+
+		double exactDurationSecs = (exactEndTimeMs - contentStartTimeMs) / 1000.0;
+
+		//single pass: -t bounds the output exactly as the old second trim pass did, so that pass only
+		//doubled bytes read and written. Locale.US keeps the decimal separator a dot for ffmpeg.
+		String command = String.format(
+				Locale.US,
+				"%s -f concat -safe 0 -i %s -c copy -bsf:a aac_adtstoasc -t %.3f -avoid_negative_ts 1 %s",
+				ffmpegPath,
+				tsFileList.getAbsolutePath(),
+				exactDurationSecs,
+				outputFilePath
+				);
+
+		boolean success = runCommand(command);
+
+		long duration = (System.nanoTime() - startTime) / 1000000;
+		logger.info("Mp4 creation duration: {} ms for {} with exact duration: {} s", duration, outputFilePath, exactDurationSecs);
+
+		//the list file is scratch either way, so do not leak it when ffmpeg fails
+		deleteFile(tsFileList);
+
+		return success;
+	}
 
 	public static boolean createMp4(File tsFileList, String outputFilePath) {
 		
