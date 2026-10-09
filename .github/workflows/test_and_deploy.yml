@@ -52,7 +52,14 @@ jobs:
             cd ..
 
         - name: Build Ant Media Server project
+          env:
+            # Requires contents:read access to the private native-webrtc-build repository.
+            GITHUB_TOKEN: ${{ secrets.NATIVE_WEBRTC_TOKEN }}
           run: |
+             if [ -z "$GITHUB_TOKEN" ]; then
+               echo "::error::NATIVE_WEBRTC_TOKEN is required to download native WebRTC dependencies. Configure it with contents:read access to ant-media/native-webrtc-build."
+               exit 1
+             fi
              BRANCH="${{ github.ref_name }}"
              if [[ "${{ github.event_name }}" == "pull_request" ]]; then
                BRANCH="${{ github.head_ref }}"
