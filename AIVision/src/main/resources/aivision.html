@@ -30,6 +30,7 @@
 		body {
 			margin: 0;
 			min-height: 100vh;
+			overflow-x: hidden;
 			background:
 				radial-gradient(circle at 18% 0%, rgba(227, 30, 36, 0.18), transparent 32%),
 				linear-gradient(180deg, #111827 0%, var(--bg) 42%);
@@ -37,6 +38,7 @@
 
 		button,
 		input,
+		select,
 		textarea {
 			font: inherit;
 		}
@@ -166,6 +168,7 @@
 			gap: 16px;
 			align-items: stretch;
 			min-height: 0;
+			min-width: 0;
 		}
 
 		.panel,
@@ -175,6 +178,7 @@
 			gap: 14px;
 			padding: 14px;
 			min-height: 0;
+			min-width: 0;
 		}
 
 		.panel {
@@ -182,9 +186,12 @@
 		}
 
 		.stage {
-			grid-template-rows: auto minmax(0, auto);
+			grid-template-rows: auto auto auto;
 			align-content: start;
+			overflow: visible;
 		}
+
+		.stage > *, .player-toolbar, .player-shell, .prompt-panel { width: 100%; min-width: 0; }
 
 		.results-panel {
 			grid-template-rows: auto minmax(0, 1fr);
@@ -212,16 +219,22 @@
 			font-size: 12px;
 		}
 
+		.query-heading-actions { display: flex; align-items: center; gap: 7px; min-width: 0; }
+		.query-file-name { max-width: 110px; overflow: hidden; color: var(--muted); font-size: 11px; font-weight: 700; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+		.query-toolbar-button { display: grid; place-items: center; width: 32px; height: 32px; min-height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-deep); color: var(--muted-strong); padding: 0; }
+		.query-toolbar-button:hover { border-color: #64748b; color: #fff; box-shadow: none; transform: none; }
+		.query-toolbar-button svg { width: 16px; height: 16px; }
+
 		.form-grid {
 			display: grid;
-			gap: 14px;
+			gap: 28px;
 		}
 
 		.field-group {
 			display: grid;
 			gap: 12px;
 			border-top: 1px solid var(--line);
-			padding-top: 14px;
+			padding-top: 28px;
 		}
 
 		.field-group:first-child {
@@ -229,10 +242,14 @@
 			padding-top: 0;
 		}
 
+		.field-group.is-hidden {
+			display: none;
+		}
+
 		.group-title {
 			color: #e2e8f0;
-			font-size: 12px;
-			font-weight: 900;
+			font-size: 15px;
+			font-weight: 950;
 			letter-spacing: 0.04em;
 			text-transform: uppercase;
 		}
@@ -246,6 +263,7 @@
 		}
 
 		input,
+		select,
 		textarea {
 			width: 100%;
 			border: 1px solid var(--line);
@@ -257,7 +275,10 @@
 			transition: border-color 0.16s ease, box-shadow 0.16s ease;
 		}
 
+		select { min-height: 42px; appearance: auto; }
+
 		input:focus,
+		select:focus,
 		textarea:focus {
 			border-color: rgba(227, 30, 36, 0.7);
 			box-shadow: 0 0 0 4px rgba(227, 30, 36, 0.14);
@@ -377,9 +398,20 @@
 			border-radius: 8px;
 			background: #030712;
 			aspect-ratio: 16 / 9;
-			min-height: 260px;
-			max-height: 540px;
+			min-height: 190px;
+			max-height: 360px;
 		}
+
+		.player-toolbar {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr);
+			gap: 10px;
+			align-items: end;
+		}
+
+		.settings-heading { margin-bottom: 12px; font-size: 16px; font-weight: 950; }
+		.settings-heading-actions { display: flex; gap: 7px; }
+		.settings-heading-button { width: auto; min-height: 32px; padding: 6px 10px; font-size: 12px; }
 
 		.app.alert-active .player-shell {
 			border-color: var(--ant-red);
@@ -416,24 +448,211 @@
 			padding: 14px;
 		}
 
-		.analysis-actions {
+		.queries-panel {
 			display: grid;
-			grid-template-columns: minmax(180px, 1fr) auto;
+			gap: 10px;
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			background: var(--panel-soft);
+			padding: 14px;
+		}
+
+		.queries-list {
+			display: grid;
 			gap: 12px;
+			align-content: start;
+			overflow: auto;
+		}
+
+		.query-item {
+			display: grid;
+			gap: 14px;
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			background: linear-gradient(145deg, #111827 0%, #0b1220 100%);
+			padding: 14px;
+			box-shadow: 0 10px 24px rgba(2, 6, 23, 0.2);
+		}
+
+		.query-head {
+			display: flex;
+			align-items: start;
+			justify-content: space-between;
+			gap: 10px;
+		}
+
+		.query-actions {
+			display: flex;
+			gap: 6px;
+			flex: 0 0 auto;
+		}
+
+		.query-stats {
+			display: flex;
 			align-items: center;
+			gap: 7px;
+			flex-wrap: wrap;
+			color: var(--muted-strong);
+			font-size: 12px;
+			font-weight: 800;
+		}
+
+		.query-stat {
+			min-height: 28px;
+			border: 1px solid var(--line);
+			border-radius: 999px;
+			background: rgba(15, 23, 42, 0.7);
+			padding: 5px 9px;
+			color: var(--muted-strong);
+			font-size: 12px;
+			font-weight: 800;
+			cursor: pointer;
+			transition: border-color 0.16s ease, background 0.16s ease;
+		}
+
+		.query-stat:hover { border-color: #64748b; background: #1e293b; box-shadow: none; transform: none; }
+
+		.query-stat.alerts {
+			border-color: var(--danger-line);
+			color: #fca5a5;
+		}
+
+		.query-latest-toggle { display: flex; align-items: center; gap: 7px; min-height: 28px; margin-left: auto; color: var(--muted-strong); font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+		.query-latest-toggle .switch-track { width: 34px; height: 20px; }
+		.query-latest-toggle .switch-track::after { width: 14px; height: 14px; }
+		.query-latest-toggle input:checked + .switch-track::after { transform: translateX(14px); }
+
+		.modal-results-list { display: grid; grid-column: 1 / -1; gap: 10px; }
+
+		.query-last-result {
+			display: grid;
+			grid-template-columns: 88px minmax(0, 1fr);
+			gap: 11px;
+			border: 1px solid var(--line);
+			border-radius: 10px;
+			background: rgba(2, 6, 23, 0.48);
+			padding: 9px;
+			color: var(--muted-strong);
+			font-size: 12px;
+			line-height: 1.4;
+			cursor: pointer;
+			transition: border-color 0.16s ease, background 0.16s ease;
+		}
+
+		.query-last-result:hover { border-color: #475569; background: rgba(15, 23, 42, 0.8); }
+		.query-last-result[hidden] { display: none; }
+		.query-last-result.is-empty { display: block; cursor: default; padding: 14px; text-align: center; }
+		.query-last-result.is-alert { border-color: var(--danger-line); background: var(--danger-soft); }
+		.query-result-thumb { width: 88px; aspect-ratio: 16 / 10; border: 1px solid var(--line); border-radius: 7px; background: #020617; object-fit: cover; }
+		.query-result-body { display: grid; gap: 5px; min-width: 0; }
+		.query-result-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; font-weight: 800; }
+		.query-result-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; color: var(--muted-strong); font-size: 12px; line-height: 1.45; }
+
+		.query-info {
+			display: grid;
+			gap: 4px;
+			min-width: 0;
+		}
+
+		.query-title {
+			color: var(--text);
+			font-size: 14px;
+			font-weight: 900;
+			line-height: 1.4;
+			overflow-wrap: anywhere;
+		}
+
+		.query-prompt {
+			overflow: hidden;
+			color: var(--muted);
+			font-size: 12px;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.query-icon-button { display: grid; place-items: center; width: 32px; height: 32px; min-height: 32px; border-color: var(--line); border-radius: 8px; background: rgba(15, 23, 42, 0.75); color: var(--muted-strong); padding: 0; }
+		.query-icon-button:hover { border-color: #64748b; color: #fff; box-shadow: none; transform: none; }
+		.query-icon-button.delete:hover { border-color: var(--danger-line); background: var(--danger-soft); color: #fca5a5; }
+		.query-icon-button svg { width: 16px; height: 16px; }
+
+		.analysis-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			align-items: center;
+		}
+
+		.analysis-actions > #analyzeButton { flex: 0 0 108px; }
+		.analysis-actions > .apply-field { flex: 1 1 210px; margin-right: 14px; }
+		.analysis-actions > .continuous-field { flex: 0 0 122px; }
+		.analysis-actions > .period-control { flex: 0 0 150px; }
+
+		.action-field, .period-control { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
+		.control-label { color: var(--muted-strong); font-size: 12px; font-weight: 800; white-space: nowrap; }
+
+		.apply-to {
+			position: relative;
+			min-width: 0;
+		}
+
+		.apply-to summary {
+			min-height: 42px;
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			background: var(--panel-deep);
+			color: var(--text);
+			cursor: pointer;
+			font-size: 13px;
+			font-weight: 900;
+			padding: 11px;
+			list-style: none;
+		}
+
+		.apply-to-options {
+			position: absolute;
+			z-index: 20;
+			top: calc(100% + 6px);
+			right: 0;
+			display: grid;
+			width: min(320px, 80vw);
+			max-height: 240px;
+			overflow: auto;
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			background: #111827;
+			padding: 8px;
+			box-shadow: 0 18px 42px rgba(0, 0, 0, 0.4);
+		}
+
+		.apply-to-options label {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 7px;
+		}
+
+		.apply-to-options input {
+			width: auto;
+		}
+
+		.period-control {
+			color: var(--muted-strong);
+		}
+
+		.period-control input {
+			width: 100%;
+		}
+
+		.period-control.is-disabled {
+			opacity: 0.45;
 		}
 
 		.switch-control {
 			display: flex;
 			align-items: center;
-			justify-content: space-between;
-			gap: 12px;
+			justify-content: flex-start;
 			min-height: 42px;
-			border: 1px solid var(--line);
-			border-radius: 8px;
-			background: var(--panel-deep);
-			padding: 8px 10px;
-			color: var(--muted-strong);
+			padding: 0;
 			cursor: pointer;
 			user-select: none;
 		}
@@ -722,7 +941,7 @@
 			font-size: 14px;
 		}
 
-		@media (max-width: 1180px) {
+		@media (max-width: 1220px) {
 			.app {
 				height: auto;
 				min-height: 100vh;
@@ -783,9 +1002,11 @@
 				grid-template-columns: 1fr;
 			}
 
-			.analysis-actions {
-				grid-template-columns: 1fr;
-			}
+			.analysis-actions { display: grid; grid-template-columns: 1fr; }
+			.analysis-actions > #analyzeButton,
+			.analysis-actions > .apply-field,
+			.analysis-actions > .continuous-field,
+			.analysis-actions > .period-control { width: 100%; margin-right: 0; }
 
 			.player-shell {
 				min-height: 210px;
@@ -816,24 +1037,14 @@
 
 		<div class="layout">
 			<aside class="panel">
-				<div class="panel-title">
-					<span>Stream Controls</span>
+				<div class="panel-title settings-heading">
+					<span>Settings</span>
+					<div class="settings-heading-actions">
+						<button id="resetSettingsButton" class="secondary settings-heading-button" type="button">Reset</button>
+						<button id="saveSettingsButton" class="settings-heading-button" type="button">Save</button>
+					</div>
 				</div>
 				<div class="form-grid">
-					<div class="field-group">
-						<div class="group-title">Playback</div>
-						<div class="stream-row">
-							<label>
-								Stream ID
-								<input id="streamId" value="stream1" autocomplete="off">
-							</label>
-							<button id="connectButton" class="connection-button" type="button">
-								<span class="connection-dot"></span>
-								<span id="connectButtonText">Connect</span>
-							</button>
-						</div>
-					</div>
-
 					<div class="field-group">
 						<div class="group-title">Vision Model</div>
 						<label>
@@ -851,7 +1062,20 @@
 							<input id="model" value="llava" autocomplete="off">
 						</label>
 
-						<button id="saveSettingsButton" class="secondary" type="button">Save Settings</button>
+					</div>
+
+					<div class="field-group">
+						<div class="group-title">Plugin Behavior</div>
+						<label>
+							Max results per analysis
+							<input id="maxResultsPerAnalysis" type="number" min="1" max="1000" value="100">
+						</label>
+
+						<label>
+							Alert Webhook URL
+							<input id="webhookUrl" type="url" placeholder="https://example.com/alerts" autocomplete="off">
+						</label>
+
 					</div>
 
 					<div class="field-group">
@@ -862,6 +1086,14 @@
 			</aside>
 
 			<section class="stage">
+				<div class="player-toolbar">
+					<label>
+						Playing Stream
+						<select id="activeStreamSelect">
+							<option value="">No active stream</option>
+						</select>
+					</label>
+				</div>
 				<div class="player-shell">
 					<video id="remoteVideo" autoplay playsinline controls muted></video>
 					<div id="streamBadge" class="stream-badge">stream1</div>
@@ -874,22 +1106,43 @@
 					</label>
 					<div class="analysis-actions">
 						<button id="analyzeButton" type="button">Analyze</button>
-						<label class="switch-control">
-							<span class="switch-label">Continuous</span>
-							<input id="continuousToggle" type="checkbox">
-							<span class="switch-track"></span>
-						</label>
+						<div class="action-field apply-field">
+							<span class="control-label">Apply to</span>
+							<details id="applyTo" class="apply-to">
+								<summary id="applyToLabel">All</summary>
+								<div id="applyToOptions" class="apply-to-options"></div>
+							</details>
+						</div>
+						<div class="action-field continuous-field">
+							<span class="control-label">Continuous</span>
+							<label class="switch-control" aria-label="Continuous analysis">
+								<input id="continuousToggle" type="checkbox">
+								<span class="switch-track"></span>
+							</label>
+						</div>
+						<label id="periodControl" class="period-control is-disabled"><span class="control-label">Period (sec)</span><input id="period" type="number" min="1" max="86400" value="10" disabled></label>
 					</div>
 				</section>
+
 			</section>
 
 			<aside class="results-panel">
 				<div class="panel-title">
-					<span>Analysis Results</span>
-					<span id="resultCount" class="counter">0</span>
+					<span>Prompt Queries</span>
+					<div class="query-heading-actions">
+						<span id="queryCount" class="counter">0</span>
+						<span id="queryFileName" class="query-file-name" title="No file selected">No file</span>
+						<button id="saveQueriesButton" class="query-toolbar-button" type="button" title="Save queries" aria-label="Save queries">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v3h16v-3"/></svg>
+						</button>
+						<button id="loadQueriesButton" class="query-toolbar-button" type="button" title="Load queries" aria-label="Load queries">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9m0 0 4 4m-4-4-4 4"/><path d="M4 7V4h16v3"/></svg>
+						</button>
+						<input id="queryFileInput" type="file" accept="application/json,.json" hidden>
+					</div>
 				</div>
-				<div id="resultsList" class="results-list">
-					<div class="empty-results">No analysis result yet.</div>
+				<div id="queriesList" class="queries-list">
+					<div class="empty-results">No active periodic query.</div>
 				</div>
 			</aside>
 		</div>
@@ -910,36 +1163,52 @@
 
 		const appName = location.pathname.split("/").filter(Boolean)[0] || "LiveApp";
 		const restBase = `${location.origin}/${appName}/rest/v2/aivision`;
+		const broadcastsBase = `${location.origin}/${appName}/rest/v2/broadcasts`;
 		let webRTCAdaptor;
-		let continuousTimer;
+		let resultPollTimer;
 		let isAnalyzing = false;
 		let lastAnalyzedImageUrl = "";
 		let lastAnalyzedFrameTimestamp = 0;
 		let connectionState = "disconnected";
 		let connectedStreamId = "";
-		const results = [];
-		const continuousIntervalMs = 0;
+		const periodicResultIds = new Map();
+		let activeStreams = [];
+		let selectedApplyStreams = new Set();
+		const latestVisibleQueryIds = new Set();
+		let editingRequestId = null;
+		let streamListTimer;
+		let queryListTimer;
 
 		const elements = {
 			app: document.getElementById("app"),
-			streamId: document.getElementById("streamId"),
 			prompt: document.getElementById("prompt"),
+			period: document.getElementById("period"),
+			periodControl: document.getElementById("periodControl"),
 			baseUrl: document.getElementById("baseUrl"),
 			token: document.getElementById("token"),
 			model: document.getElementById("model"),
+			webhookUrl: document.getElementById("webhookUrl"),
+			maxResultsPerAnalysis: document.getElementById("maxResultsPerAnalysis"),
+			applyTo: document.getElementById("applyTo"),
+			applyToLabel: document.getElementById("applyToLabel"),
+			applyToOptions: document.getElementById("applyToOptions"),
+			activeStreamSelect: document.getElementById("activeStreamSelect"),
+			queriesList: document.getElementById("queriesList"),
+			queryCount: document.getElementById("queryCount"),
+			queryFileName: document.getElementById("queryFileName"),
+			saveQueriesButton: document.getElementById("saveQueriesButton"),
+			loadQueriesButton: document.getElementById("loadQueriesButton"),
+			queryFileInput: document.getElementById("queryFileInput"),
 			status: document.getElementById("status"),
 			statusText: document.getElementById("statusText"),
-			resultsList: document.getElementById("resultsList"),
-			resultCount: document.getElementById("resultCount"),
 			resultModalBackdrop: document.getElementById("resultModalBackdrop"),
 			resultModalTitle: document.getElementById("resultModalTitle"),
 			resultModalContent: document.getElementById("resultModalContent"),
 			resultModalClose: document.getElementById("resultModalClose"),
 			streamBadge: document.getElementById("streamBadge"),
-			connectButton: document.getElementById("connectButton"),
-			connectButtonText: document.getElementById("connectButtonText"),
 			analyzeButton: document.getElementById("analyzeButton"),
 			continuousToggle: document.getElementById("continuousToggle"),
+			resetSettingsButton: document.getElementById("resetSettingsButton"),
 			saveSettingsButton: document.getElementById("saveSettingsButton")
 		};
 
@@ -948,7 +1217,7 @@
 		}
 
 		function streamId() {
-			return elements.streamId.value.trim();
+			return elements.activeStreamSelect.value;
 		}
 
 		function updateStreamBadge() {
@@ -957,13 +1226,14 @@
 			lastAnalyzedFrameTimestamp = 0;
 		}
 
+		function updateContinuousMode() {
+			const enabled = elements.continuousToggle.checked;
+			elements.period.disabled = !enabled;
+			elements.periodControl.classList.toggle("is-disabled", !enabled);
+		}
+
 		function setConnectionState(state) {
 			connectionState = state;
-			elements.connectButton.classList.toggle("is-connected", state === "connected");
-			elements.connectButton.classList.toggle("is-connecting", state === "connecting");
-			elements.streamId.disabled = state !== "disconnected";
-			elements.connectButton.disabled = state === "connecting";
-			elements.connectButtonText.textContent = state === "connected" ? "Disconnect" : state === "connecting" ? "Connecting" : "Connect";
 		}
 
 		function bellIcon() {
@@ -984,6 +1254,22 @@
 			return svg;
 		}
 
+		function actionIcon(type) {
+			const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+			svg.setAttribute("viewBox", "0 0 24 24");
+			svg.setAttribute("fill", "none");
+			svg.setAttribute("stroke", "currentColor");
+			svg.setAttribute("stroke-width", "2");
+			svg.setAttribute("stroke-linecap", "round");
+			svg.setAttribute("stroke-linejoin", "round");
+			const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+			path.setAttribute("d", type === "edit"
+					? "M12 20h9 M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"
+					: "M18 6 6 18 M6 6l12 12");
+			svg.appendChild(path);
+			return svg;
+		}
+
 		function detailBlock(label, value, primary = false) {
 			const block = document.createElement("div");
 			block.className = "detail-block";
@@ -1000,14 +1286,23 @@
 			return block;
 		}
 
+		let resultModalBackAction = null;
+
 		function closeResultModal() {
+			if (resultModalBackAction) {
+				const backAction = resultModalBackAction;
+				resultModalBackAction = null;
+				backAction();
+				return;
+			}
 			elements.resultModalBackdrop.classList.remove("is-open");
 			elements.resultModalBackdrop.setAttribute("aria-hidden", "true");
 			elements.resultModalTitle.textContent = "";
 			elements.resultModalContent.textContent = "";
 		}
 
-		function openResultModal(result) {
+		function openResultModal(result, backAction = null) {
+			resultModalBackAction = backAction;
 			elements.resultModalTitle.textContent = "";
 			if (result.alertTriggered) {
 				elements.resultModalTitle.appendChild(bellIcon());
@@ -1046,77 +1341,74 @@
 			elements.resultModalClose.focus();
 		}
 
-		function renderResults() {
-			elements.resultCount.textContent = String(results.length);
-			const hasAlert = results.some((result) => result.alertTriggered);
-			elements.app.classList.toggle("alert-active", hasAlert);
-			elements.statusText.textContent = hasAlert ? "Alert" : "";
-
-			if (results.length === 0) {
-				elements.resultsList.innerHTML = '<div class="empty-results">No analysis result yet.</div>';
+		function openOneShotResults(results) {
+			if (results.length === 1) {
+				openResultModal(results[0]);
 				return;
 			}
 
-			elements.resultsList.innerHTML = "";
+			resultModalBackAction = null;
+			elements.resultModalTitle.textContent = `Analysis Results (${results.length})`;
+			elements.resultModalContent.textContent = "";
+			const list = document.createElement("div");
+			list.className = "modal-results-list";
 			for (const result of results) {
 				const item = document.createElement("article");
 				item.className = `result-item${result.alertTriggered ? " is-alert" : ""}`;
 				item.setAttribute("role", "button");
 				item.setAttribute("tabindex", "0");
-				item.setAttribute("aria-label", "Open analysis detail");
-				item.addEventListener("click", () => openResultModal(result));
-				item.addEventListener("keydown", (event) => {
-					if (event.key === "Enter" || event.key === " ") {
-						event.preventDefault();
-						openResultModal(result);
-					}
-				});
 
-				let thumb;
+				let thumbnail;
 				if (result.imageUrl) {
-					thumb = document.createElement("img");
-					thumb.className = "result-thumb";
-					thumb.src = result.imageUrl;
-					thumb.alt = "Analyzed frame";
+					thumbnail = document.createElement("img");
+					thumbnail.className = "result-thumb";
+					thumbnail.src = result.imageUrl;
+					thumbnail.alt = "Analyzed frame";
 				}
 				else {
-					thumb = document.createElement("div");
-					thumb.className = "result-thumb result-placeholder";
-					thumb.textContent = "No image";
+					thumbnail = document.createElement("div");
+					thumbnail.className = "result-thumb result-placeholder";
+					thumbnail.textContent = "No image";
 				}
 
 				const body = document.createElement("div");
 				body.className = "result-body";
-
 				const head = document.createElement("div");
 				head.className = "result-head";
-
 				const title = document.createElement("div");
 				title.className = "result-title";
-				if (result.alertTriggered) {
-					title.appendChild(bellIcon());
-				}
+				if (result.alertTriggered) title.appendChild(bellIcon());
 				const titleText = document.createElement("span");
-				titleText.textContent = result.alertTriggered ? (result.alerts.join(", ") || "Alert") : result.streamId;
+				titleText.textContent = result.streamId || "Unknown stream";
 				title.appendChild(titleText);
-
 				const time = document.createElement("div");
 				time.className = "result-time";
 				time.textContent = result.time;
-
-				const text = document.createElement("div");
-				text.className = "result-text";
-				text.textContent = result.aiResponse || result.message || "";
-
+				const responseText = document.createElement("div");
+				responseText.className = "result-text";
+				responseText.textContent = result.aiResponse || result.message || "";
 				head.append(title, time);
-				body.append(head, text);
-				item.append(thumb, body);
-				elements.resultsList.appendChild(item);
+				body.append(head, responseText);
+				item.append(thumbnail, body);
+
+				const openDetail = () => openResultModal(result, () => openOneShotResults(results));
+				item.addEventListener("click", openDetail);
+				item.addEventListener("keydown", (event) => {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						openDetail();
+					}
+				});
+				list.appendChild(item);
 			}
+			elements.resultModalContent.appendChild(list);
+			elements.resultModalBackdrop.classList.add("is-open");
+			elements.resultModalBackdrop.setAttribute("aria-hidden", "false");
+			elements.resultModalClose.focus();
 		}
 
 		function addResult(body) {
-			results.unshift({
+			const result = {
 				streamId: body.streamId || streamId(),
 				prompt: body.prompt || elements.prompt.value,
 				imageUrl: body.imageUrl,
@@ -1124,9 +1416,11 @@
 				message: body.message,
 				alertTriggered: Boolean(body.alertTriggered),
 				alerts: Array.isArray(body.alerts) ? body.alerts : [],
-				time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-			});
-			renderResults();
+				time: new Date(body.analysisTimestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+			};
+			elements.app.classList.toggle("alert-active", result.alertTriggered);
+			elements.statusText.textContent = result.alertTriggered ? "Alert" : "";
+			return result;
 		}
 
 		async function request(path, options = {}) {
@@ -1142,30 +1436,425 @@
 			return body;
 		}
 
-		async function registerStream() {
-			if (!streamId()) {
-				throw new Error("Stream ID is required");
-			}
-			updateStreamBadge();
-			const result = await request(`/register/${encodeURIComponent(streamId())}`, { method: "POST" });
-			setStatus(result.message || "Stream registered");
-		}
-
-		async function unregisterStream(targetStreamId) {
-			if (!targetStreamId) {
-				return;
-			}
+		async function openQueryResults(group, alertsOnly) {
 			try {
-				await request(`/register/${encodeURIComponent(targetStreamId)}`, { method: "DELETE" });
+				resultModalBackAction = null;
+				const allResults = await request(`/periodic/${encodeURIComponent(group.requestId)}/results?after=0`);
+				const visibleResults = alertsOnly ? allResults.filter((result) => result.alertTriggered) : allResults;
+				elements.resultModalTitle.textContent = alertsOnly ? "Alert Results" : "Analysis Results";
+				elements.resultModalContent.textContent = "";
+				const list = document.createElement("div");
+				list.className = "modal-results-list";
+				if (visibleResults.length === 0) {
+					list.innerHTML = `<div class="empty-results">No ${alertsOnly ? "alert" : "analysis"} result yet.</div>`;
+				}
+				for (const rawResult of [...visibleResults].reverse()) {
+					const result = { ...rawResult, time: new Date(rawResult.analysisTimestamp || Date.now()).toLocaleTimeString() };
+					const item = document.createElement("article");
+					item.className = `result-item${result.alertTriggered ? " is-alert" : ""}`;
+					item.setAttribute("role", "button");
+					item.setAttribute("tabindex", "0");
+					let thumbnail;
+					if (result.imageUrl) {
+						thumbnail = document.createElement("img");
+						thumbnail.className = "result-thumb";
+						thumbnail.src = result.imageUrl;
+						thumbnail.alt = "Analyzed frame";
+					}
+					else {
+						thumbnail = document.createElement("div");
+						thumbnail.className = "result-thumb result-placeholder";
+						thumbnail.textContent = "No image";
+					}
+					const body = document.createElement("div");
+					body.className = "result-body";
+					const head = document.createElement("div");
+					head.className = "result-head";
+					const title = document.createElement("div");
+					title.className = "result-title";
+					if (result.alertTriggered) title.appendChild(bellIcon());
+					const titleText = document.createElement("span");
+					titleText.textContent = result.streamId || "Unknown stream";
+					title.appendChild(titleText);
+					const time = document.createElement("div");
+					time.className = "result-time";
+					time.textContent = result.time;
+					const responseText = document.createElement("div");
+					responseText.className = "result-text";
+					responseText.textContent = result.aiResponse || result.message || "";
+					head.append(title, time);
+					body.append(head, responseText);
+					item.append(thumbnail, body);
+					const openDetail = () => openResultModal(result, () => openQueryResults(group, alertsOnly));
+					item.addEventListener("click", openDetail);
+					item.addEventListener("keydown", (event) => {
+						if (event.key === "Enter" || event.key === " ") {
+							event.preventDefault();
+							openDetail();
+						}
+					});
+					list.appendChild(item);
+				}
+				elements.resultModalContent.appendChild(list);
+				elements.resultModalBackdrop.classList.add("is-open");
+				elements.resultModalBackdrop.setAttribute("aria-hidden", "false");
 			}
 			catch (error) {
 				setStatus(error.message);
 			}
 		}
 
+		async function loadActiveQueries() {
+			try {
+				const queries = await request("/periodic");
+				const groups = new Map();
+				for (const query of queries) {
+					const key = query.requestId;
+					const group = groups.get(key) || { requestId: query.requestId, prompt: query.prompt, period: query.period, streams: [], applyToAll: Boolean(query.applyToAll), resultCount: 0, alertCount: 0, lastResult: null };
+					group.streams.push(...(query.streamIds || []));
+					group.resultCount += query.resultCount || 0;
+					group.alertCount += query.alertCount || 0;
+					if (query.lastResult && (!group.lastResult || query.lastResult.analysisTimestamp > group.lastResult.analysisTimestamp)) {
+						group.lastResult = query.lastResult;
+					}
+					groups.set(key, group);
+				}
+				elements.queryCount.textContent = String(groups.size);
+				elements.queriesList.textContent = "";
+				if (groups.size === 0) {
+					const empty = document.createElement("div");
+					empty.className = "empty-results";
+					empty.textContent = "No active periodic query.";
+					elements.queriesList.appendChild(empty);
+					return;
+				}
+
+				for (const group of groups.values()) {
+					const item = document.createElement("div");
+					item.className = "query-item";
+					const head = document.createElement("div");
+					head.className = "query-head";
+					const info = document.createElement("div");
+					info.className = "query-info";
+					const title = document.createElement("div");
+					title.className = "query-title";
+					title.textContent = group.prompt;
+					const prompt = document.createElement("div");
+					prompt.className = "query-prompt";
+					prompt.textContent = `${group.applyToAll ? "All streams" : group.streams.join(", ")} · every ${group.period}s`;
+					info.append(title, prompt);
+
+					const actions = document.createElement("div");
+					actions.className = "query-actions";
+					const edit = document.createElement("button");
+					edit.type = "button";
+					edit.className = "query-icon-button";
+					edit.title = "Edit query";
+					edit.setAttribute("aria-label", "Edit query");
+					edit.appendChild(actionIcon("edit"));
+					edit.addEventListener("click", () => editQuery(group));
+					const remove = document.createElement("button");
+					remove.type = "button";
+					remove.className = "query-icon-button delete";
+					remove.title = "Delete query";
+					remove.setAttribute("aria-label", "Delete query");
+					remove.appendChild(actionIcon("delete"));
+					remove.addEventListener("click", () => deleteQueryGroup(group.requestId));
+					actions.append(edit, remove);
+					head.append(info, actions);
+
+					const stats = document.createElement("div");
+					stats.className = "query-stats";
+					const resultStat = document.createElement("button");
+					resultStat.type = "button";
+					resultStat.className = "query-stat";
+					resultStat.textContent = `${group.resultCount} results`;
+					resultStat.addEventListener("click", () => openQueryResults(group, false));
+					const alertStat = document.createElement("button");
+					alertStat.type = "button";
+					alertStat.className = "query-stat alerts";
+					alertStat.textContent = `${group.alertCount} alerts`;
+					alertStat.addEventListener("click", () => openQueryResults(group, true));
+					const last = document.createElement("div");
+					last.hidden = !latestVisibleQueryIds.has(group.requestId);
+					const latestToggle = document.createElement("label");
+					latestToggle.className = "query-latest-toggle switch-control";
+					const latestText = document.createElement("span");
+					latestText.textContent = "Show latest";
+					const latestInput = document.createElement("input");
+					latestInput.type = "checkbox";
+					latestInput.checked = latestVisibleQueryIds.has(group.requestId);
+					latestInput.setAttribute("aria-label", "Show latest result");
+					const latestTrack = document.createElement("span");
+					latestTrack.className = "switch-track";
+					latestInput.addEventListener("change", () => {
+						if (latestInput.checked) {
+							latestVisibleQueryIds.add(group.requestId);
+						}
+						else {
+							latestVisibleQueryIds.delete(group.requestId);
+						}
+						last.hidden = !latestInput.checked;
+					});
+					latestToggle.append(latestText, latestInput, latestTrack);
+					stats.append(resultStat, alertStat, latestToggle);
+					if (group.lastResult) {
+						const result = { ...group.lastResult, time: new Date(group.lastResult.analysisTimestamp).toLocaleTimeString() };
+						last.className = `query-last-result${result.alertTriggered ? " is-alert" : ""}`;
+						let thumbnail;
+						if (result.imageUrl) {
+							thumbnail = document.createElement("img");
+							thumbnail.className = "query-result-thumb";
+							thumbnail.src = result.imageUrl;
+							thumbnail.alt = "Latest analyzed frame";
+						}
+						else {
+							thumbnail = document.createElement("div");
+							thumbnail.className = "query-result-thumb result-placeholder";
+							thumbnail.textContent = "No image";
+						}
+						const resultBody = document.createElement("div");
+						resultBody.className = "query-result-body";
+						const resultMeta = document.createElement("div");
+						resultMeta.className = "query-result-meta";
+						const latestLabel = document.createElement("span");
+						latestLabel.textContent = result.alertTriggered ? "Latest alert" : "Latest result";
+						const streamAndTime = document.createElement("span");
+						streamAndTime.textContent = `${result.streamId} · ${result.time}`;
+						resultMeta.append(latestLabel, streamAndTime);
+						const resultText = document.createElement("div");
+						resultText.className = "query-result-text";
+						resultText.textContent = result.aiResponse || result.message || "";
+						resultBody.append(resultMeta, resultText);
+						last.append(thumbnail, resultBody);
+						last.setAttribute("role", "button");
+						last.setAttribute("tabindex", "0");
+						last.addEventListener("click", () => openResultModal(result));
+						last.addEventListener("keydown", (event) => {
+							if (event.key === "Enter" || event.key === " ") {
+								event.preventDefault();
+								openResultModal(result);
+							}
+						});
+					}
+					else {
+						last.className = "query-last-result is-empty";
+						last.textContent = "Waiting for the first result…";
+					}
+					item.append(head, stats, last);
+					elements.queriesList.appendChild(item);
+				}
+			}
+			catch (error) {
+				setStatus(error.message);
+			}
+		}
+
+		async function saveQueries() {
+			try {
+				const queries = await request("/periodic");
+				const fileContent = {
+					version: 1,
+					exportedAt: new Date().toISOString(),
+					queries: queries.map(({ prompt, period, streamIds, applyToAll }) => ({ prompt, period, streamIds, applyToAll: Boolean(applyToAll) }))
+				};
+				const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(fileContent, null, 2)], { type: "application/json" }));
+				const download = document.createElement("a");
+				download.href = blobUrl;
+				const fileName = `aivision-queries-${appName}.json`;
+				download.download = fileName;
+				download.click();
+				URL.revokeObjectURL(blobUrl);
+				elements.queryFileName.textContent = fileName;
+				elements.queryFileName.title = fileName;
+				setStatus(`${fileContent.queries.length} query definition(s) saved to file`);
+			}
+			catch (error) {
+				setStatus(error.message);
+			}
+		}
+
+		function loadQueries() {
+			elements.queryFileInput.value = "";
+			elements.queryFileInput.click();
+		}
+
+		async function loadQueriesFromFile(event) {
+			try {
+				const file = event.target.files?.[0];
+				if (!file) return;
+				elements.queryFileName.textContent = file.name;
+				elements.queryFileName.title = file.name;
+				const content = JSON.parse(await file.text());
+				const saved = content?.queries;
+				if (!Array.isArray(saved) || saved.length === 0) {
+					throw new Error("The selected file has no query definitions");
+				}
+				let loaded = 0;
+				for (const query of saved) {
+					if (typeof query.prompt !== "string" || !query.prompt.trim() || !Number.isFinite(Number(query.period)) || !Array.isArray(query.streamIds)) {
+						throw new Error("Invalid query definition file");
+					}
+					const response = await request("/periodic", {
+						method: "POST",
+						body: JSON.stringify({ prompt: query.prompt, period: query.period, streamIds: query.streamIds, applyToAll: Boolean(query.applyToAll) })
+					});
+					if (response.success) {
+						periodicResultIds.set(response.dataId, 0);
+						loaded++;
+					}
+				}
+				await loadActiveQueries();
+				setStatus(`${loaded} query definition(s) loaded from file`);
+			}
+			catch (error) {
+				setStatus(error.message);
+			}
+		}
+
+		function editQuery(group) {
+			elements.prompt.value = group.prompt;
+			elements.period.value = group.period;
+			elements.continuousToggle.checked = true;
+			updateContinuousMode();
+			selectedApplyStreams = group.applyToAll ? new Set() : new Set(group.streams);
+			editingRequestId = group.requestId;
+			renderApplyToOptions();
+			elements.analyzeButton.textContent = "Update Query";
+			elements.prompt.focus();
+		}
+
+		async function deleteQueryGroup(requestId) {
+			try {
+				await request(`/periodic/${encodeURIComponent(requestId)}`, { method: "DELETE" });
+				periodicResultIds.delete(requestId);
+				setStatus("Prompt query deleted");
+				await loadActiveQueries();
+			}
+			catch (error) {
+				setStatus(error.message);
+			}
+		}
+
+		async function loadActiveStreams(autoPlayFirst = false) {
+			try {
+				const response = await fetch(`${broadcastsBase}/list/0/50?sort_by=date&order_by=desc`);
+				if (!response.ok) {
+					throw new Error(`Could not load streams: HTTP ${response.status}`);
+				}
+				const broadcasts = await response.json();
+				activeStreams = (Array.isArray(broadcasts) ? broadcasts : [])
+						.filter((broadcast) => broadcast.status === "broadcasting")
+						.map((broadcast) => ({
+							streamId: broadcast.streamId,
+							name: broadcast.name || broadcast.streamId
+						}));
+				renderApplyToOptions();
+
+				const previousSelection = elements.activeStreamSelect.value || connectedStreamId;
+				elements.activeStreamSelect.textContent = "";
+				if (activeStreams.length === 0) {
+					const option = document.createElement("option");
+					option.value = "";
+					option.textContent = "No active stream";
+					elements.activeStreamSelect.appendChild(option);
+					if (connectedStreamId) {
+						await disconnectPlayer();
+					}
+					return;
+				}
+
+				for (const stream of activeStreams) {
+					const option = document.createElement("option");
+					option.value = stream.streamId;
+					option.textContent = stream.name === stream.streamId
+							? stream.streamId : `${stream.name} (${stream.streamId})`;
+					elements.activeStreamSelect.appendChild(option);
+				}
+
+				const selectedStream = activeStreams.some((stream) => stream.streamId === previousSelection)
+						? previousSelection : activeStreams[0].streamId;
+				const shouldSwitchPlayer = Boolean(connectedStreamId && connectedStreamId !== selectedStream);
+				elements.activeStreamSelect.value = selectedStream;
+				selectStream(selectedStream);
+				if (shouldSwitchPlayer) {
+					await playSelectedStream();
+				}
+				else if (autoPlayFirst && connectionState === "disconnected") {
+					await connectPlayer();
+				}
+			}
+			catch (error) {
+				setStatus(error.message);
+			}
+		}
+
+		function renderApplyToOptions() {
+			const availableIds = new Set(activeStreams.map((stream) => stream.streamId));
+			selectedApplyStreams = new Set([...selectedApplyStreams].filter((id) => availableIds.has(id)));
+			elements.applyToOptions.textContent = "";
+
+			const allLabel = document.createElement("label");
+			const allCheckbox = document.createElement("input");
+			allCheckbox.type = "checkbox";
+			allCheckbox.checked = selectedApplyStreams.size === 0;
+			allCheckbox.addEventListener("change", () => {
+				selectedApplyStreams.clear();
+				renderApplyToOptions();
+			});
+			allLabel.append(allCheckbox, document.createTextNode("All active streams"));
+			elements.applyToOptions.appendChild(allLabel);
+
+			for (const stream of activeStreams) {
+				const label = document.createElement("label");
+				const checkbox = document.createElement("input");
+				checkbox.type = "checkbox";
+				checkbox.checked = selectedApplyStreams.has(stream.streamId);
+				checkbox.addEventListener("change", () => {
+					if (checkbox.checked) {
+						selectedApplyStreams.add(stream.streamId);
+					}
+					else {
+						selectedApplyStreams.delete(stream.streamId);
+					}
+					renderApplyToOptions();
+				});
+				label.append(checkbox, document.createTextNode(stream.name === stream.streamId
+						? stream.streamId : `${stream.name} (${stream.streamId})`));
+				elements.applyToOptions.appendChild(label);
+			}
+
+			elements.applyToLabel.textContent = selectedApplyStreams.size === 0
+					? "All" : `${selectedApplyStreams.size} stream${selectedApplyStreams.size === 1 ? "" : "s"}`;
+		}
+
+		function targetStreamIds() {
+			return selectedApplyStreams.size === 0
+					? activeStreams.map((stream) => stream.streamId)
+					: [...selectedApplyStreams];
+		}
+
+		function selectStream(selectedStreamId) {
+			if (!selectedStreamId) {
+				return;
+			}
+			elements.activeStreamSelect.value = selectedStreamId;
+			updateStreamBadge();
+		}
+
+		async function playSelectedStream() {
+			const selectedStreamId = elements.activeStreamSelect.value;
+			if (!selectedStreamId || selectedStreamId === connectedStreamId) {
+				return;
+			}
+			if (connectionState !== "disconnected") {
+				await disconnectPlayer();
+			}
+			selectStream(selectedStreamId);
+			await connectPlayer();
+		}
+
 		async function disconnectPlayer() {
-			clearTimeout(continuousTimer);
-			elements.continuousToggle.checked = false;
 			if (webRTCAdaptor) {
 				try {
 					webRTCAdaptor.stop(connectedStreamId || streamId());
@@ -1176,7 +1865,6 @@
 				}
 				webRTCAdaptor = null;
 			}
-			await unregisterStream(connectedStreamId || streamId());
 			connectedStreamId = "";
 			setConnectionState("disconnected");
 			setStatus("Disconnected");
@@ -1191,14 +1879,6 @@
 			const targetStreamId = streamId();
 			updateStreamBadge();
 			setConnectionState("connecting");
-			try {
-				await registerStream();
-			}
-			catch (error) {
-				setConnectionState("disconnected");
-				setStatus(error.message);
-				return;
-			}
 			if (webRTCAdaptor) {
 				webRTCAdaptor.stop(connectedStreamId || targetStreamId);
 				webRTCAdaptor.closeWebSocket();
@@ -1230,44 +1910,49 @@
 			});
 		}
 
-		function toggleConnection() {
-			if (connectionState === "connected") {
-				disconnectPlayer();
-				return;
-			}
-			if (connectionState === "disconnected") {
-				connectPlayer();
-			}
-		}
-
-		async function analyze(options = {}) {
+		async function analyze() {
 			if (isAnalyzing) {
 				return;
 			}
 			isAnalyzing = true;
 			elements.analyzeButton.disabled = true;
 			try {
-				const body = await request("/analyze", {
-					method: "POST",
-					body: JSON.stringify({
-						streamId: streamId(),
-						prompt: elements.prompt.value,
-						lastImageUrl: lastAnalyzedImageUrl,
-						lastFrameTimestamp: lastAnalyzedFrameTimestamp
-					})
-				});
-				if (body.imageUrl) {
-					lastAnalyzedImageUrl = body.imageUrl;
+				const targets = targetStreamIds();
+				const applyToAll = selectedApplyStreams.size === 0;
+				if (targets.length === 0 && !elements.continuousToggle.checked) {
+					throw new Error("No active stream is available");
 				}
-				if (body.frameTimestamp) {
-					lastAnalyzedFrameTimestamp = body.frameTimestamp;
-				}
-				if (!body.success) {
-					setStatus(body.message || "Analysis failed");
+				elements.applyTo.open = false;
+				if (elements.continuousToggle.checked) {
+					if (editingRequestId) {
+						await request(`/periodic/${encodeURIComponent(editingRequestId)}`, { method: "DELETE" });
+						periodicResultIds.delete(editingRequestId);
+					}
+					const response = await request("/periodic", {
+						method: "POST",
+						body: JSON.stringify({ prompt: elements.prompt.value, period: Number(elements.period.value), streamIds: targets, applyToAll })
+					});
+					if (!response.success) {
+						throw new Error(response.message || "Periodic analysis could not be started");
+					}
+					periodicResultIds.set(response.dataId, 0);
+					editingRequestId = null;
+					elements.analyzeButton.textContent = "Analyze";
+					setStatus(applyToAll ? "Periodic analysis started for all streams" : `Periodic analysis started for ${targets.length} stream(s)`);
+					await loadActiveQueries();
 					return;
 				}
-				addResult(body);
-				setStatus(body.alertTriggered ? "Alert received" : "Analysis completed");
+
+				const results = [];
+				for (const target of targets) {
+					const body = await request("/analyze", {
+						method: "POST",
+						body: JSON.stringify({ streamId: target, prompt: elements.prompt.value, lastFrameTimestamp: 0 })
+					});
+					results.push(addResult(body));
+				}
+				openOneShotResults(results);
+				setStatus(`Analysis completed for ${targets.length} stream(s)`);
 			}
 			catch (error) {
 				setStatus(error.message);
@@ -1275,25 +1960,24 @@
 			finally {
 				isAnalyzing = false;
 				elements.analyzeButton.disabled = false;
-				if (options.continuous && elements.continuousToggle.checked) {
-					scheduleContinuousAnalysis();
+			}
+		}
+
+		async function pollPeriodicResults() {
+			try {
+				const queries = await request("/periodic");
+				for (const query of queries) {
+					const after = periodicResultIds.get(query.requestId) || 0;
+					const newResults = await request(`/periodic/${encodeURIComponent(query.requestId)}/results?after=${after}`);
+					for (const result of newResults) {
+						periodicResultIds.set(query.requestId, Math.max(periodicResultIds.get(query.requestId) || 0, result.resultId || 0));
+						addResult(result);
+					}
 				}
 			}
-		}
-
-		function scheduleContinuousAnalysis() {
-			clearTimeout(continuousTimer);
-			continuousTimer = setTimeout(() => analyze({ continuous: true }), continuousIntervalMs);
-		}
-
-		function setContinuousAnalysis(enabled) {
-			clearTimeout(continuousTimer);
-			if (enabled) {
-				setStatus("Continuous analysis started");
-				analyze({ continuous: true });
-				return;
+			catch (error) {
+				setStatus(error.message);
 			}
-			setStatus("Continuous analysis stopped");
 		}
 
 		async function saveSettings() {
@@ -1304,7 +1988,9 @@
 					body: JSON.stringify({
 						baseUrl: elements.baseUrl.value,
 						token: elements.token.value,
-						model: elements.model.value
+						model: elements.model.value,
+						webhookUrl: elements.webhookUrl.value,
+						maxResultsPerAnalysis: Number(elements.maxResultsPerAnalysis.value)
 					})
 				});
 				setStatus(`AI settings saved: ${body.baseUrl} / ${body.model}`);
@@ -1317,11 +2003,44 @@
 			}
 		}
 
-		elements.streamId.addEventListener("input", updateStreamBadge);
-		elements.connectButton.addEventListener("click", toggleConnection);
+		async function loadSettings() {
+			try {
+				const body = await request("/settings");
+				elements.baseUrl.value = body.baseUrl || "";
+				elements.token.value = body.token || "";
+				elements.model.value = body.model || "";
+				elements.webhookUrl.value = body.webhookUrl || "";
+				elements.maxResultsPerAnalysis.value = body.maxResultsPerAnalysis || 100;
+				return true;
+			}
+			catch (error) {
+				setStatus(error.message);
+				return false;
+			}
+		}
+
+		async function resetSettings() {
+			elements.resetSettingsButton.disabled = true;
+			try {
+				if (await loadSettings()) {
+					setStatus("Unsaved changes discarded; settings reloaded from server");
+				}
+			}
+			finally {
+				elements.resetSettingsButton.disabled = false;
+			}
+		}
+
 		elements.analyzeButton.addEventListener("click", analyze);
-		elements.continuousToggle.addEventListener("change", () => setContinuousAnalysis(elements.continuousToggle.checked));
+		elements.continuousToggle.addEventListener("change", () => {
+			updateContinuousMode();
+		});
+		elements.activeStreamSelect.addEventListener("change", playSelectedStream);
 		elements.saveSettingsButton.addEventListener("click", saveSettings);
+		elements.resetSettingsButton.addEventListener("click", resetSettings);
+		elements.saveQueriesButton.addEventListener("click", saveQueries);
+		elements.loadQueriesButton.addEventListener("click", loadQueries);
+		elements.queryFileInput.addEventListener("change", loadQueriesFromFile);
 		elements.resultModalClose.addEventListener("click", closeResultModal);
 		elements.resultModalBackdrop.addEventListener("click", (event) => {
 			if (event.target === elements.resultModalBackdrop) {
@@ -1333,7 +2052,17 @@
 				closeResultModal();
 			}
 		});
-		renderResults();
+		async function initialize() {
+			updateContinuousMode();
+			await loadSettings();
+			await loadActiveStreams(true);
+			await loadActiveQueries();
+			streamListTimer = setInterval(() => loadActiveStreams(false), 5000);
+			queryListTimer = setInterval(loadActiveQueries, 3000);
+			resultPollTimer = setInterval(pollPeriodicResults, 1000);
+		}
+
+		initialize();
 	</script>
 </body>
 </html>

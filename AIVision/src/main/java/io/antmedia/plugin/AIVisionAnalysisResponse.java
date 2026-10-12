@@ -13,6 +13,8 @@ public class AIVisionAnalysisResponse {
 	private String imageUrl;
 	private String imagePath;
 	private long frameTimestamp;
+	private long resultId;
+	private long analysisTimestamp;
 	private String aiResponse;
 	private List<String> alerts = new ArrayList<>();
 
@@ -86,6 +88,22 @@ public class AIVisionAnalysisResponse {
 
 	public void setFrameTimestamp(long frameTimestamp) {
 		this.frameTimestamp = frameTimestamp;
+	}
+
+	public long getResultId() {
+		return resultId;
+	}
+
+	public void setResultId(long resultId) {
+		this.resultId = resultId;
+	}
+
+	public long getAnalysisTimestamp() {
+		return analysisTimestamp;
+	}
+
+	public void setAnalysisTimestamp(long analysisTimestamp) {
+		this.analysisTimestamp = analysisTimestamp;
 	}
 
 	public String getAiResponse() {
