@@ -8,17 +8,16 @@ The plugin supports one-shot analysis and server-side periodic queries. A query 
 
 ## Features
 
-- Automatically discovers active streams; no registration request is required.
-- Plays any active stream selected from the `Playing Stream` list.
-- Runs one-shot analysis on one, several, or all active streams.
-- Runs periodic analysis on the server after the UI starts the query.
-- Identifies every periodic query with a generated request ID.
-- Shows result and alert counts, history, and analyzed images per query.
-- Supports editing and cancelling active queries.
-- Exports and imports query definitions without exporting results.
-- Sends alert results to an optional webhook URL.
-- Stores plugin settings in the AMS application settings.
-- Limits retained results independently for each periodic query.
+- Analyzes live stream frames with custom natural-language prompts.
+- Runs one-shot or server-side periodic analysis on selected streams or all streams.
+- Detects alert conditions and posts alert results to an optional webhook.
+- Keeps per-query result history with model responses, timestamps, stream IDs, and analyzed images.
+- Displays result and alert counts and lets users inspect full result details.
+- Supports OpenAI-compatible hosted, local, and on-premise vision models.
+- Lets users edit, cancel, export, and import periodic query definitions.
+- Plays active streams directly in the dashboard while queries run.
+- Stores model and plugin settings in the AMS application settings.
+- Configures the maximum retained result count for each periodic query.
 
 ## Installation
 
