@@ -5,6 +5,8 @@ public class AIVisionSettings {
 	private String baseUrl = "http://localhost:11434/v1";
 	private String token = "";
 	private String model = "llava";
+	private String webhookUrl = "";
+	private int maxResultsPerAnalysis = 100;
 
 	public String getBaseUrl() {
 		return baseUrl;
@@ -28,6 +30,22 @@ public class AIVisionSettings {
 
 	public void setModel(String model) {
 		this.model = model;
+	}
+
+	public String getWebhookUrl() {
+		return webhookUrl;
+	}
+
+	public void setWebhookUrl(String webhookUrl) {
+		this.webhookUrl = webhookUrl != null ? webhookUrl.trim() : "";
+	}
+
+	public int getMaxResultsPerAnalysis() {
+		return maxResultsPerAnalysis;
+	}
+
+	public void setMaxResultsPerAnalysis(int maxResultsPerAnalysis) {
+		this.maxResultsPerAnalysis = Math.max(1, Math.min(maxResultsPerAnalysis, 1000));
 	}
 
 	private String trimTrailingSlash(String value) {

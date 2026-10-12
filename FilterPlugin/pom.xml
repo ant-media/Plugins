@@ -14,7 +14,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/ma
 	<properties>
         <skipTests>false</skipTests>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<sonar.projectKey>ant-media_plugins</sonar.projectKey>
+		<sonar.projectKey>io.antmedia.plugin:filter-plugin</sonar.projectKey>
 		<sonar.organization>ant-media-plugins</sonar.organization>
 		<argLine></argLine> <!-- Empty default value -->
 		<sonar.exclusions>

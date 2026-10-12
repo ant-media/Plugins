@@ -44,7 +44,6 @@ public class AIVisionPacketListener implements IPacketListener {
 	private final String imageUrlPrefix;
 	private final Vertx vertx;
 	private final AtomicReference<LatestFrame> latestFrame = new AtomicReference<>();
-	private final AtomicReference<AIVisionImage> latestSavedImage = new AtomicReference<>();
 	private volatile AIVisionVideoDecoder videoDecoder;
 	private volatile StreamParametersInfo videoStreamInfo;
 
@@ -117,10 +116,6 @@ public class AIVisionPacketListener implements IPacketListener {
 		stop();
 	}
 
-	public AIVisionImage getLatestImage() {
-		return latestSavedImage.get();
-	}
-
 	public long getLatestFrameTimestamp() {
 		LatestFrame frame = latestFrame.get();
 		return frame != null ? frame.getTimestamp() : 0;
@@ -138,7 +133,6 @@ public class AIVisionPacketListener implements IPacketListener {
 		File imageFile = new File(imageDirectory, fileName);
 		ImageIO.write(frame.getImage(), "png", imageFile);
 		AIVisionImage image = new AIVisionImage(imageFile, imageUrlPrefix + "/" + fileName, timestamp);
-		latestSavedImage.set(image);
 		logger.debug("Saved AI Vision analysis frame for stream {} at {}", streamId, imageFile.getAbsolutePath());
 		return image;
 	}
