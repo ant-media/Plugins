@@ -76,11 +76,12 @@ Default settings are available before the first save:
 
 ## Using the Dashboard
 
-1. Select the stream to watch from `Playing Stream`. The list refreshes automatically.
-2. Enter a prompt.
-3. Choose `Apply to: All` or select specific active streams.
-4. Leave `Continuous` disabled for one-shot analysis, or enable it and set a period.
-5. Click `Analyze`.
+1. Enter a prompt.
+2. Choose `Apply to: All` or select specific active streams.
+3. Leave `Continuous` disabled for one-shot analysis, or enable it and set a period.
+4. Click `Analyze`.
+
+`Playing Stream` is an optional preview control. It only selects the stream shown in the player and does not determine which streams are analyzed. The active stream list refreshes automatically.
 
 One-shot `All` analysis creates one result for every stream active when the button is clicked. Periodic `All` analysis remains active and also applies to streams that start later.
 
