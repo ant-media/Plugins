@@ -4,8 +4,14 @@ import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 import static io.antmedia.plugin.TestReflect.*;
 
+import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.AppSettings;
+import io.antmedia.datastore.db.DataStore;
+import io.antmedia.datastore.db.types.BroadcastUpdate;
+import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.streamsource.StreamFetcher;
+import io.vertx.core.Context;
+import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import org.junit.After;
 import org.junit.Before;
@@ -34,6 +40,8 @@ public class MoQStreamFetcherTest {
 
     private IScope scope;
     private Vertx vertx;
+    private AntMediaApplicationAdapter app;
+    private DataStore dataStore;
 
     // Every fetcher binds a real listening port in its constructor. Closing them at the end of
     // each test body only works while nothing above it throws, so it happens here instead.
@@ -45,8 +53,14 @@ public class MoQStreamFetcherTest {
         AppSettings appSettings = mock(AppSettings.class);
         when(appSettings.getStreamFetcherBufferTime()).thenReturn(0);
 
+        // getInstance() walks the same path for the broadcast status writes of the state listener
+        app = mock(AntMediaApplicationAdapter.class);
+        dataStore = mock(DataStore.class);
+        when(app.getDataStore()).thenReturn(dataStore);
+
         ApplicationContext appCtx = mock(ApplicationContext.class);
         when(appCtx.getBean(AppSettings.BEAN_NAME)).thenReturn(appSettings);
+        when(appCtx.getBean(AntMediaApplicationAdapter.BEAN_NAME)).thenReturn(app);
 
         IContext red5Ctx = mock(IContext.class);
         when(red5Ctx.getApplicationContext()).thenReturn(appCtx);
@@ -54,7 +68,15 @@ public class MoQStreamFetcherTest {
         scope = mock(IScope.class);
         when(scope.getContext()).thenReturn(red5Ctx);
 
+        // Runs the state machine inline, so a transition has happened by the time the call returns
+        Context context = mock(Context.class);
+        doAnswer(inv -> {
+            inv.<Handler<Void>>getArgument(0).handle(null);
+            return null;
+        }).when(context).runOnContext(any());
+
         vertx = mock(Vertx.class);
+        when(vertx.getOrCreateContext()).thenReturn(context);
     }
 
     @After
@@ -87,9 +109,9 @@ public class MoQStreamFetcherTest {
         assertNull(carrier.get());
 
         assertFalse("the announce poller owns restart, so the fetcher must not restart itself",
-                fetcher.isRestartStream());
+                getBoolean(fetcher, "restartStream"));
         assertNull("no moq process yet", fetcher.getLogStream());
-        assertFalse("no worker thread yet", fetcher.isAlive());
+        assertFalse("not started yet", fetcher.isAlive());
     }
 
     @Test
@@ -109,11 +131,13 @@ public class MoQStreamFetcherTest {
         doThrow(new IOException("connection reset")).when(stuck).close();
         setRelaySocket(fetcher, stuck);
 
-        fetcher.stopStream();
+        assertTrue("the future completes once the fetcher is stopped", fetcher.stopStream().isDone());
 
         verify(moq).destroy();
         verify(stuck).close();
         assertTrue("the listening port must still be released", ss.isClosed());
+        assertEquals(StreamFetcher.State.STOPPED, fetcher.getState());
+        verify(app).closeBroadcast("s1", null, null);
     }
 
     @Test
@@ -226,23 +250,40 @@ public class MoQStreamFetcherTest {
         assertTrue(entered.await(10, TimeUnit.SECONDS));
     }
 
-    @Test(timeout = 30_000)
-    public void testIsAlive_tracksWorkerThread() throws Exception {
+    @Test
+    public void testIsAlive_tracksFetcherState() throws Exception {
         MoQStreamFetcher fetcher = newFetcher("s1");
 
-        // The announce poller restarts an ingest the moment this flips to false, so a
-        // present-but-finished thread has to be distinguishable from a running one.
-        CountDownLatch release = new CountDownLatch(1);
-        StreamFetcher.WorkerThread worker = spy(fetcher.new WorkerThread());
-        doAnswer(inv -> { release.await(); return null; }).when(worker).run(); // no real FFmpeg work
-        fetcher.setThread(worker);
-        worker.start();
+        // The announce poller restarts an ingest the moment this flips to false, so only an
+        // attempt that is actually running may count as alive.
+        for (StreamFetcher.State state : StreamFetcher.State.values()) {
+            setField(fetcher, "state", state);
+            boolean running = state == StreamFetcher.State.CONNECTING
+                    || state == StreamFetcher.State.STREAMING
+                    || state == StreamFetcher.State.STOPPING;
+            assertEquals("isAlive in state " + state, running, fetcher.isAlive());
+        }
+    }
 
-        assertTrue("a running worker thread means the ingest is alive", fetcher.isAlive());
+    @Test
+    public void testOnTransition_writesBroadcastStatus() {
+        MoQStreamFetcher fetcher = newFetcher("s1");
+        BroadcastUpdate preparing = new BroadcastUpdate();
+        when(app.getFreshBroadcastUpdateForStatus(IAntMediaStreamHandler.PUBLISH_TYPE_PULL, IAntMediaStreamHandler.BROADCAST_STATUS_PREPARING))
+                .thenReturn(preparing);
 
-        release.countDown();
-        worker.join(10_000);
-        assertFalse("a finished worker thread must report dead so the poller restarts it", fetcher.isAlive());
+        fetcher.onTransition(fetcher, StreamFetcher.State.IDLE, StreamFetcher.State.CONNECTING);
+        verify(dataStore).updateBroadcastFields("s1", preparing);
+
+        fetcher.onTransition(fetcher, StreamFetcher.State.CONNECTING, StreamFetcher.State.STREAMING);
+        verify(app).startPublish("s1", 0, IAntMediaStreamHandler.PUBLISH_TYPE_PULL, null, null);
+
+        fetcher.onTransition(fetcher, StreamFetcher.State.STREAMING, StreamFetcher.State.STOPPING);
+        fetcher.onTick(fetcher);
+        verify(app, never()).closeBroadcast(any(), any(), any());
+
+        fetcher.onTransition(fetcher, StreamFetcher.State.STOPPING, StreamFetcher.State.STOPPED);
+        verify(app).closeBroadcast("s1", null, null);
     }
 
     @Test(timeout = 30_000)

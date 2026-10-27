@@ -405,7 +405,7 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
     void startIngest(String streamId) {
         IAntMediaStreamHandler app = getApplication();
 
-        // StreamFetcher.WorkerThread requires a Broadcast record in the DB — create one if
+        // StreamFetcher's worker requires a Broadcast record in the DB — create one if
         // the stream was never registered manually. Type "liveStream" makes it appear in the
         // management console alongside RTMP/WebRTC streams, not under stream sources.
         if (app.getDataStore().get(streamId) == null) {
@@ -430,7 +430,6 @@ public class MoQPlugin implements ApplicationContextAware, IStreamListener {
             logger.error("MoQ: cannot create stream fetcher for stream {}", streamId, e);
             return;
         }
-        fetcher.setStartStreamForce(true);
         activeIngests.put(streamId, fetcher);
         fetcher.startStream();
     }

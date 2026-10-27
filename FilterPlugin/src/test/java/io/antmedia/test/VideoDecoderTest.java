@@ -106,7 +106,27 @@ public class VideoDecoderTest {
 		//no crash
 		assertNull(videoDecoder.decodeVideoPacket(pkt));
 
-		
+
+	}
+
+	@Test
+	public void testOpenDecoderFails() {
+		AVCodecParameters videoCodecParameters = new AVCodecParameters();
+		videoCodecParameters.codec_id(AV_CODEC_ID_H264);
+		videoCodecParameters.codec_type(AVMEDIA_TYPE_VIDEO);
+
+		StreamParametersInfo streamParams = new StreamParametersInfo();
+		streamParams.setCodecParameters(videoCodecParameters);
+
+		//videoContext is never allocated, constructor must not dereference it
+		VideoDecoder videoDecoder = new VideoDecoder("streamId", streamParams) {
+			@Override
+			public boolean openDecoder(org.bytedeco.ffmpeg.avcodec.AVCodec codec, AVCodecParameters par) {
+				return false;
+			}
+		};
+
+		assertFalse(videoDecoder.isRunning());
 	}
 
 }
