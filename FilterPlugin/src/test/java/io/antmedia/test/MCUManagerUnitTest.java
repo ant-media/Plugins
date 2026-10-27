@@ -1,4 +1,6 @@
 package io.antmedia.test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -27,6 +29,7 @@ import io.antmedia.AntMediaApplicationAdapter;
 import io.antmedia.datastore.db.DataStore;
 import io.antmedia.datastore.db.InMemoryDataStore;
 import io.antmedia.datastore.db.types.Broadcast;
+import io.antmedia.filter.utils.MCUFilterTextGenerator;
 import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.plugin.FiltersManager;
 import io.antmedia.plugin.MCUManager;
@@ -190,5 +193,36 @@ public class MCUManagerUnitTest {
 		verify(filtersManager, timeout(MCUManager.CONFERENCE_INFO_POLL_PERIOD_MS*4000).times(1)).createFilter(any(), eq(app));
 
 	}
-	
+
+	@Test
+	public void testCreateAudioFilter() {
+		assertEquals("[in0]acopy[out0]", MCUFilterTextGenerator.createAudioFilter(1));
+		assertEquals("[in0][in1][in2]amix=inputs=3[out0]", MCUFilterTextGenerator.createAudioFilter(3));
+	}
+
+	@Test
+	public void testCreateVideoFilter() {
+		assertEquals("[in0]copy[out0]", MCUFilterTextGenerator.createVideoFilter(1));
+
+		//single row
+		assertEquals("[in0]scale=354:234:force_original_aspect_ratio=decrease,pad=360:240:3:3:color=black[s0];"
+				+ "[in1]scale=354:234:force_original_aspect_ratio=decrease,pad=360:240:3:3:color=black[s1];"
+				+ "[s0][s1]hstack=inputs=2,pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]",
+				MCUFilterTextGenerator.createVideoFilter(2));
+
+		//last row has a single stream, it is padded without hstack
+		assertTrue(MCUFilterTextGenerator.createVideoFilter(3).endsWith(
+				"[s0][s1]hstack=inputs=2[l0];[s2]pad=720:240:180[l1];[l0][l1]vstack=inputs=2,pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]"));
+
+		//full grid, no padding for the last row
+		assertTrue(MCUFilterTextGenerator.createVideoFilter(4).endsWith(
+				"[s0][s1]hstack=inputs=2[l0];[s2][s3]hstack=inputs=2[l1];[l0][l1]vstack=inputs=2,pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]"));
+
+		//last row is shorter than the others, it is stacked and then padded
+		String fiveStreams = MCUFilterTextGenerator.createVideoFilter(5);
+		assertTrue(fiveStreams.startsWith("[in0]scale=234:154:force_original_aspect_ratio=decrease,pad=240:160:3:3:color=black[s0];"));
+		assertTrue(fiveStreams.endsWith(
+				"[s0][s1][s2]hstack=inputs=3[l0];[s3][s4]hstack=inputs=2[l1];[l1]pad=720:160:120[l1];[l0][l1]vstack=inputs=2,pad=720:480:(ow-iw)/2:(oh-ih)/2[out0]"));
+	}
+
 }
