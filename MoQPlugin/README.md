@@ -35,6 +35,15 @@ Ingest works by polling. The plugin asks the relay `GET <relay>/announced/moq/<a
 
 ## Build and install
 
+You need JDK 17+, Maven, and Node 24+ for the player. Ubuntu's apt `nodejs` is too old, so install it from NodeSource:
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+On nixos, `src/main/js/player/shell.nix` provides it.
+
 ```bash
 ./build.sh                 # player + plugin
 ./build.sh --skip-player   # plugin only, reuses the committed player build
@@ -153,7 +162,7 @@ The publisher pins H.264, because browsers that can hardware encode AV1 or VP9 p
 
 ```bash
 cd src/main/js/player
-nix-shell shell.nix   # on nixos, for node. skip it if npm is already on PATH
+nix-shell shell.nix   # on nixos, for node 24. skip it if node 24+ is already on PATH
 npm install
 npm run dev
 ```

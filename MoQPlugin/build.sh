@@ -36,11 +36,12 @@ check_java() {
 }
 
 check_node() {
-    require npm "On nixos: nix-shell $PLAYER_SRC/shell.nix"
+    local hint="\nOn ubuntu (apt's nodejs is too old): curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - && sudo apt install -y nodejs\nOn nixos: nix-shell $PLAYER_SRC/shell.nix"
+    require npm "$hint"
     local major
     major=$(node -v 2>/dev/null | sed 's/v\([0-9]*\).*/\1/')
-    if [ -n "$major" ] && [ "$major" -lt 20 ]; then
-        error "node $major is too old for vite, need 20 or newer"
+    if [ -n "$major" ] && [ "$major" -lt 24 ]; then
+        error "node $major is too old, need 24 or newer. $hint"
     fi
 }
 
