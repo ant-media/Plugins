@@ -45,7 +45,7 @@ public class AudioDecoder
 					+ audioCodecParameters.codec_id() + ".");
 		}
 		
-		logger.info("audio decoder name:{} for {} sample rate:{}" , codec.name().getString(), streamId, audioCodecParameters.sample_rate());
+		logger.info("audio decoder name:{} for {} sample rate:{}" , codec.name().getString(), streamId.replaceAll("[\n\r]", "_"), audioCodecParameters.sample_rate());
 
 		// Allocate a codec context for the decoder
 		if ((audioContext = avcodec_alloc_context3(codec)) == null) {
