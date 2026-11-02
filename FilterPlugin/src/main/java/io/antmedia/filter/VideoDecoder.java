@@ -90,9 +90,14 @@ public class VideoDecoder {
 			streamParameters.getCodecParameters().format(AV_PIX_FMT_NV12);
 		}
 		
-		BytePointer name = codec.name();
-		logger.info("video decoder name: {} video context timebase:{}/{} wxh:{}x{}" , name.getString(),  videoContext.time_base().num(), videoContext.time_base().den(), videoContext.width(), videoContext.height());
-		codec.close();
+		if (codec != null) {
+			// videoContext is only usable when the decoder is opened
+			if (result) {
+				BytePointer name = codec.name();
+				logger.info("video decoder name: {} video context timebase:{}/{} wxh:{}x{}" , name.getString(),  videoContext.time_base().num(), videoContext.time_base().den(), videoContext.width(), videoContext.height());
+			}
+			codec.close();
+		}
 		
 		running = result;
 		

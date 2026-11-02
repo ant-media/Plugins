@@ -865,7 +865,7 @@ public class MoQPluginTest {
             assertFalse("external relay must keep certificate verification on",
                     (boolean) getField(fetcher, "tlsDisableVerify"));
             assertFalse("the poller owns restart, so the fetcher must not restart itself",
-                    fetcher.isRestartStream());
+                    getBoolean(fetcher, "restartStream"));
         } finally {
             ((java.net.ServerSocket) getField(fetcher, "serverSocket")).close();
         }

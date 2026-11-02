@@ -19,8 +19,9 @@ import io.antmedia.filter.utils.FilterGraph;
 
 
 public class Utils {
-	
-	
+
+	private static final Logger logger = LoggerFactory.getLogger(Utils.class);
+
 	public static final  AVRational TIME_BASE_FOR_MS;
 	static {
 		TIME_BASE_FOR_MS = new AVRational();
@@ -46,7 +47,7 @@ public class Utils {
 			Files.write(file.toPath(), uPlane, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
 			Files.write(file.toPath(), vPlane, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error("Cannot save frame to file", e);
 		}
 		
 		//Typical check if it's ok		

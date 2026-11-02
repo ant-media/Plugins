@@ -519,7 +519,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener {
 					IFrameListener customBroadcast = app.createCustomBroadcast(streamId, filterConfiguration.getVideoOutputHeight(), filterConfiguration.getVideoOutputBitrate());
 					startBroadcast(streamId, customBroadcast, filterConfiguration.isVideoEnabled(), filterConfiguration.isAudioEnabled(), app);
 					currentOutStreams.put(streamId, customBroadcast);
-					logger.info("Output stream:{} will be created for filterId:{} and height:{}", streamId, filterId, filterConfiguration.getVideoOutputHeight());
+					logger.info("Output stream:{} will be created for filterId:{} and height:{}", streamId.replaceAll("[\n\r]", "_"), filterId, filterConfiguration.getVideoOutputHeight());
 				}
 
 			}		
@@ -569,7 +569,7 @@ public class FilterAdaptor implements IFrameListener, IPacketListener {
 
 		// This ensures plugins like LowLatencyHLSPlugin get notified about the filter output stream and hooks etc. works
 		app.startPublish(streamId, System.currentTimeMillis(), IAntMediaStreamHandler.PUBLISH_TYPE_WEBRTC, null, null);
-		logger.info("Stream notifications triggered for custom broadcast filter output: {}", streamId);
+		logger.info("Stream notifications triggered for custom broadcast filter output: {}", streamId.replaceAll("[\n\r]", "_"));
 	}
 
 	public FilterConfiguration getCurrentFilterConfiguration() {

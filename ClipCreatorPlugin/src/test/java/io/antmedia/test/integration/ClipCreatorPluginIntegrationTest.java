@@ -625,6 +625,69 @@ public class ClipCreatorPluginIntegrationTest {
 
 	}
 
+	/**
+	 * Async range clip (returnFile=false) registers a "processing" placeholder VoD, then muxingFinished adds
+	 * another VoD with the same vodId. MongoStore inserts it as a second document, so the list shows an
+	 * empty VoD plus the real one sharing a vodId. MapDB overwrites by vodId, so the server must run on MongoDB to go red.
+	 */
+	@Test
+	public void testAsyncRangeMp4CreatesSingleVoD() throws Exception {
+		ClipCreatorSettings clipCreatorSettings = new ClipCreatorSettings();
+		clipCreatorSettings.setEnabled(false);
+
+		AppSettings appSettings = callGetAppSettings(appName);
+		appSettings.setHlsPlayListType("event");
+		appSettings.getCustomSettings().put("plugin."+ClipCreatorPlugin.PLUGIN_KEY, clipCreatorSettings);
+		assertTrue(callSetAppSettings(appName, appSettings).isSuccess());
+
+		String streamId = "testStream" + RandomStringUtils.randomAlphanumeric(5);
+		rtmpSendingProcess = execute(ffmpegPath
+				+ " -re -i src/test/resources/test_video_360p.flv  -codec copy -f flv rtmp://localhost/LiveApp/"
+				+ streamId);
+
+		Awaitility.await().atMost(15, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
+			Broadcast broadcast = getBroadcast(streamId);
+			return broadcast != null && IAntMediaStreamHandler.BROADCAST_STATUS_BROADCASTING.equals(broadcast.getStatus());
+		});
+
+		Awaitility.await().atMost(10, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() ->
+			testFile("http://" + SERVER_ADDR + ":5080/LiveApp/streams/" + streamId + ".m3u8", 0, false)
+		);
+
+		//let some segments accumulate
+		Awaitility.await().pollDelay(15, TimeUnit.SECONDS).atMost(16, TimeUnit.SECONDS).until(() -> true);
+
+		long endTimestamp = System.currentTimeMillis();
+		Result result = callCreateMp4RangeAsync(streamId, endTimestamp - 10000, endTimestamp);
+		assertTrue(result.isSuccess());
+		String vodId = result.getDataId();
+		assertNotNull(vodId);
+
+		//wait until the real mp4 is registered and the process status is updated after it
+		Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
+			List<VoD> vodList = getVoDsWithId(vodId);
+			return vodList.stream().anyMatch(vod -> vod.getFileSize() > 0)
+					&& vodList.stream().anyMatch(vod -> VoD.PROCESS_STATUS_FINISHED.equals(vod.getProcessStatus()));
+		});
+
+		List<VoD> vods = getVoDsWithId(vodId);
+		logger.info("VoDs for vodId:{} -> count:{} fileSizes:{} statuses:{}", vodId, vods.size(),
+				vods.stream().map(VoD::getFileSize).collect(Collectors.toList()),
+				vods.stream().map(VoD::getProcessStatus).collect(Collectors.toList()));
+
+		assertEquals("Duplicate VoD records for vodId " + vodId, 1, vods.size());
+		VoD vod = vods.get(0);
+		assertTrue(vod.getFileSize() > 0);
+		assertTrue(vod.getDuration() > 0);
+		assertEquals(VoD.PROCESS_STATUS_FINISHED, vod.getProcessStatus());
+	}
+
+	private static List<VoD> getVoDsWithId(String vodId) {
+		return callGetVoDList(0, 50, null).stream()
+				.filter(vod -> vodId.equals(vod.getVodId()))
+				.collect(Collectors.toList());
+	}
+
 	public static boolean testFile(String absolutePath, int expectedDurationInMS, boolean fullRead) {
 		int ret;
 		audioExists = false;
@@ -1060,6 +1123,29 @@ public class ClipCreatorPluginIntegrationTest {
 			} catch (Exception e) {
 				e.printStackTrace();
 				throw new RuntimeException("Error while downloading MP4 file", e);
+			}
+		}
+	}
+
+	public static Result callCreateMp4RangeAsync(String streamId, long startTimestamp, long endTimestamp) throws Exception {
+		String url = ROOT_SERVICE_URL + "/clip-creator/mp4/" + streamId + "/range?startTimestamp=" + startTimestamp
+				+ "&endTimestamp=" + endTimestamp;
+
+		try (CloseableHttpClient client = HttpClients.custom()
+				.setRedirectStrategy(new LaxRedirectStrategy())
+				.setDefaultCookieStore(httpCookieStore)
+				.build()) {
+
+			HttpUriRequest post = RequestBuilder.post()
+					.setUri(url)
+					.setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+					.build();
+
+			try (CloseableHttpResponse response = client.execute(post)) {
+				StringBuffer result = readResponse(response);
+				logger.info("create mp4 range result: {} status:{}", result, response.getStatusLine().getStatusCode());
+				assertEquals(202, response.getStatusLine().getStatusCode());
+				return new Gson().fromJson(result.toString(), Result.class);
 			}
 		}
 	}

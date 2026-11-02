@@ -1,6 +1,7 @@
 package io.antmedia.plugin;
 
 import io.antmedia.AntMediaApplicationAdapter;
+import io.antmedia.muxer.IAntMediaStreamHandler;
 import io.antmedia.streamsource.StreamFetcher;
 import io.vertx.core.Vertx;
 import org.red5.server.api.scope.IScope;
@@ -14,6 +15,9 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -35,10 +39,17 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>moq stderr is available via {@link #getLogStream()} and polled by
  * {@link MoQPlugin#pollCliLogs()}.
  */
-public class MoQStreamFetcher extends StreamFetcher {
+public class MoQStreamFetcher extends StreamFetcher implements StreamFetcher.StateListener {
 
     private static final Logger logger = LoggerFactory.getLogger(MoQStreamFetcher.class);
     static int acceptTimeoutMs = 10000;
+
+    // MoQ ingests are not registered in StreamFetcherManager, so they bring their own worker pool
+    private static final ExecutorService workerPool = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "moq-fetcher-worker");
+        t.setDaemon(true);
+        return t;
+    });
 
     // ThreadLocal carries the ServerSocket through the super() call so we can
     // create it before super() (to get the port) while still calling super() first.
@@ -64,6 +75,7 @@ public class MoQStreamFetcher extends StreamFetcher {
         this.tlsDisableVerify = tlsDisableVerify;
 
         setRestartStream(false); // poller owns restart logic
+        initialize(vertx.getOrCreateContext(), workerPool, this);
     }
 
     /**
@@ -81,9 +93,27 @@ public class MoQStreamFetcher extends StreamFetcher {
         }
     }
 
-    /** True if the StreamFetcher WorkerThread is still alive. Used by the poller. */
+    /** True while the fetcher is connecting, streaming or stopping. Used by the poller. */
     public boolean isAlive() {
-        return getThread() != null && getThread().isAlive();
+        return isThreadActive();
+    }
+
+    // Broadcast status is written by the state listener, which for a MoQ ingest is the fetcher itself
+    @Override
+    public void onTransition(StreamFetcher fetcher, State from, State to) {
+        AntMediaApplicationAdapter app = getInstance();
+        switch (to) {
+            case CONNECTING -> getDataStore().updateBroadcastFields(streamId,
+                    app.getFreshBroadcastUpdateForStatus(IAntMediaStreamHandler.PUBLISH_TYPE_PULL, IAntMediaStreamHandler.BROADCAST_STATUS_PREPARING));
+            case STREAMING -> app.startPublish(streamId, 0, IAntMediaStreamHandler.PUBLISH_TYPE_PULL, null, null);
+            case STOPPED -> app.closeBroadcast(streamId, null, null);
+            default -> { /* restart is off, nothing to write for the other states */ }
+        }
+    }
+
+    @Override
+    public void onTick(StreamFetcher fetcher) {
+        // no periodic maintenance, MoQAnnouncePoller owns the ingest lifecycle
     }
 
     /** moq-cli stderr — polled by MoQPlugin for log output. */
@@ -103,7 +133,7 @@ public class MoQStreamFetcher extends StreamFetcher {
 
         startRelayThread();
 
-        // WorkerThread spawned here → calls avformat_open_input("tcp://localhost:PORT").
+        // Worker started here → calls avformat_open_input("tcp://localhost:PORT").
         // serverSocket is already listening, so the connection completes immediately.
         callSuperStartStream();
     }
@@ -139,7 +169,7 @@ public class MoQStreamFetcher extends StreamFetcher {
     }
 
     @Override
-    public void stopStream() {
+    public CompletableFuture<Void> stopStream() {
         // 1. Kill moq → transferTo() in relay thread gets IOException/EOF → relay exits.
         Process p = moqProcess.get();
         if (p != null) {
@@ -150,7 +180,7 @@ public class MoQStreamFetcher extends StreamFetcher {
         // 3. Close server socket → unblocks accept() if relay thread is still waiting.
         closeQuietly(serverSocket);
 
-        super.stopStream();
+        return super.stopStream();
     }
 
     protected void startRelayThread() {
