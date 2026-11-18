@@ -39,6 +39,11 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/ma
 	</licenses>
 	 <repositories>
         <repository>
+            <id>github</id>
+            <name>Ant Media JavaCPP Presets GitHub Packages</name>
+            <url>https://maven.pkg.github.com/ant-media/javacpp-presets</url>
+        </repository>
+        <repository>
             <snapshots>
                 <enabled>false</enabled>
             </snapshots>
