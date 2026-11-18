@@ -106,6 +106,7 @@ public class FilterGraphUnitTest {
 	public void testPrepareFrame() {
 		FilterGraph graph = Mockito.spy(createFilterGraph("[in0][in1]vstack[out0]", 2, 1));
 		AVFrame frame = new AVFrame();
+		avutil.av_frame_unref(frame);
 		frame.width(480);
 		frame.height(360);
 		frame.format(avutil.AV_PIX_FMT_YUV420P);

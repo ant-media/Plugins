@@ -97,6 +97,7 @@ public class FilterAdaptorUnitTest {
 
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
 		AVFrame frame = new AVFrame();
+		avutil.av_frame_unref(frame);
 		FilterGraph filterGraph = mock(FilterGraph.class);
 
 		filterAdaptor.onVideoFrame(streamId, frame);
@@ -142,6 +143,7 @@ public class FilterAdaptorUnitTest {
 		
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
 		AVFrame frame = new AVFrame();
+		avutil.av_frame_unref(frame);
 		FilterGraph filterGraph = mock(FilterGraph.class);
 
 		filterAdaptor.onVideoFrame(streamId, frame);
@@ -189,6 +191,7 @@ public class FilterAdaptorUnitTest {
 		
 		String streamId = "stream"+RandomUtils.nextInt(0, 10000);
 		AVFrame frame = new AVFrame();
+		avutil.av_frame_unref(frame);
 		FilterGraph filterGraph = mock(FilterGraph.class);
 
 		filterAdaptor.onAudioFrame(streamId, frame);
@@ -340,6 +343,7 @@ public class FilterAdaptorUnitTest {
 		when(filterGraph.isInitiated()).thenReturn(true);
 		when(filterGraph.getListener()).thenReturn(mock(IFilteredFrameListener.class));
 		AVFrame filterOutputFrame = new AVFrame();
+		avutil.av_frame_unref(filterOutputFrame);
 		filterOutputFrame.width(100);
 		filterOutputFrame.height(100);
 		when(filterGraph.doFilter(eq(streamId), any(), anyBoolean())).thenReturn(filterOutputFrame);
@@ -351,6 +355,7 @@ public class FilterAdaptorUnitTest {
 		//for video
 		for(int i = 0; i < 100; i++) {
 			AVFrame frame = new AVFrame();
+			avutil.av_frame_unref(frame);
 			frame.width(streamInfo.getCodecParameters().width());
 			frame.height(streamInfo.getCodecParameters().height());
 			frame.pts(RandomUtils.nextLong(0, 5000));
@@ -367,6 +372,7 @@ public class FilterAdaptorUnitTest {
 		//for audio
 		for(int i = 0; i < 100; i++) {
 			AVFrame frame = new AVFrame();
+			avutil.av_frame_unref(frame);
 			frame.pts(RandomUtils.nextLong(0, 5000));
 			AVFrame filteredFrame = filterAdaptor.onAudioFrame(streamId, frame);
 
