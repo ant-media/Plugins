@@ -54,8 +54,7 @@ public class FilterGraphUnitTest {
 	public void testSinkPixelFormatWithExistingOptions() {
 		for (String options : new String[] {null, "", "colorspaces=1"}) {
 			AVFilterGraph graph = avfilter_graph_alloc();
-			try {
-				AVFilterContext source = new AVFilterContext(null);
+			try (AVFilterContext source = new AVFilterContext(null)) {
 				assertEquals(0, avfilter.avfilter_graph_create_filter(source,
 						avfilter.avfilter_get_by_name("buffer"), "in",
 						"video_size=16x16:pix_fmt=yuv420p:time_base=1/25:pixel_aspect=1/1", null, graph));
