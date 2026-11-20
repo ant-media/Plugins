@@ -11,6 +11,8 @@ import java.util.Map;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.bytedeco.ffmpeg.avfilter.AVFilterGraph;
+import org.bytedeco.ffmpeg.avfilter.AVFilterContext;
+import org.bytedeco.ffmpeg.global.avfilter;
 import org.bytedeco.ffmpeg.avutil.AVFrame;
 import org.bytedeco.ffmpeg.global.avutil;
 import org.junit.Rule;
@@ -46,6 +48,27 @@ public class FilterGraphUnitTest {
 		assertTrue(createFilterGraph("[in0][in1]vstack[out0]", 2, 1).isInitiated());
 		assertFalse(createFilterGraph("[in0][in1]dummy[out0]", 2, 1).isInitiated());
 		assertTrue(createFilterGraph("[in0]split[out0][out1]", 1, 2).isInitiated());
+	}
+
+	@Test
+	public void testSinkPixelFormatWithExistingOptions() {
+		for (String options : new String[] {null, "", "colorspaces=1"}) {
+			AVFilterGraph graph = avfilter_graph_alloc();
+			try (AVFilterContext source = new AVFilterContext(null)) {
+				assertEquals(0, avfilter.avfilter_graph_create_filter(source,
+						avfilter.avfilter_get_by_name("buffer"), "in",
+						"video_size=16x16:pix_fmt=yuv420p:time_base=1/25:pixel_aspect=1/1", null, graph));
+				Filter sink = new Filter("buffersink", options, "out");
+				sink.setPixelFormat(avutil.AV_PIX_FMT_YUV420P);
+				sink.initFilterContex(graph);
+				assertEquals(0, avfilter.avfilter_link(source, 0, sink.getFilterContext(), 0));
+				assertEquals(0, avfilter.avfilter_graph_config(graph, null));
+				assertEquals(avutil.AV_PIX_FMT_YUV420P,
+						avfilter.av_buffersink_get_format(sink.getFilterContext()));
+			} finally {
+				avfilter.avfilter_graph_free(graph);
+			}
+		}
 	}
 
 	@Test
@@ -106,6 +129,7 @@ public class FilterGraphUnitTest {
 	public void testPrepareFrame() {
 		FilterGraph graph = Mockito.spy(createFilterGraph("[in0][in1]vstack[out0]", 2, 1));
 		AVFrame frame = new AVFrame();
+		avutil.av_frame_unref(frame);
 		frame.width(480);
 		frame.height(360);
 		frame.format(avutil.AV_PIX_FMT_YUV420P);

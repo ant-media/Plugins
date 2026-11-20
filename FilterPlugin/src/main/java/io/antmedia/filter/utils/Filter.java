@@ -14,8 +14,6 @@ import org.bytedeco.ffmpeg.avfilter.AVFilterGraph;
 import org.bytedeco.ffmpeg.avfilter.AVFilterInOut;
 import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacpp.BytePointer;
-import org.bytedeco.javacpp.IntPointer;
-import org.bytedeco.javacpp.Pointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +61,13 @@ public class Filter {
 
 	public void initFilterContex(AVFilterGraph filterGraph) {
 		avFilter = avfilter_get_by_name(filterName);
-		int ret = avfilter_graph_create_filter(filterContext, avFilter, label, filterArgs, null, filterGraph);
+		String initArgs = filterArgs;
+		if (pixelFormat != -1) {
+			// FFmpeg 8 requires pixel formats to be configured before the sink is initialized.
+			String pixelFormatArgs = "pixel_formats=" + avutil.av_get_pix_fmt_name(pixelFormat).getString();
+			initArgs = initArgs == null || initArgs.isEmpty() ? pixelFormatArgs : initArgs + ":" + pixelFormatArgs;
+		}
+		int ret = avfilter_graph_create_filter(filterContext, avFilter, label, initArgs, null, filterGraph);
 		if (ret < 0) 
 		{
 			String message = "Cannot create filter context. Label="+ label + " filterArgs:" + filterArgs + " filterName: " + filterName + " .Error is " + Utils.getErrorDefinition(ret);
@@ -71,17 +75,6 @@ public class Filter {
 			throw new IllegalStateException(message);
 		}
 		
-		if (pixelFormat != -1) {
-			BytePointer bytePointer = new BytePointer(Pointer.sizeof(IntPointer.class));
-			bytePointer.putInt(pixelFormat);
-			bytePointer.position(0);
-			
-			ret = avutil.av_opt_set_bin(filterContext,"pix_fmts", bytePointer, Pointer.sizeof(IntPointer.class), avutil.AV_OPT_SEARCH_CHILDREN);
-			if (ret < 0) 
-			{
-				logAndThrowException(ret);
-			}
-		}
 	}
 	
 	public void logAndThrowException(int errorCode) {

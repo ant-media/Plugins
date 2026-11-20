@@ -26,6 +26,11 @@
 	</licenses>
  	<repositories>
         <repository>
+            <id>github</id>
+            <name>Ant Media JavaCPP Presets GitHub Packages</name>
+            <url>https://maven.pkg.github.com/ant-media/javacpp-presets</url>
+        </repository>
+        <repository>
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>

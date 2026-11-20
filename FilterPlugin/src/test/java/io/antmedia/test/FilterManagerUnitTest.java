@@ -515,6 +515,8 @@ public class FilterManagerUnitTest {
 
 		AVFrame rawVideoFrame = new AVFrame();
 
+		avutil.av_frame_unref(rawVideoFrame);
+
 		rawVideoFrame.width(sourceWidth);
 		rawVideoFrame.height(sourceHeight);
 		rawVideoFrame.format(AV_PIX_FMT_YUV420P);
@@ -694,6 +696,8 @@ public class FilterManagerUnitTest {
 		assertTrue(result.isSuccess());
 
 		AVFrame rawVideoFrame = new AVFrame();
+
+		avutil.av_frame_unref(rawVideoFrame);
 
 		rawVideoFrame.width(sourceWidth);
 		rawVideoFrame.height(sourceHeight);

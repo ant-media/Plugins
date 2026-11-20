@@ -531,6 +531,9 @@ public class FilterAdaptor implements IFrameListener, IPacketListener {
 
 	private void startBroadcast(String streamId, IFrameListener customBroadcast, boolean videoEnabled, boolean audioEnabled, AntMediaApplicationAdapter app) {
 		AVCodecParameters videoCodecParameters = new AVCodecParameters();
+		videoCodecParameters.color_space(avutil.AVCOL_SPC_UNSPECIFIED);
+		videoCodecParameters.color_primaries(avutil.AVCOL_PRI_UNSPECIFIED);
+		videoCodecParameters.color_trc(avutil.AVCOL_TRC_UNSPECIFIED);
 		videoCodecParameters.height(filterConfiguration.getVideoOutputHeight());
 		videoCodecParameters.width((int) (filterConfiguration.getVideoOutputHeight()*1.5f)); //non 0, it will be overriden by AMS
 		videoCodecParameters.codec_id(AV_CODEC_ID_H264);
